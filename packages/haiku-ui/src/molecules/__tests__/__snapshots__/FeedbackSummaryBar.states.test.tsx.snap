@@ -2,7 +2,7 @@
 
 exports[`FeedbackSummaryBar — state matrix > renders (active filter × status) + empty cells (snapshot) 1`] = `
 <div
-  data-token-hash="27cdf90208a68e61"
+  data-token-hash="00a5d2cd526e0349"
 >
   <div
     data-cell="active-none"

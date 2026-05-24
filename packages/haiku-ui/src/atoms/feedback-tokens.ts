@@ -104,6 +104,10 @@ export const originColors: Record<FeedbackOrigin, string> = {
 		"bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
 	"studio-review":
 		"bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
+	"engine-review":
+		"bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
+	drift: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+	discovery: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
 	"external-pr":
 		"bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
 	"external-mr":
@@ -112,6 +116,8 @@ export const originColors: Record<FeedbackOrigin, string> = {
 	"user-chat": "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
 	"user-question":
 		"bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+	"user-revisit":
+		"bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
 	agent: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
 }
 
@@ -123,11 +129,15 @@ export const originColors: Record<FeedbackOrigin, string> = {
 export const originIcons: Record<FeedbackOrigin, string> = {
 	"adversarial-review": "\u{1F50D}", // 🔍 magnifying glass
 	"studio-review": "\u{1F50D}", // 🔍 same class as adversarial — label differentiates
+	"engine-review": "\u{1F50D}", // 🔍 engine-built review roles
+	drift: "\u{1F30A}", // 🌊 wave — something shifted under the engine
+	discovery: "\u{1F9ED}", // 🧭 compass — discovery question
 	"external-pr": "\u{1F517}", // 🔗 link
 	"external-mr": "\u{1F517}", // 🔗 link
 	"user-visual": "\u{270E}", // ✎ pencil
 	"user-chat": "\u{1F4AC}", // 💬 speech balloon
 	"user-question": "\u{2753}", // ❓ question mark
+	"user-revisit": "\u{1F501}", // 🔁 repeat — user-forced stage revisit
 	agent: "\u{1F916}", // 🤖 robot face
 }
 
@@ -140,11 +150,15 @@ export const originIcons: Record<FeedbackOrigin, string> = {
 export const originLabels: Record<FeedbackOrigin, string> = {
 	"adversarial-review": "Review Agent",
 	"studio-review": "Studio Review",
+	"engine-review": "Engine Review",
+	drift: "Drift",
+	discovery: "Discovery",
 	"external-pr": "PR Comment",
 	"external-mr": "MR Comment",
 	"user-visual": "Annotation",
 	"user-chat": "Comment",
 	"user-question": "Question",
+	"user-revisit": "Revisit",
 	agent: "Agent",
 }
 

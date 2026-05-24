@@ -42,6 +42,7 @@ export {
 export type {
 	FeedbackFrontmatter,
 	FeedbackOrigin,
+	FeedbackSeverity,
 	HaikuFeedbackInput,
 } from "./feedback.js"
 export {
@@ -49,7 +50,9 @@ export {
 	FB_ID_PATTERN,
 	FEEDBACK_FRONTMATTER_SCHEMA,
 	FEEDBACK_ORIGINS,
+	FEEDBACK_SEVERITIES,
 	FSM_DRIVEN_FB_FIELDS,
+	feedbackSeverityRank,
 	HAIKU_FEEDBACK_INPUT_SCHEMA,
 	validateHaikuFeedbackInputSchema,
 } from "./feedback.js"
@@ -95,6 +98,7 @@ export {
 	HAIKU_FEEDBACK_READ_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_REJECT_HAT_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_REJECT_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_SET_SEVERITY_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_SET_TARGETS_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_WRITE_INPUT_SCHEMA,
 	validateHaikuFeedbackAdvanceHatInputSchema,
@@ -104,6 +108,7 @@ export {
 	validateHaikuFeedbackReadInputSchema,
 	validateHaikuFeedbackRejectHatInputSchema,
 	validateHaikuFeedbackRejectInputSchema,
+	validateHaikuFeedbackSetSeverityInputSchema,
 	validateHaikuFeedbackSetTargetsInputSchema,
 	validateHaikuFeedbackWriteInputSchema,
 } from "./inputs/feedback-variants.js"

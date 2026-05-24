@@ -3540,6 +3540,7 @@ export {
 	FSM_DRIVEN_FB_FIELDS,
 	FSM_DRIVEN_INTENT_FIELDS,
 	FSM_DRIVEN_UNIT_FIELDS,
+	feedbackSeverityRank,
 	INTENT_FRONTMATTER_SCHEMA,
 	OK_OUTPUT_SCHEMA,
 	STAGE_STATE_FIELDS,
@@ -3557,6 +3558,7 @@ import {
 	FSM_DRIVEN_FB_FIELDS,
 	FSM_DRIVEN_INTENT_FIELDS,
 	FSM_DRIVEN_UNIT_FIELDS,
+	feedbackSeverityRank,
 	HAIKU_BACKLOG_INPUT_SCHEMA,
 	HAIKU_CAPACITY_INPUT_SCHEMA,
 	HAIKU_DECISION_RECORD_INPUT_SCHEMA,
@@ -3569,6 +3571,7 @@ import {
 	HAIKU_FEEDBACK_READ_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_REJECT_HAT_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_REJECT_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_SET_SEVERITY_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_SET_TARGETS_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_WRITE_INPUT_SCHEMA,
 	HAIKU_INTENT_GET_INPUT_SCHEMA,
@@ -3621,6 +3624,7 @@ import {
 	validateHaikuFeedbackReadInputSchema,
 	validateHaikuFeedbackRejectHatInputSchema,
 	validateHaikuFeedbackRejectInputSchema,
+	validateHaikuFeedbackSetSeverityInputSchema,
 	validateHaikuFeedbackSetTargetsInputSchema,
 	validateHaikuFeedbackWriteInputSchema,
 	validateHaikuIntentGetInputSchema,
@@ -5692,6 +5696,22 @@ function pickUndispatchedFbBlock(slug: string, studio: string): string | null {
 	}
 	scopes.push({ stage: "", dir: join(iDir, "feedback") })
 
+	// Gather every undispatched candidate across all scopes in walk order
+	// (prior+current stages, then intent scope; readdir-sorted within
+	// each), then pick the HIGHEST-severity one to refill the freed slot.
+	// This mirrors the initial-pool ordering in cursor.ts
+	// (`collectFeedbackDispatches`): the whole queue drains
+	// blocker-first. A stable sort over walk order keeps re-ticks
+	// deterministic within a severity band; an unclassified FB ranks as
+	// `medium`.
+	type FbCandidate = {
+		stage: string
+		feedbackId: string
+		firstHat: string
+		terminal: boolean
+		severity: string | null
+	}
+	const candidates: FbCandidate[] = []
 	for (const { stage, dir } of scopes) {
 		if (!existsSync(dir)) continue
 		const files = readdirSync(dir)
@@ -5727,22 +5747,36 @@ function pickUndispatchedFbBlock(slug: string, studio: string): string | null {
 				? resolveStageFixHats(studio, stage)
 				: resolveStudioFixHats(studio)
 			if (fixHats.length === 0) continue
-			const firstHat = fixHats[0]
 			const fbNum = file.match(/^(\d+)-/)?.[1] ?? ""
 			if (!fbNum) continue
-			const feedbackId = `FB-${fbNum.padStart(3, "0")}`
-			stampDispatchClaim({ slug, stage, feedbackId, hat: firstHat })
-			return buildFbHatDispatchBlock({
-				slug,
-				studio,
-				feedbackId,
+			candidates.push({
 				stage,
-				hat: firstHat,
+				feedbackId: `FB-${fbNum.padStart(3, "0")}`,
+				firstHat: fixHats[0],
 				terminal: fixHats.length === 1,
+				severity: typeof fm.severity === "string" ? fm.severity : null,
 			})
 		}
 	}
-	return null
+	if (candidates.length === 0) return null
+	const picked = [...candidates].sort(
+		(a, b) =>
+			feedbackSeverityRank(a.severity) - feedbackSeverityRank(b.severity),
+	)[0]
+	stampDispatchClaim({
+		slug,
+		stage: picked.stage,
+		feedbackId: picked.feedbackId,
+		hat: picked.firstHat,
+	})
+	return buildFbHatDispatchBlock({
+		slug,
+		studio,
+		feedbackId: picked.feedbackId,
+		stage: picked.stage,
+		hat: picked.firstHat,
+		terminal: picked.terminal,
+	})
 }
 
 /** Resolve the next sequential NN prefix in a feedback directory. */
@@ -5817,6 +5851,10 @@ export interface FeedbackItem {
 	body: string
 	status: string
 	origin: string
+	// Finding urgency: blocker | high | medium | low. `null` for FBs not
+	// yet classified (user/SPA findings before the classifier fix-hat
+	// backfills) and for pre-severity legacy FBs.
+	severity: string | null
 	author: string
 	author_type: string
 	created_at: string
@@ -5898,6 +5936,13 @@ export function writeFeedbackFile(
 		body: string
 		origin?: string
 		author?: string
+		/** Finding urgency — one of blocker | high | medium | low. Drives
+		 *  fix-loop dispatch order (higher first). Agent-filed FBs (via the
+		 *  `haiku_feedback` MCP tool) always carry it; user/SPA FBs land
+		 *  without it (omitted, NOT null — the read-side schema's optional
+		 *  enum rejects null) and the classifier fix-hat backfills via
+		 *  `haiku_feedback_set_severity`. */
+		severity?: string | null
 		source_ref?: string | null
 		/** Triage timestamp. Set automatically when the FB is created via
 		 *  the studio review layer or by `haiku_feedback_move` — the
@@ -5972,6 +6017,16 @@ export function writeFeedbackFile(
 	const authorType = opts.authorType ?? deriveAuthorType(origin)
 	const author = opts.author || deriveDefaultAuthor(origin)
 
+	// Severity is written ONLY when a valid value is supplied. A null /
+	// absent severity (the user/SPA path) leaves the field off the
+	// frontmatter entirely — the read-side schema's optional enum rejects
+	// an explicit null, and the classifier fix-hat backfills it.
+	const validSeverities = new Set(["blocker", "high", "medium", "low"])
+	const severity =
+		typeof opts.severity === "string" && validSeverities.has(opts.severity)
+			? opts.severity
+			: null
+
 	// Read current iteration count from the per-stage iterations log,
 	// falling back to legacy state.json when present (test fixtures
 	// and pre-v4 intents). Intent-scope feedback has no stage — use 0
@@ -6036,6 +6091,7 @@ export function writeFeedbackFile(
 		title: opts.title,
 		status: "pending",
 		origin,
+		...(severity ? { severity } : {}),
 		author,
 		author_type: authorType,
 		created_at: timestamp(),
@@ -6155,6 +6211,7 @@ export function readFeedbackFiles(slug: string, stage: string): FeedbackItem[] {
 			// stored FM. The legacy `status:` field was migrated away in v8.
 			status: deriveFeedbackStatus(data),
 			origin: (data.origin as string) || "agent",
+			severity: (data.severity as string) || null,
 			author: (data.author as string) || "agent",
 			author_type: (data.author_type as string) || "agent",
 			created_at: (data.created_at as string) || "",
@@ -7973,6 +8030,22 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 				feedback_id: { type: "string" },
 				target_unit: { type: ["string", "null"] },
 				target_invalidates: { type: "array", items: { type: "string" } },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
+		},
+	},
+	{
+		name: "haiku_feedback_set_severity",
+		description:
+			"Classify a feedback's severity — set `severity` (blocker | high | medium | low). Called by the `classifier` fix-hat (first in the `fix_hats:` chain) when the FB was filed WITHOUT a severity (e.g. via the SPA, where the human can't classify). The fix-loop dispatches higher-severity findings first. Refuses to overwrite an FB that already has a severity — once set, immutable per the FB-as-unit architecture (agent-filed FBs carry severity from creation, so this is a no-op-confirm on those).",
+		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_SET_SEVERITY_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				feedback_id: { type: "string" },
+				severity: { type: "string" },
 				message: { type: "string" },
 				error: { type: "string" },
 			},
@@ -9928,6 +10001,7 @@ export function handleStateTool(
 							title: fbTitle,
 							body: fbBody,
 							origin: "agent",
+							severity: "blocker",
 							author: "engine",
 							authorType: "system",
 							source_ref: `reject-loop:${args.unit as string}:${currentHat}`,
@@ -11731,6 +11805,9 @@ export function handleStateTool(
 			const stage = (args.stage as string) || ""
 			const title = args.title as string
 			const body = args.body as string
+			// Gate-required (HAIKU_FEEDBACK_INPUT_SCHEMA enforces the enum) —
+			// the agent classifies urgency as it files.
+			const severity = args.severity as string
 			const origin = (args.origin as string) || undefined
 			const sourceRef = (args.source_ref as string) || undefined
 			const author = (args.author as string) || undefined
@@ -11831,6 +11908,7 @@ export function handleStateTool(
 				title,
 				body,
 				origin,
+				severity,
 				author,
 				source_ref: sourceRef ?? null,
 				resolution: resolution ?? null,
@@ -13458,6 +13536,91 @@ export function handleStateTool(
 				target_invalidates: targetInvalidates,
 				reasoning: reasoning || null,
 				message: `Feedback '${feedbackId}' classified: target_unit=${targetUnit ?? "null (intent-scope)"}, invalidates=[${targetInvalidates.join(", ")}]${reasoning ? ` — ${reasoning}` : ""}.`,
+			})
+		}
+
+		case "haiku_feedback_set_severity": {
+			const setSeverityInputErr = validateToolInput(
+				args,
+				validateHaikuFeedbackSetSeverityInputSchema,
+				"haiku_feedback_set_severity",
+			)
+			if (setSeverityInputErr) return setSeverityInputErr
+			const sevIntent = args.intent as string
+			const sevStage = (args.stage as string) || ""
+			const sevFeedbackId = formatFeedbackId(args.feedback_id as number)
+			const sevValue = args.severity as string
+			const sevReasoning =
+				typeof args.reasoning === "string"
+					? (args.reasoning as string).trim()
+					: ""
+
+			const sevBranchErr = enforceStageBranch(sevIntent, sevStage || undefined)
+			if (sevBranchErr) return sevBranchErr
+
+			const sevFound = findFeedbackFile(sevIntent, sevStage, sevFeedbackId)
+			if (!sevFound) {
+				return reply(
+					{
+						error: "feedback_not_found",
+						feedback_id: sevFeedbackId,
+						message: sevStage
+							? `Feedback '${sevFeedbackId}' not found in stage '${sevStage}'.`
+							: `Feedback '${sevFeedbackId}' not found (intent-scope).`,
+					},
+					{ isError: true },
+				)
+			}
+
+			// Write-once: refuse to overwrite an already-set severity.
+			// Agent-filed FBs carry severity from creation, so the
+			// classifier's call lands here as a no-op-confirm — it reads the
+			// code and simply advances.
+			const existingSeverity =
+				typeof sevFound.data.severity === "string"
+					? (sevFound.data.severity as string)
+					: null
+			if (existingSeverity !== null) {
+				return reply(
+					{
+						error: "severity_already_set",
+						feedback_id: sevFeedbackId,
+						current_severity: existingSeverity,
+						message: `Feedback '${sevFeedbackId}' already has severity '${existingSeverity}' — once set, immutable per the FB-as-unit architecture. To re-rank, reject the FB (haiku_feedback_reject) and create a new one.`,
+					},
+					{ isError: true },
+				)
+			}
+
+			// Lifecycle guard: don't classify terminal FBs.
+			const sevStatus = (sevFound.data.status as string) || "pending"
+			if (sevStatus === "closed" || sevStatus === "rejected") {
+				return reply(
+					{
+						error: "lifecycle_violation",
+						current_status: sevStatus,
+						message: `Cannot set severity on FB '${sevFeedbackId}' — already ${sevStatus} (terminal).`,
+					},
+					{ isError: true },
+				)
+			}
+
+			const sevNewData = {
+				...sevFound.data,
+				severity: sevValue,
+			}
+			writeFileSync(
+				sevFound.path,
+				matter.stringify(`\n${sevFound.body}\n`, sevNewData),
+			)
+			sealIntentState(sevIntent)
+
+			return reply({
+				ok: true,
+				feedback_id: sevFeedbackId,
+				severity: sevValue,
+				reasoning: sevReasoning || null,
+				message: `Feedback '${sevFeedbackId}' severity set to '${sevValue}'${sevReasoning ? ` — ${sevReasoning}` : ""}.`,
 			})
 		}
 

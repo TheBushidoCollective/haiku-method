@@ -110,6 +110,9 @@ export function registerFeedbackRoutes(instance: FastifyInstance): void {
 				body: i.body,
 				status: i.status as FeedbackListResponse["items"][number]["status"],
 				origin: i.origin as FeedbackListResponse["items"][number]["origin"],
+				severity: i.severity as
+					| FeedbackListResponse["items"][number]["severity"]
+					| null,
 				author: i.author,
 				author_type:
 					i.author_type as FeedbackListResponse["items"][number]["author_type"],
@@ -184,6 +187,9 @@ export function registerFeedbackRoutes(instance: FastifyInstance): void {
 				body: i.body,
 				status: i.status as FeedbackListResponse["items"][number]["status"],
 				origin: i.origin as FeedbackListResponse["items"][number]["origin"],
+				severity: i.severity as
+					| FeedbackListResponse["items"][number]["severity"]
+					| null,
 				author: i.author,
 				author_type:
 					i.author_type as FeedbackListResponse["items"][number]["author_type"],

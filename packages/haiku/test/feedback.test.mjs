@@ -574,6 +574,7 @@ try {
 			title: "MCP test feedback",
 			body: "Created via the MCP tool.",
 			origin: "agent",
+			severity: "medium",
 		})
 
 		assert.ok(
@@ -598,6 +599,7 @@ try {
 			title: "Citation missing for claim",
 			body: "Body asserts X but no citation provided.",
 			origin: "adversarial-review",
+			severity: "high",
 			inline_anchor: {
 				selected_text: "this claim has no citation backing it",
 				paragraph: 3,
@@ -675,6 +677,7 @@ try {
 			stage: "",
 			title: "Intent-scope finding",
 			body: "Cross-stage concern logged by studio-level review",
+			severity: "medium",
 		})
 		assert.ok(!result.isError, getTextResult(result))
 		const parsed = JSON.parse(getTextResult(result))
@@ -743,6 +746,7 @@ try {
 			stage: stageName,
 			title: "Test",
 			body: "Test",
+			severity: "medium",
 		})
 		assert.ok(result.isError)
 		assert.ok(
@@ -773,6 +777,7 @@ try {
 			stage: "nonexistent-stage",
 			title: "Test",
 			body: "Test",
+			severity: "medium",
 		})
 		assert.ok(result.isError)
 		assert.ok(
@@ -788,12 +793,124 @@ try {
 				title: `Origin test ${origin}`,
 				body: "Testing origin.",
 				origin,
+				severity: "medium",
 			})
 			assert.ok(
 				!result.isError,
 				`Origin '${origin}' should be valid but got error: ${getTextResult(result)}`,
 			)
 		}
+	})
+
+	// ── haiku_feedback severity ───────────────────────────────────────────────
+
+	console.log("\n=== haiku_feedback severity ===")
+
+	test("MCP tool rejects missing severity", () => {
+		const result = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "No severity",
+			body: "Filed without a severity.",
+			origin: "agent",
+		})
+		assert.ok(result.isError)
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_input_invalid")
+		assert.ok(
+			parsed.errors.some(
+				(e) =>
+					e.keyword === "required" && e.params?.missingProperty === "severity",
+			),
+			`expected missing-required severity; got ${JSON.stringify(parsed.errors)}`,
+		)
+	})
+
+	test("MCP tool rejects invalid severity enum", () => {
+		const result = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "Bad severity",
+			body: "Filed with an out-of-enum severity.",
+			severity: "urgent",
+		})
+		assert.ok(result.isError)
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_input_invalid")
+		assert.ok(
+			parsed.errors.some((e) => e.path === "/severity" && e.keyword === "enum"),
+			`expected /severity enum violation; got ${JSON.stringify(parsed.errors)}`,
+		)
+	})
+
+	test("MCP tool persists severity to frontmatter", () => {
+		const result = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "Blocker finding",
+			body: "Something is broken.",
+			origin: "adversarial-review",
+			severity: "blocker",
+		})
+		assert.ok(!result.isError, getTextResult(result))
+		const parsed = JSON.parse(getTextResult(result))
+		const raw = readFileSync(join(projDir, parsed.file), "utf8")
+		assert.ok(
+			raw.includes("severity: blocker"),
+			`expected severity in FM, got:\n${raw.slice(0, 400)}`,
+		)
+	})
+
+	// ── haiku_feedback_set_severity (classifier backfill) ─────────────────────
+
+	console.log("\n=== haiku_feedback_set_severity ===")
+
+	test("backfills severity on a user FB that landed without one", () => {
+		// Mirror the SPA/human path: writeFeedbackFile with no severity.
+		const created = writeFeedbackFile(intentSlug, stageName, {
+			title: "User finding no severity",
+			body: "Typed in the SPA, no severity picker.",
+			origin: "user-chat",
+			author: "user",
+		})
+		const num = Number.parseInt(created.feedback_id.replace(/^FB-/, ""), 10)
+		// Confirm it landed severity-less.
+		const before = readFileSync(join(projDir, created.file), "utf8")
+		assert.ok(!/^severity:/m.test(before), "expected no severity pre-backfill")
+
+		const set = handleStateTool("haiku_feedback_set_severity", {
+			intent: intentSlug,
+			stage: stageName,
+			feedback_id: num,
+			severity: "high",
+			reasoning: "User reported a real defect.",
+		})
+		assert.ok(!set.isError, getTextResult(set))
+		const parsed = JSON.parse(getTextResult(set))
+		assert.strictEqual(parsed.ok, true)
+		assert.strictEqual(parsed.severity, "high")
+		const after = readFileSync(join(projDir, created.file), "utf8")
+		assert.ok(after.includes("severity: high"), "expected severity written")
+	})
+
+	test("refuses to overwrite an already-set severity", () => {
+		const created = writeFeedbackFile(intentSlug, stageName, {
+			title: "Already classified",
+			body: "Agent filed this with a severity.",
+			origin: "adversarial-review",
+			severity: "medium",
+		})
+		const num = Number.parseInt(created.feedback_id.replace(/^FB-/, ""), 10)
+		const set = handleStateTool("haiku_feedback_set_severity", {
+			intent: intentSlug,
+			stage: stageName,
+			feedback_id: num,
+			severity: "blocker",
+		})
+		assert.ok(set.isError, "expected immutability rejection")
+		const parsed = JSON.parse(getTextResult(set))
+		assert.strictEqual(parsed.error, "severity_already_set")
+		assert.strictEqual(parsed.current_severity, "medium")
 	})
 
 	// ── haiku_feedback_update MCP tool ────────────────────────────────────────

@@ -180,6 +180,7 @@ test("MCP create with target_unit + target_invalidates persists both", () => {
 		title: "regression — close should clear approvals.user",
 		body: "the bug from 2026-05-15",
 		origin: "user-chat",
+		severity: "medium",
 		target_unit: "unit-02",
 		target_invalidates: ["user"],
 	})
@@ -205,6 +206,7 @@ test("MCP create with origin alone defaults invalidates from origin", () => {
 		title: "user pushback",
 		body: "no",
 		origin: "user-chat",
+		severity: "medium",
 	})
 	assert.ok(!result.isError, `MCP create failed: ${JSON.stringify(result)}`)
 	assert.ok(
@@ -224,6 +226,7 @@ test("MCP create with target_invalidates: [] respects explicit empty (overrides 
 		title: "user FYI",
 		body: "no closure invalidation",
 		origin: "user-chat",
+		severity: "medium",
 		target_invalidates: [],
 	})
 	assert.ok(!result.isError, `MCP create failed: ${JSON.stringify(result)}`)

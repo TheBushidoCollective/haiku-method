@@ -7,7 +7,7 @@
 - Cross-stage references resolve — a unit in this stage that names `stages/<upstream>/outputs/foo.tsx` actually finds that file
 
 **How to file findings:**
-- Per-orphan or per-broken-reference: `haiku_feedback({ stage: "<this stage>", origin: "engine-review", author: "continuity", source_ref: "continuity:<path>", target_unit: <best guess or null>, target_invalidates: [] })`
+- Per-orphan or per-broken-reference: `haiku_feedback({ stage: "<this stage>", origin: "engine-review", author: "continuity", severity: "high", source_ref: "continuity:<path>", target_unit: <best guess or null>, target_invalidates: [] })` (a broken reference is a concrete defect, so `high` — bump to `blocker` if it makes the deliverable non-functional)
 - If an orphan is intentionally unwired (e.g. reserved for future use), the fix-loop's response is `haiku_coverage_acknowledge` — do NOT propose deletion.
 
 **Anti-patterns (RFC 2119):**

@@ -124,6 +124,7 @@ export function autoFileMalformedUnitInputs(
 				title: `Unit ${unitName}: inputs reference unit names, not file paths`,
 				body,
 				origin: "agent",
+				severity: "blocker",
 				author: "engine:input-validator",
 				authorType: "system",
 				source_ref: sourceRef,

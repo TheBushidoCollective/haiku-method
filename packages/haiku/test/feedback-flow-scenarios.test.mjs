@@ -129,6 +129,79 @@ test("FB on stage A doesn't affect stage B's queue", async () => {
 	})
 })
 
+// ── Severity-first fix-loop ordering ─────────────────────────────────
+
+test("fix-loop dispatches the blocker before the lower-numbered low", async () => {
+	if (!HAS_GIT) return
+	await withRepo(
+		"test-fb-severity-order",
+		async ({ repoRoot, intentDir, slug }) => {
+			makeStudio({
+				repoRoot,
+				studio: "test",
+				stages: [
+					{
+						name: "a",
+						hats: ["planner", "verifier"],
+						fix_hats: ["classifier", "planner", "feedback-assessor"],
+						review: "ask",
+						review_agents: ["code-reviewer"],
+					},
+				],
+			})
+			makeIntent({ intentDir, slug, studio: "test" })
+			writeUnit(intentDir, "a", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				started_at: null,
+				iterations: [],
+				reviews: {},
+				approvals: {},
+				discovery: {},
+			})
+
+			// FB-001 (lower number, would win on walk order) is LOW; FB-002 is
+			// the BLOCKER. Agent origin so both auto-triage and flow straight to
+			// the fix-loop dispatch. If severity ordering works, the blocker is
+			// dispatched first despite its higher number.
+			makeFeedback({
+				intentDir,
+				stage: "a",
+				id: "01",
+				title: "low nit",
+				body: "cosmetic",
+				origin: "adversarial-review",
+				author: "code-reviewer",
+				severity: "low",
+				closed: false,
+			})
+			makeFeedback({
+				intentDir,
+				stage: "a",
+				id: "02",
+				title: "blocker bug",
+				body: "broken",
+				origin: "adversarial-review",
+				author: "code-reviewer",
+				severity: "blocker",
+				closed: false,
+			})
+
+			const action = await runTick(slug)
+			assert.strictEqual(
+				action.action,
+				"start_feedback_hat",
+				`expected fix-hat dispatch; got: ${action.action}`,
+			)
+			assert.strictEqual(
+				action.feedback_ids[0],
+				"FB-002",
+				`expected the blocker (FB-002) dispatched first; got order ${JSON.stringify(action.feedback_ids)}`,
+			)
+		},
+	)
+})
+
 // ── Intent-scope vs stage-scope FBs ──────────────────────────────────
 
 test("intent-scope FB is preserved separately from stage-scope FBs", async () => {

@@ -25,5 +25,11 @@ You MUST NOT write, edit, or create any file. Your ONLY output channel is `haiku
 
 1. Read your mandate above, then the intent artifacts under `.haiku/intents/<%= slug %>/stages/*/` and `.haiku/intents/<%= slug %>/knowledge/`.
 2. Audit the intent-as-a-whole through your mandate's lens.
-3. For each issue, FIRST check the existing-feedback list above — if it's already captured there (open or already decided), do NOT re-file it. Otherwise: `haiku_feedback({ intent: "<%= slug %>", title, body, origin: "studio-review", author: "<%= role %>" })`. Omit `stage`.
+3. For each issue, FIRST check the existing-feedback list above — if it's already captured there (open or already decided), do NOT re-file it. Otherwise: `haiku_feedback({ intent: "<%= slug %>", title, body, origin: "studio-review", author: "<%= role %>", severity: "<blocker|high|medium|low>" })`. Omit `stage`. `severity` is required; pick it per this rubric (the fix-loop fixes higher-severity findings first):
+   - **blocker** — the intent as delivered is wrong/broken/unsafe or doesn't meet what it set out to do. Fix before the intent closes.
+   - **high** — a real defect that should be fixed before delivery, but doesn't stop completion on its own.
+   - **medium** — a genuine issue worth fixing; not completion-blocking.
+   - **low** — a nit, polish, or nice-to-have.
+
+   Rank honestly — inflating everything to `blocker` defeats the ordering.
 4. **Close — return a one-line summary of how many findings you logged.** Terminating clean (no findings) is what the engine reads as your sign-off; findings route to the fix loop next tick.

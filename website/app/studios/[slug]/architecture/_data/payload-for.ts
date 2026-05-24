@@ -120,7 +120,7 @@ export function payloadFor(
 				{
 					hook: "v0→v4 migrator",
 					target: "intent.md, every unit.md, every feedback.md (one-time)",
-					what: "`run-tick.ts` runs the migrator on first read of any pre-v4 intent: strips deprecated fields (`active_stage`, `phase`, `status`, `triaged_at`, `upstream_stage`, etc.), deletes `state.json`, deletes pre-v4 drift sidecars, stamps `plugin_version: \"4.0.0\"`, synthesizes `approvals.user` for previously-completed units. Idempotent.",
+					what: '`run-tick.ts` runs the migrator on first read of any pre-v4 intent: strips deprecated fields (`active_stage`, `phase`, `status`, `triaged_at`, `upstream_stage`, etc.), deletes `state.json`, deletes pre-v4 drift sidecars, stamps `plugin_version: "4.0.0"`, synthesizes `approvals.user` for previously-completed units. Idempotent.',
 				},
 				{
 					hook: "readStudio() / readStageDef()",
@@ -128,7 +128,8 @@ export function payloadFor(
 					what: "once orientation is complete and the cursor walks Track A on the first stage, `start_stage` inlines the studio body + STAGE.md body so the agent has the full mandate up front.",
 				},
 			],
-			action: "select_studio → select_mode → (quick? select_stage) → elaborate_loop",
+			action:
+				"select_studio → select_mode → (quick? select_stage) → elaborate_loop",
 			summary: `pre-cursor selection chain → first stage (${stage.name}) elaborate_loop`,
 			payload: {
 				action: "select_studio",
@@ -153,7 +154,7 @@ export function payloadFor(
 				{
 					path: ".haiku/intents/{slug}/intent.md",
 					change:
-						"frontmatter: `studio`, `mode`, optionally `stages[]` written by engine after each picker resolves; `plugin_version: \"4.0.0\"` stamped by the migrator on first v4 read.",
+						'frontmatter: `studio`, `mode`, optionally `stages[]` written by engine after each picker resolves; `plugin_version: "4.0.0"` stamped by the migrator on first v4 read.',
 				},
 			],
 			instructions: `The pre-cursor gates in \`run-tick.ts\` emit one \`select_*\` action at a time when the corresponding \`intent.md\` field is missing. \`haiku_run_next\` intercepts each, blocks on the SPA picker, writes the chosen value, and re-ticks. Once orientation is complete, the cursor walks Track A on the first stage (\`${stage.name}\`) — initially the stage has no units, so the cursor returns \`elaborate_loop { stage: "${stageLower}", signals_unmet: [{signal: "conversation"}] }\` and the agent begins collaborative drafting. As the agent makes progress (records the elaboration, dispatches discovery subagents, drafts units), subsequent ticks return \`elaborate_loop\` with whichever signals remain unmet until the loop falls through to execute.`,
@@ -205,7 +206,7 @@ export function payloadFor(
 					target: "agent's `tool_use_result`",
 					what: isAutopilot
 						? "autopilot mode: spec gate is auto. Reviews collapse to engine roles `[spec, continuity, cross-stage-consistency]`; once all three are signed the cursor advances directly to `start_unit_hat` for the first wave."
-						: "non-autopilot: `dispatch_review` for the next missing role until every studio agent signs, then the cursor emits `user_gate { gate_kind: \"spec\" }` and the engine opens the SPA review session inline.",
+						: 'non-autopilot: `dispatch_review` for the next missing role until every studio agent signs, then the cursor emits `user_gate { gate_kind: "spec" }` and the engine opens the SPA review session inline.',
 				},
 			],
 			action: isAutopilot ? "start_unit_hat" : "user_gate",
@@ -244,14 +245,14 @@ export function payloadFor(
 			],
 			instructions: isAutopilot
 				? "Autopilot mode: the cursor's reviewRoles list is `[spec, continuity, cross-stage-consistency]`, so once all three engine subagents sign there's no more PRE-execute spec-review work. The next tick returns `start_unit_hat` for the first wave-ready batch."
-				: "The cursor returns `user_gate { gate_kind: \"spec\" }` and `haiku_run_next` opens the review SPA session inline (via `haiku_review_open`), then blocks on `haiku_await_gate`. On approve, the engine stamps `reviews.user` on every unit; on request_changes, the engine writes the annotations as feedback files and Track B walks them on the next tick.",
+				: 'The cursor returns `user_gate { gate_kind: "spec" }` and `haiku_run_next` opens the review SPA session inline (via `haiku_review_open`), then blocks on `haiku_await_gate`. On approve, the engine stamps `reviews.user` on every unit; on request_changes, the engine writes the annotations as feedback files and Track B walks them on the next tick.',
 		},
 		"elab-to-gate": {
 			injection: [
 				{
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
-					what: "`user_gate { gate_kind: \"spec\" }` — the cursor's reviewRoles loop reached the `user` role. `haiku_run_next` calls `haiku_review_open` inline (creates or reuses a session) and blocks on `haiku_await_gate`.",
+					what: '`user_gate { gate_kind: "spec" }` — the cursor\'s reviewRoles loop reached the `user` role. `haiku_run_next` calls `haiku_review_open` inline (creates or reuses a session) and blocks on `haiku_await_gate`.',
 				},
 				{
 					hook: "haiku_review_open / _prepareGateReview",
@@ -270,7 +271,8 @@ export function payloadFor(
 				},
 			],
 			action: "user_gate",
-			summary: "spec reviews signed by every agent → user_gate { gate_kind: \"spec\" } (engine-side blocking)",
+			summary:
+				'spec reviews signed by every agent → user_gate { gate_kind: "spec" } (engine-side blocking)',
 			payload: {
 				action: "user_gate",
 				intent: "{slug}",
@@ -307,7 +309,7 @@ export function payloadFor(
 				{
 					hook: "stamp-agent-write (PostToolUse)",
 					target: "intent action log",
-					what: "agent edits inside tracked drift surfaces stamp `entry_type: \"agent_write\"` so the next drift sweep attributes the change to the agent rather than firing `drift_detected` against the agent's own work.",
+					what: 'agent edits inside tracked drift surfaces stamp `entry_type: "agent_write"` so the next drift sweep attributes the change to the agent rather than firing `drift_detected` against the agent\'s own work.',
 				},
 			],
 			action: "haiku_unit_advance_hat",
@@ -320,7 +322,8 @@ export function payloadFor(
 					unit: opts.unit ?? "?",
 					hat: opts.from ?? "?",
 				},
-				output_for_next_tick: "the cursor walks `nextHatForUnit` on the next `haiku_run_next` tick and either returns `start_unit_hat` for the next hat or moves on to the spec-review track when every hat sequence has terminal-advanced.",
+				output_for_next_tick:
+					"the cursor walks `nextHatForUnit` on the next `haiku_run_next` tick and either returns `start_unit_hat` for the next hat or moves on to the spec-review track when every hat sequence has terminal-advanced.",
 			},
 			validations: [
 				`Current hat (\`${opts.from ?? "?"}\`) iterations[-1].result === null at advance time (in-flight, can advance)`,
@@ -364,11 +367,13 @@ export function payloadFor(
 			writes: [
 				{
 					path: `.haiku/intents/{slug}/stages/${stageLower}/units/<unit>.md`,
-					change: 'frontmatter: `started_at` stamped on each newly-dispatched unit by `haiku_unit_start` (called by the subagent on entry).',
+					change:
+						"frontmatter: `started_at` stamped on each newly-dispatched unit by `haiku_unit_start` (called by the subagent on entry).",
 				},
 				{
 					path: `.haiku/worktrees/<unit>/`,
-					change: "git worktree created for each newly-eligible unit by the engine.",
+					change:
+						"git worktree created for each newly-eligible unit by the engine.",
 				},
 			],
 			instructions:
@@ -410,14 +415,14 @@ export function payloadFor(
 				},
 			],
 			instructions:
-				"The cursor walks the POST-execute approval track per role (audits the WORK against the SPEC the pre-execute review already approved). Engine-built `spec`, `continuity`, `cross-stage-consistency` and engine-run `quality_gates` come before any studio agent. On quality-gate failure the agent fixes the code in place and re-runs — failures don't roll the workflow back, they stay on the approval track until the gates pass. After `quality_gates` is signed, the cursor returns `dispatch_approval { role: <next> }` for each studio approval agent in turn, then `user_gate { gate_kind: \"approval\" }` (skipped under autopilot).",
+				'The cursor walks the POST-execute approval track per role (audits the WORK against the SPEC the pre-execute review already approved). Engine-built `spec`, `continuity`, `cross-stage-consistency` and engine-run `quality_gates` come before any studio agent. On quality-gate failure the agent fixes the code in place and re-runs — failures don\'t roll the workflow back, they stay on the approval track until the gates pass. After `quality_gates` is signed, the cursor returns `dispatch_approval { role: <next> }` for each studio approval agent in turn, then `user_gate { gate_kind: "approval" }` (skipped under autopilot).',
 		},
 		"review-spec-to-agents": {
 			injection: [
 				{
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
-					what: "`dispatch_review { role: \"spec\" }` — every stage's PRE-execute review track always starts with the engine-built `spec` role (cross-unit acceptance criteria coverage, scope creep, cross-unit drift on the planned spec). Then `continuity`, then `cross-stage-consistency`. All three render from sibling `engine-bodies/<role>.eta.md` files; no per-studio mandate, no opt-out.",
+					what: '`dispatch_review { role: "spec" }` — every stage\'s PRE-execute review track always starts with the engine-built `spec` role (cross-unit acceptance criteria coverage, scope creep, cross-unit drift on the planned spec). Then `continuity`, then `cross-stage-consistency`. All three render from sibling `engine-bodies/<role>.eta.md` files; no per-studio mandate, no opt-out.',
 				},
 			],
 			action: "dispatch_review",
@@ -475,7 +480,7 @@ export function payloadFor(
 				},
 			],
 			instructions:
-				"v4's cursor walks one reviewRole per tick — engine roles (`spec`, `continuity`, `cross-stage-consistency`) first, then each studio review-agent in declared order (resolved via the project → stage → studio → global cascade), then `user`. Mode-shaped: autopilot trims to engine roles only. After every non-user role signs, the cursor returns `user_gate { gate_kind: \"spec\" }` (skipped under autopilot); only after that does the cursor advance to `start_unit_hat` for wave dispatch.",
+				'v4\'s cursor walks one reviewRole per tick — engine roles (`spec`, `continuity`, `cross-stage-consistency`) first, then each studio review-agent in declared order (resolved via the project → stage → studio → global cascade), then `user`. Mode-shaped: autopilot trims to engine roles only. After every non-user role signs, the cursor returns `user_gate { gate_kind: "spec" }` (skipped under autopilot); only after that does the cursor advance to `start_unit_hat` for wave dispatch.',
 		},
 		"review-quality-to-agents": {
 			injection: [
@@ -509,11 +514,11 @@ export function payloadFor(
 				{
 					path: ".haiku/intents/{slug}/stages/{stage}/units/<unit>.md",
 					change:
-						"the approval agent CLOSES by calling `haiku_review_stamp { kind: \"approval\", stage, role }`, which signs `approvals.<role>: { at, body_sha256, witnesses: [<output paths>] }` on each unit it didn't flag and returns a terminal ack — no cursor walk, no `haiku_run_next`. Witnesses are the drift surface Track C sweeps every subsequent tick.",
+						'the approval agent CLOSES by calling `haiku_review_stamp { kind: "approval", stage, role }`, which signs `approvals.<role>: { at, body_sha256, witnesses: [<output paths>] }` on each unit it didn\'t flag and returns a terminal ack — no cursor walk, no `haiku_run_next`. Witnesses are the drift surface Track C sweeps every subsequent tick.',
 				},
 			],
 			instructions:
-				"Approval agents focus on built artifacts (architecture, performance, security, test coverage) — they audit the WORK, not the spec (the pre-execute review walk already approved the spec). Each subagent closes with `haiku_review_stamp` (not `haiku_run_next` — same decouple as the pre-execute review track, so parallel approval siblings can't trip the loop guard). The PARENT ticks once the wave closes. After every studio approval signs, the cursor returns `user_gate { gate_kind: \"approval\" }` (skipped under autopilot, where `complete_stage` auto-fires once the engine-role and quality_gates set is signed).",
+				'Approval agents focus on built artifacts (architecture, performance, security, test coverage) — they audit the WORK, not the spec (the pre-execute review walk already approved the spec). Each subagent closes with `haiku_review_stamp` (not `haiku_run_next` — same decouple as the pre-execute review track, so parallel approval siblings can\'t trip the loop guard). The PARENT ticks once the wave closes. After every studio approval signs, the cursor returns `user_gate { gate_kind: "approval" }` (skipped under autopilot, where `complete_stage` auto-fires once the engine-role and quality_gates set is signed).',
 		},
 		"review-to-gate": {
 			injection: [
@@ -522,13 +527,13 @@ export function payloadFor(
 					target: "agent's `tool_use_result`",
 					what: isAutopilot
 						? "autopilot: approvalRoles trimmed to `[spec, continuity, cross-stage-consistency, quality_gates]`. Once all four engine entries sign the cursor returns `complete_stage` directly — no user gate, no studio agents."
-						: "every studio approval agent has signed → `user_gate { gate_kind: \"approval\" }`. `haiku_run_next` opens the review SPA inline and blocks on `haiku_await_gate`.",
+						: 'every studio approval agent has signed → `user_gate { gate_kind: "approval" }`. `haiku_run_next` opens the review SPA inline and blocks on `haiku_await_gate`.',
 				},
 			],
 			action: isAutopilot ? "complete_stage" : "user_gate",
 			summary: isAutopilot
 				? "autopilot: every required approval signed → complete_stage"
-				: "every studio approval signed → user_gate { gate_kind: \"approval\" }",
+				: 'every studio approval signed → user_gate { gate_kind: "approval" }',
 			payload: isAutopilot
 				? {
 						action: "complete_stage",
@@ -546,7 +551,7 @@ export function payloadFor(
 				"`approvals.<role>` signed on every unit for every approvalRole except the next one",
 				isAutopilot
 					? "autopilot: engine roles + `quality_gates` signed → no further approval work; cursor returns `complete_stage`"
-					: "non-autopilot: every studio approval agent has signed; cursor returns `user_gate { gate_kind: \"approval\" }`",
+					: 'non-autopilot: every studio approval agent has signed; cursor returns `user_gate { gate_kind: "approval" }`',
 			],
 			writes: [
 				{
@@ -558,7 +563,7 @@ export function payloadFor(
 			],
 			instructions: isAutopilot
 				? "Autopilot: cursor returns `complete_stage` directly. The engine merges the stage branch into intent main under `withIntentMainLock`."
-				: "Cursor returns `user_gate { gate_kind: \"approval\" }`. `haiku_run_next` opens the SPA review session inline and blocks on `haiku_await_gate`. On approve, the cursor advances to `complete_stage`. On request_changes, engine writes feedback and Track B walks the fix loop. **In `discrete` mode, the user gate dispatches differently — the engine opens a real PR/MR for the stage branch and the merge into intent main IS the approval signal.**",
+				: 'Cursor returns `user_gate { gate_kind: "approval" }`. `haiku_run_next` opens the SPA review session inline and blocks on `haiku_await_gate`. On approve, the cursor advances to `complete_stage`. On request_changes, engine writes feedback and Track B walks the fix loop. **In `discrete` mode, the user gate dispatches differently — the engine opens a real PR/MR for the stage branch and the merge into intent main IS the approval signal.**',
 		},
 		"gate-to-next-stage": {
 			injection: [
@@ -624,7 +629,7 @@ export function payloadFor(
 				{
 					hook: "start_feedback_hat prompt builder",
 					target: "subagent prompt",
-					what: "the fix-hat's mandate (`hats/<hat>.md`), the FB body, and a tool whitelist (`haiku_feedback_read`, `haiku_feedback_write`, `haiku_unit_read` for context, `haiku_feedback_advance_hat` / `_reject_hat`, optionally `haiku_feedback_set_targets` for the classifier hat).",
+					what: "the fix-hat's mandate (`hats/<hat>.md`), the FB body, and a tool whitelist (`haiku_feedback_read`, `haiku_feedback_write`, `haiku_unit_read` for context, `haiku_feedback_advance_hat` / `_reject_hat`, optionally `haiku_feedback_set_targets` + `haiku_feedback_set_severity` for the classifier hat).",
 				},
 			],
 			action: "start_feedback_hat",
@@ -657,7 +662,7 @@ export function payloadFor(
 				},
 			],
 			instructions:
-				"FB-as-unit fix loop. The first hat in `fix_hats:` is conventionally a classifier — it reads the FB body, decides which unit (if any) the finding targets and which approval roles to invalidate on closure, and calls `haiku_feedback_set_targets`. Subsequent hats LAND THE FIX on disk in the chain's worktree (a description of the fix is not the fix); the terminal hat (typically `feedback-assessor`) verifies the fix landed (commands pass) and calls `haiku_feedback_advance_hat`. Engine auto-stamps `closed_at`, merges the chain's code into the stage branch, and applies invalidations on the next tick. If the merge conflicts, the pre-tick `completePendingFixChainMerges` gate hands back `integrate_fix_chains` until the agent resolves it. A rejected (invalid) finding's code is discarded — it never lands.",
+				"FB-as-unit fix loop. The first hat in `fix_hats:` is conventionally a classifier — it reads the FB body, decides which unit (if any) the finding targets and which approval roles to invalidate on closure (`haiku_feedback_set_targets`), and ranks any unclassified finding's urgency (`haiku_feedback_set_severity`, blocker/high/medium/low — the cursor dispatches higher-severity findings first). Subsequent hats LAND THE FIX on disk in the chain's worktree (a description of the fix is not the fix); the terminal hat (typically `feedback-assessor`) verifies the fix landed (commands pass) and calls `haiku_feedback_advance_hat`. Engine auto-stamps `closed_at`, merges the chain's code into the stage branch, and applies invalidations on the next tick. If the merge conflicts, the pre-tick `completePendingFixChainMerges` gate hands back `integrate_fix_chains` until the agent resolves it. A rejected (invalid) finding's code is discarded — it never lands.",
 		},
 		"drift-detected": {
 			injection: [
@@ -674,7 +679,7 @@ export function payloadFor(
 				{
 					hook: "stamp-agent-write (PostToolUse)",
 					target: "intent action log",
-					what: "agent edits get an `entry_type: \"agent_write\"` stamp so the next sweep attributes the change to the agent and does NOT emit drift. The `drift_detected` action only fires for genuinely out-of-band edits.",
+					what: 'agent edits get an `entry_type: "agent_write"` stamp so the next sweep attributes the change to the agent and does NOT emit drift. The `drift_detected` action only fires for genuinely out-of-band edits.',
 				},
 			],
 			action: "drift_detected",
@@ -704,7 +709,7 @@ export function payloadFor(
 				{
 					path: ".haiku/intents/{slug}/stages/{stage}/feedback/<NN>-drift-*.md",
 					change:
-						"the agent files one FB per drift event via `haiku_feedback` with `origin: \"drift\"`, `source_ref: \"drift:<kind>:<file>\"`, `target_unit: <named unit>`, `target_invalidates: []`. The classifier hat decides whether the drift is material; closure with empty invalidates means \"cosmetic, no action,\" a non-empty list re-routes the cursor through the named approval roles.",
+						'the agent files one FB per drift event via `haiku_feedback` with `origin: "drift"`, `source_ref: "drift:<kind>:<file>"`, `target_unit: <named unit>`, `target_invalidates: []`. The classifier hat decides whether the drift is material; closure with empty invalidates means "cosmetic, no action," a non-empty list re-routes the cursor through the named approval roles.',
 				},
 			],
 			instructions:

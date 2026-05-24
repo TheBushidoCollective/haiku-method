@@ -20,22 +20,40 @@ const AuthorTypeSchemaInternal = z
 		"Derived from origin. Human-authored feedback cannot be closed/deleted by agents. `system` is reserved for engine-authored FBs (e.g. reject-loop escalation) that the SPA surfaces to humans but treats distinctly from agent and human authorship.",
 	)
 
-/** Origins a feedback item can come from. */
+/** Origins a feedback item can come from. Kept in lockstep with the
+ *  on-disk enum at packages/haiku/src/state/schemas/feedback.ts
+ *  (FEEDBACK_ORIGINS) — both runtimes enumerate the same set so a
+ *  projected FB never fails the wire parse. */
 export const FeedbackOriginSchema = z
 	.enum([
 		"adversarial-review",
 		"studio-review",
+		"engine-review",
+		"drift",
+		"discovery",
 		"external-pr",
 		"external-mr",
 		"user-visual",
 		"user-chat",
 		"user-question",
+		"user-revisit",
 		"agent",
 	])
 	.describe(
-		"Origin of a feedback item. Derives author_type (human|agent) via state-tools.deriveAuthorType. `user-question` marks a reply-seeking item that the router handles with `feedback_answer` instead of a fix loop.",
+		"Origin of a feedback item. Derives author_type (human|agent) via state-tools.deriveAuthorType. `user-question` marks a reply-seeking item that the router handles with `feedback_answer` instead of a fix loop. `engine-review` is the engine-built review roles (spec/continuity/cross-stage-consistency).",
 	)
 export type FeedbackOrigin = z.infer<typeof FeedbackOriginSchema>
+
+/** Finding urgency. Mirrors the on-disk FEEDBACK_SEVERITIES enum. The
+ *  fix-loop dispatches higher-severity findings first. Nullable on the
+ *  wire: a user-authored FB has no severity until the classifier
+ *  fix-hat backfills it. */
+export const FeedbackSeveritySchema = z
+	.enum(["blocker", "high", "medium", "low"])
+	.describe(
+		"Finding urgency: blocker (stops the gate) > high (fix before delivery) > medium (should fix) > low (nit). Drives fix-loop dispatch order.",
+	)
+export type FeedbackSeverity = z.infer<typeof FeedbackSeveritySchema>
 
 /** Lifecycle status of a feedback item.
  *

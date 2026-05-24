@@ -457,9 +457,11 @@ What's strictly enforced:
 
 This is why front-loading matters. By the time a defect surfaces at the gate, the original units' specs are permanent — but their code can be corrected by a fix-loop without re-opening the spec.
 
-### 6.3 FB classification (haiku_feedback_set_targets)
+### 6.3 FB classification (haiku_feedback_set_targets, haiku_feedback_set_severity)
 
-User-authored FBs land without targets (`target_unit: null`, `target_invalidates: []`). The first hat in the stage's `fix_hats:` chain is conventionally a classifier — it reads the FB body, decides which unit (if any) the finding targets and which approval roles to invalidate on closure, and calls `haiku_feedback_set_targets` to record the decision. Targets are immutable once set; subsequent calls return a stable named error.
+User-authored FBs land without targets (`target_unit: null`, `target_invalidates: []`) and without a `severity:`. The first hat in the stage's `fix_hats:` chain is conventionally a classifier — it reads the FB body, decides which unit (if any) the finding targets and which approval roles to invalidate on closure (via `haiku_feedback_set_targets`), and ranks its urgency `blocker | high | medium | low` (via `haiku_feedback_set_severity`). Both are immutable once set; subsequent calls return a stable named error. Agent-filed FBs already carry a severity from the `haiku_feedback` create call (it's a **required** create field for the review/approval roles), so the classifier's `set_severity` call is a no-op-confirm (`severity_already_set`) on those — it only does real work for the user/SPA findings that arrive unclassified.
+
+Severity drives **fix-loop dispatch order**: the cursor sorts open FBs highest-severity-first (`feedbackSeverityRank`, blocker < high < medium < low; an unclassified FB ranks as `medium`) before slicing the concurrency pool, and the slot-replenishment pick applies the same ranking — so a stage full of findings drains blockers before nits. Engine-authored FBs (gate failures, drift) set their severity at write time rather than deferring to the classifier.
 
 Pre-v4 used a separate `triaged_at:` field and a pre-tick triage gate. v4 collapses that into the classifier hat: the FB-as-unit hat chain runs immediately, and the classifier IS the first hat. Cross-stage routing via `haiku_feedback_move` still exists for cases where the FB was filed against the wrong stage entirely.
 

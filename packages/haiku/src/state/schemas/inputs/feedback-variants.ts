@@ -215,6 +215,44 @@ export const validateHaikuFeedbackSetTargetsInputSchema = stateAjv.compile(
 	HAIKU_FEEDBACK_SET_TARGETS_INPUT_SCHEMA,
 )
 
+// ── haiku_feedback_set_severity ───────────────────────────────────
+//
+// Classifier-hat backfill path: a user-authored FB lands WITHOUT a
+// severity (the SPA composer has no severity picker — the human types
+// what they mean, the agent triages it). The classifier fix-hat reads
+// the FB body, judges urgency, and records it here. Mirror of
+// `haiku_feedback_set_targets`: write-once, refuses to overwrite an
+// already-set severity (immutable per the FB-as-unit architecture; to
+// re-rank, reject + recreate). Agent-filed FBs already carry severity
+// from the `haiku_feedback` create call, so the classifier's call is a
+// no-op-confirm on those (returns `severity_already_set`, the agent
+// just advances).
+
+export const HAIKU_FEEDBACK_SET_SEVERITY_INPUT_SCHEMA = Type.Object(
+	{
+		...fbTargeting,
+		severity: Type.String({
+			enum: ["blocker", "high", "medium", "low"],
+			description:
+				"Finding urgency. blocker = stops the gate, fix first; high = fix before delivery; medium = should fix; low = nice-to-have / nit. Set once; subsequent calls on an already-classified FB are rejected.",
+		}),
+		reasoning: Type.Optional(
+			Type.String({
+				description:
+					"Optional one-paragraph rationale for the severity choice. Surfaced in the SPA next to the badge so reviewers see WHY the classifier ranked it this way. Encouraged for non-obvious calls (e.g. a low-looking finding bumped to blocker because it gates a downstream unit).",
+			}),
+		),
+		state_file: stateFile,
+	},
+	{ additionalProperties: false },
+)
+export type HaikuFeedbackSetSeverityInput = Static<
+	typeof HAIKU_FEEDBACK_SET_SEVERITY_INPUT_SCHEMA
+>
+export const validateHaikuFeedbackSetSeverityInputSchema = stateAjv.compile(
+	HAIKU_FEEDBACK_SET_SEVERITY_INPUT_SCHEMA,
+)
+
 // ── haiku_feedback_advance_hat ────────────────────────────────────
 //
 // The `reply` field is optional at the schema layer because mid-chain

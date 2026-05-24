@@ -54,6 +54,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import matter from "gray-matter"
+import { feedbackSeverityRank } from "../../state/schemas/index.js"
 import {
 	findHaikuRoot,
 	MAX_CONCURRENT_SUBAGENTS,
@@ -1026,6 +1027,10 @@ function walkFeedbackTrack(args: {
 		stage: string
 		hat: string
 		terminal: boolean
+		// Finding urgency — drives dispatch order (blocker first). Read
+		// from the FB's frontmatter; null/absent for not-yet-classified
+		// findings, which rank alongside `medium`.
+		severity: string | null
 	}
 	const dispatches: FbDispatch[] = []
 
@@ -1036,11 +1041,14 @@ function walkFeedbackTrack(args: {
 			// Non-dispatch action — return immediately, can't be batched.
 			return action
 		}
+		const fbSeverity =
+			((readFm(fbPath)?.data as Record<string, unknown> | undefined)
+				?.severity as string | undefined) ?? null
 		// Pull the single FB ID out of the action's dispatches array
 		// (nextActionForFeedback always returns a single-entry array).
 		const entry = action.dispatches[0]
 		if (!entry) return null
-		dispatches.push({ ...entry })
+		dispatches.push({ ...entry, severity: fbSeverity })
 		return null
 	}
 
@@ -1167,6 +1175,18 @@ function walkFeedbackTrack(args: {
 	}
 	if (verifiedBatch.length === 0) return null
 
+	// Severity-first ordering: dispatch the findings that matter most
+	// before the rest. A stable sort by severity rank (blocker < high <
+	// medium < low; unclassified ranks as medium) preserves the existing
+	// walk order (stage order, then readdir-sorted FBs, then intent
+	// scope) WITHIN each severity band, so re-ticks stay deterministic.
+	// `pickUndispatchedFbBlock` applies the same ranking when it refills a
+	// freed slot, so the whole queue drains highest-severity-first.
+	const rankedBatch = [...verifiedBatch].sort(
+		(a, b) =>
+			feedbackSeverityRank(a.severity) - feedbackSeverityRank(b.severity),
+	)
+
 	// Cap the initial pool width at MAX_CONCURRENT_SUBAGENTS. This is the
 	// fix-loop's true slot count: the parent spawns this many chains in
 	// one wave, and `pickUndispatchedFbBlock` (terminal-advance slot
@@ -1174,10 +1194,7 @@ function walkFeedbackTrack(args: {
 	// FB until the queue drains. Without a cap a stage with dozens of
 	// open findings would spawn all of them at once; with it the pool
 	// runs at a steady width. Override via HAIKU_MAX_CONCURRENT_SUBAGENTS.
-	// verifiedBatch is already in stable walk order (stage order, then
-	// readdir-sorted FBs, then intent scope), so the slice is
-	// deterministic across re-ticks.
-	const pooledBatch = verifiedBatch.slice(0, MAX_CONCURRENT_SUBAGENTS)
+	const pooledBatch = rankedBatch.slice(0, MAX_CONCURRENT_SUBAGENTS)
 
 	const first = pooledBatch[0]
 	return {

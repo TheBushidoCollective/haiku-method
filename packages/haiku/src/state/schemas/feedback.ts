@@ -35,6 +35,7 @@ import { stateAjv } from "./_ajv.js"
 const FEEDBACK_ORIGINS = [
 	"adversarial-review",
 	"studio-review",
+	"engine-review",
 	"drift",
 	"discovery",
 	"external-pr",
@@ -47,6 +48,43 @@ const FEEDBACK_ORIGINS = [
 ] as const
 
 export type FeedbackOrigin = (typeof FEEDBACK_ORIGINS)[number]
+
+// ── Severity ──────────────────────────────────────────────────────────
+//
+// Every finding carries a severity so the fix-loop can dispatch the
+// findings that matter most first. Ordered most-to-least urgent:
+//   blocker — stops the gate; must be fixed before the stage advances
+//   high    — fix before delivery
+//   medium  — should fix
+//   low     — nice-to-have / nit
+//
+// Required on the agent-facing `haiku_feedback` create tool (review
+// agents classify as they file). User-authored feedback (SPA / human
+// path) lands WITHOUT severity — the classifier fix-hat backfills it via
+// `haiku_feedback_set_severity`, the same way it backfills `targets`.
+
+const FEEDBACK_SEVERITIES = ["blocker", "high", "medium", "low"] as const
+
+export type FeedbackSeverity = (typeof FEEDBACK_SEVERITIES)[number]
+
+// Ordering rank — lower number = higher urgency, dispatched first.
+// An unset/unknown severity (a freshly-filed user FB not yet classified)
+// ranks alongside `medium` so it neither jumps ahead of real blockers nor
+// gets starved behind every low.
+export function feedbackSeverityRank(severity: unknown): number {
+	switch (severity) {
+		case "blocker":
+			return 0
+		case "high":
+			return 1
+		case "medium":
+			return 2
+		case "low":
+			return 3
+		default:
+			return 2
+	}
+}
 
 // FB-NN identifier shape — `FB-` followed by one or more digits, OR
 // just digits (the handler accepts either).
@@ -100,6 +138,10 @@ export const FEEDBACK_FRONTMATTER_SCHEMA = Type.Object(
 	{
 		title: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
 		origin: Type.Optional(Type.String({ enum: [...FEEDBACK_ORIGINS] })),
+		// Optional on the READ side: user-authored FBs land severity-less
+		// until the classifier fix-hat backfills it. The agent-facing
+		// create tool below requires it.
+		severity: Type.Optional(Type.String({ enum: [...FEEDBACK_SEVERITIES] })),
 		author: Type.Optional(Type.String()),
 		author_type: Type.Optional(
 			Type.String({ enum: ["agent", "human", "system"] }),
@@ -190,6 +232,10 @@ export const HAIKU_FEEDBACK_INPUT_SCHEMA = Type.Object(
 		body: Type.String({
 			minLength: 1,
 			description: "Markdown body describing the finding.",
+		}),
+		severity: Type.String({
+			enum: [...FEEDBACK_SEVERITIES],
+			description: `How urgent the finding is. REQUIRED — classify as you file. One of: ${FEEDBACK_SEVERITIES.join(" | ")}. blocker = stops the gate, fix first; high = fix before delivery; medium = should fix; low = nice-to-have / nit. The fix-loop dispatches higher-severity findings first.`,
 		}),
 		origin: Type.Optional(
 			Type.String({
@@ -286,6 +332,7 @@ export const FSM_DRIVEN_FB_FIELDS = FSM_DRIVEN_FB_FIELDS_LIST
 export const CREATE_TIME_FB_FIELDS = [
 	"title",
 	"origin",
+	"severity",
 	"author",
 	"author_type",
 	"created_at",
@@ -295,4 +342,4 @@ export const CREATE_TIME_FB_FIELDS = [
 	"targets",
 ] as const
 
-export { FEEDBACK_ORIGINS }
+export { FEEDBACK_ORIGINS, FEEDBACK_SEVERITIES }

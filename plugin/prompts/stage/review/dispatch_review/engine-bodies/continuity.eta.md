@@ -9,7 +9,7 @@
 **Why pre-execute:** orphan-output PLANS are cheap to fix at the spec level (delete the unit or wire it). Orphan-output REALITIES at post-execute mean the unit shipped code with no consumers — recovery means writing integration code or calling `haiku_coverage_acknowledge`. Same `continuity` mandate fires again at post-execute `dispatch_approval` to verify the BUILT outputs are wired; this pre-execute pass catches the planning failure before it becomes a building failure.
 
 **How to file findings:**
-- Per-orphan-plan or per-broken-reference: `haiku_feedback({ stage: "<this stage>", origin: "engine-review", author: "continuity", source_ref: "continuity-spec:<path>", target_unit: <best guess or null>, target_invalidates: ["continuity"] })`
+- Per-orphan-plan or per-broken-reference: `haiku_feedback({ stage: "<this stage>", origin: "engine-review", author: "continuity", severity: "high", source_ref: "continuity-spec:<path>", target_unit: <best guess or null>, target_invalidates: ["continuity"] })` (a broken planned reference is a concrete spec defect, so `high` — bump to `blocker` if building it as-is would yield a non-functional deliverable)
 - The fix is at the SPEC level (rewrite unit `outputs:` / `inputs:` / DAG), not the code level — there is no code yet.
 
 **Anti-patterns (RFC 2119):**

@@ -564,6 +564,10 @@ export function engineHandleDriftEvents(args: {
 					currentSha: currentSha || null,
 				}),
 				origin: "drift",
+				// Drift always escalates to human attention — high, not
+				// blocker (it's a heads-up that something changed under the
+				// engine, not a gate-stopping failure).
+				severity: "high",
 				author: "engine",
 				authorType: "system",
 				source_ref: sourceRef,

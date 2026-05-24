@@ -250,6 +250,7 @@ export function makeFeedback({
 	body = "test body",
 	origin = "user-chat",
 	author = "user",
+	severity = null, // "blocker" | "high" | "medium" | "low" | null (unclassified)
 	target_unit = null,
 	target_invalidates = [],
 	resolution = null, // "question" | "inline_fix" | "stage_revisit" | null
@@ -263,6 +264,7 @@ export function makeFeedback({
 	const fm = {
 		title,
 		origin,
+		...(severity ? { severity } : {}),
 		author,
 		author_type: author === "user" ? "human" : "agent",
 		created_at: at,
@@ -451,7 +453,10 @@ export function makeStudio({
 		for (const hat of studio_fix_hats) {
 			writeFileSync(
 				join(studioFixHatsRoot, `${hat}.md`),
-				matter.stringify(`# ${hat}\n\nStudio fix-hat mandate for ${hat}.\n`, {}),
+				matter.stringify(
+					`# ${hat}\n\nStudio fix-hat mandate for ${hat}.\n`,
+					{},
+				),
 			)
 		}
 	}

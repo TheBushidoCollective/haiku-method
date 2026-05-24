@@ -260,18 +260,19 @@ export function ModalRouter({
 						<h3>tools the subagent uses</h3>
 						<ul>
 							<li>
-								<code>haiku_unit_start</code> — stamps `started_at` on first entry
+								<code>haiku_unit_start</code> — stamps `started_at` on first
+								entry
 							</li>
 							<li>
 								<code>haiku_unit_read</code> — read the unit spec body
 							</li>
 							<li>
-								<code>haiku_unit_advance_hat</code> — terminal advance, appends to{" "}
-								<code>iterations[]</code>
+								<code>haiku_unit_advance_hat</code> — terminal advance, appends
+								to <code>iterations[]</code>
 							</li>
 							<li>
-								<code>haiku_unit_reject_hat</code> — reject, rewinds one hat on the
-								next tick (or re-dispatches hat[0] if reject was on hat[0])
+								<code>haiku_unit_reject_hat</code> — reject, rewinds one hat on
+								the next tick (or re-dispatches hat[0] if reject was on hat[0])
 							</li>
 						</ul>
 					</div>
@@ -364,7 +365,7 @@ export function ModalRouter({
 						className="prose"
 						html={renderInline(
 							modal.detailKey === "specs_gate_review"
-								? "The user spec gate. The cursor's reviewRoles loop reaches the `user` role and emits `user_gate { gate_kind: \"spec\" }`. `haiku_run_next` opens the SPA review session inline (via `haiku_review_open`) and blocks on `haiku_await_gate` — single tool call, no URL+await two-step. **Reject does not re-pop the UI** — Track B walks before Track A on every tick, so any open feedback routes through `start_feedback_hat` until it closes."
+								? 'The user spec gate. The cursor\'s reviewRoles loop reaches the `user` role and emits `user_gate { gate_kind: "spec" }`. `haiku_run_next` opens the SPA review session inline (via `haiku_review_open`) and blocks on `haiku_await_gate` — single tool call, no URL+await two-step. **Reject does not re-pop the UI** — Track B walks before Track A on every tick, so any open feedback routes through `start_feedback_hat` until it closes.'
 								: "Quality gates run inline as part of the cursor's approval track. The cursor returns `dispatch_quality_gates { stage, units }` when `approvals.quality_gates` is missing on at least one unit. The agent runs `runQualityGates()` (configured tests / lint / typecheck); on success the engine signs `approvals.quality_gates` on every listed unit. Failures don't roll the workflow back — the agent fixes in place and re-runs until the gates pass.",
 						)}
 					/>
@@ -556,7 +557,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**Track A — intent.** Pre-stage: `elaborate_loop` (no `stage`, `signals_unmet: [{signal: \"verify_conversation\"}]`) when intent.md lacks `verified_at` (non-autopilot, fresh intent). On the active stage, walk: `elaborate_loop` (single state carrying every unmet completion signal — `conversation` / `verify_conversation` / `discovery` / `decompose` / `verify_decompose`) → `start_unit_hat` → `dispatch_review` / `user_gate { spec }` → `dispatch_quality_gates` / `dispatch_approval` / `user_gate { approval }` → `complete_stage`. The loop self-cycles as each signal flips on disk; the verifier signals carry `verifier_nonces.<signal>` for the matching seal tool.",
+										'**Track A — intent.** Pre-stage: `elaborate_loop` (no `stage`, `signals_unmet: [{signal: "verify_conversation"}]`) when intent.md lacks `verified_at` (non-autopilot, fresh intent). On the active stage, walk: `elaborate_loop` (single state carrying every unmet completion signal — `conversation` / `verify_conversation` / `discovery` / `decompose` / `verify_decompose`) → `start_unit_hat` → `dispatch_review` / `user_gate { spec }` → `dispatch_quality_gates` / `dispatch_approval` / `user_gate { approval }` → `complete_stage`. The loop self-cycles as each signal flips on disk; the verifier signals carry `verifier_nonces.<signal>` for the matching seal tool.',
 									)}
 								/>
 							</li>
@@ -687,7 +688,7 @@ export function ModalRouter({
 						<HtmlBlock
 							className="prose"
 							html={renderInline(
-								"v3 used a `triaged_at:` frontmatter field and a separate pre-tick triage gate. v4 collapses that into the FB-as-unit hat chain: the **first hat in the stage's `fix_hats:` chain is conventionally a classifier**. It reads the FB body, decides which unit (if any) the finding targets and which approval roles to invalidate on closure, and calls `haiku_feedback_set_targets` to record the decision. Targets are immutable once set. Cross-stage moves still go through `haiku_feedback_move` (which physically relocates the file to the target stage's `feedback/` dir).",
+								"v3 used a `triaged_at:` frontmatter field and a separate pre-tick triage gate. v4 collapses that into the FB-as-unit hat chain: the **first hat in the stage's `fix_hats:` chain is conventionally a classifier**. It reads the FB body, decides which unit (if any) the finding targets and which approval roles to invalidate on closure (`haiku_feedback_set_targets`), and ranks any unclassified finding's urgency (`haiku_feedback_set_severity` — blocker/high/medium/low, which the cursor uses to dispatch higher-severity findings first). Both are immutable once set. Cross-stage moves still go through `haiku_feedback_move` (which physically relocates the file to the target stage's `feedback/` dir).",
 							)}
 						/>
 					</div>
@@ -696,7 +697,7 @@ export function ModalRouter({
 						<HtmlBlock
 							className="prose"
 							html={renderInline(
-								"Stages are NEVER sealed — only intents are. A previously-merged stage that gains a new unit (because the fix-loop authored corrective work) becomes ahead-of-main and `firstUnmergedStage` rewinds the cursor to it on the next tick. `complete_stage` is a recurring event, not a terminal one. Forward-only applies to existing units' bytes (immutable post-merge), not to whether a stage is \"done.\"",
+								'Stages are NEVER sealed — only intents are. A previously-merged stage that gains a new unit (because the fix-loop authored corrective work) becomes ahead-of-main and `firstUnmergedStage` rewinds the cursor to it on the next tick. `complete_stage` is a recurring event, not a terminal one. Forward-only applies to existing units\' bytes (immutable post-merge), not to whether a stage is "done."',
 							)}
 						/>
 					</div>
@@ -705,7 +706,7 @@ export function ModalRouter({
 						<HtmlBlock
 							className="prose"
 							html={renderInline(
-								'`plugin/studios/ARCHITECTURE.md` §5.2–§5.4 (cursor model, properties, per-stage walk). Source: `packages/haiku/src/orchestrator/workflow/cursor.ts`.',
+								"`plugin/studios/ARCHITECTURE.md` §5.2–§5.4 (cursor model, properties, per-stage walk). Source: `packages/haiku/src/orchestrator/workflow/cursor.ts`.",
 							)}
 						/>
 					</div>
@@ -760,7 +761,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"The agent writes the answer back on the FB body via `haiku_feedback_write` (the body becomes the canonical decision record), then closes the FB via `haiku_feedback_update { status: \"closed\" }`.",
+										'The agent writes the answer back on the FB body via `haiku_feedback_write` (the body becomes the canonical decision record), then closes the FB via `haiku_feedback_update { status: "closed" }`.',
 									)}
 								/>
 							</li>
@@ -882,7 +883,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"Cursor includes `{ signal: \"verify_decompose\" }` in `signals_unmet[]` on the `elaborate_loop` action, with the seal nonce on `verifier_nonces.verify_decompose`.",
+										'Cursor includes `{ signal: "verify_decompose" }` in `signals_unmet[]` on the `elaborate_loop` action, with the seal nonce on `verifier_nonces.verify_decompose`.',
 									)}
 								/>
 							</li>
@@ -914,7 +915,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**On fail:** verifier files feedback with `targets.invalidates: [\"decompose_complete\"]` describing the coverage gap; the cursor routes through the fix loop on the next tick to rerun decomposition.",
+										'**On fail:** verifier files feedback with `targets.invalidates: ["decompose_complete"]` describing the coverage gap; the cursor routes through the fix loop on the next tick to rerun decomposition.',
 									)}
 								/>
 							</li>

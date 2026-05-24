@@ -281,6 +281,7 @@ function runStageScope(intent: string, stage: string, units: string[]) {
 					title: `quality_gates failure on ${unit}`,
 					body: `One or more declared quality_gates failed on unit \`${unit}\`:\n\n${failureSummary}\n\nThe fix loop should resolve the failure, then quality_gates re-runs on the next tick. If the gate keeps failing across attempts, the engine defers it to CI (environmental / non-source-convergent).`,
 					origin: "agent",
+					severity: "blocker",
 					author: "engine",
 					source_ref: sourceRef,
 					targetUnit: unit,
@@ -447,6 +448,7 @@ function runIntentScope(intent: string) {
 		title: `intent_quality_gates: ${failures.length} failing command(s)`,
 		body: `${failures.length} of ${distinctGates.length} distinct quality_gates command(s) failed at intent scope. The studio fix-hat loop should resolve each failure; on close, the cursor's intent walk will re-dispatch dispatch_quality_gates because approvals.intent_quality_gates is still unset. If the gates keep failing across attempts, the engine defers them to CI (environmental / non-source-convergent).\n\n${failureSummary}`,
 		origin: "agent",
+		severity: "blocker",
 		author: "engine",
 		source_ref: "intent_quality_gates",
 	})

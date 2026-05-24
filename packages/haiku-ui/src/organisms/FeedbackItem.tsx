@@ -90,6 +90,39 @@ const RESOLUTION_LABELS: Record<
 	},
 }
 
+/** Severity chip metadata. Ranks how urgently a finding must be fixed —
+ *  the fix-loop dispatches higher-severity findings first. Color runs hot
+ *  (red) to cool (stone) so the eye lands on blockers. */
+const SEVERITY_LABELS: Record<
+	"blocker" | "high" | "medium" | "low",
+	{ label: string; classes: string; tooltip: string }
+> = {
+	blocker: {
+		label: "Blocker",
+		classes: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+		tooltip:
+			"Blocker — stops the gate; fixed before the stage advances. The fix-loop dispatches blockers first.",
+	},
+	high: {
+		label: "High",
+		classes:
+			"bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+		tooltip: "High — a real defect that should be fixed before delivery.",
+	},
+	medium: {
+		label: "Medium",
+		classes:
+			"bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+		tooltip: "Medium — a genuine issue worth fixing; not delivery-blocking.",
+	},
+	low: {
+		label: "Low",
+		classes:
+			"bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
+		tooltip: "Low — a nit, polish, or nice-to-have.",
+	},
+}
+
 /**
  * Feedback body content is authored in markdown (review subagents,
  * external PR/MR bodies, user-visual dialog pasting rich text). Render
@@ -356,6 +389,10 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 				null)
 			: null
 
+		const severityBadge = item.severity
+			? (SEVERITY_LABELS[item.severity as keyof typeof SEVERITY_LABELS] ?? null)
+			: null
+
 		const visitPillClass = useMemo(
 			() => visitCounterClasses(item.visit),
 			[item.visit],
@@ -407,6 +444,16 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 						>
 							{item.feedback_id}
 						</span>
+						{severityBadge && (
+							<span
+								className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none ${severityBadge.classes}`}
+								role="status"
+								aria-label={`Severity: ${severityBadge.label}. ${severityBadge.tooltip}`}
+								title={severityBadge.tooltip}
+							>
+								{severityBadge.label}
+							</span>
+						)}
 						<FeedbackOriginIcon origin={item.origin} showLabel />
 						<FeedbackStatusBadge status={item.status} />
 						{item.scope === "intent" && (

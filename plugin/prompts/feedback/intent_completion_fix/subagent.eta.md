@@ -47,7 +47,7 @@ You are addressing ONE whole-intent finding. Your mandate is studio-wide, not st
 <%= step++ %>. **Decide:**
    - **A passes AND B passes** → call `haiku_feedback_advance_hat { intent: "<%= slug %>", feedback_id: <%= fbNum %> }` (omit `stage`). The workflow engine auto-closes the finding (this is the last hat in the fix_hats chain).
    - **A fails** → leave status unchanged. Do NOT call `haiku_feedback_advance_hat`. The workflow engine counts this bolt.
-   - **A passes, B fails** → leave the original open AND log the regression as a new finding via `haiku_feedback({ intent: "<%= slug %>", title: "<regression from intent-fix:<%= fbId %>>", body: "<diff hunk + impact>", origin: "studio-review", author: "fix-assessor" })`. Omit `stage`. Do NOT call `haiku_feedback_advance_hat`.
+   - **A passes, B fails** → leave the original open AND log the regression as a new finding via `haiku_feedback({ intent: "<%= slug %>", title: "<regression from intent-fix:<%= fbId %>>", body: "<diff hunk + impact>", origin: "studio-review", author: "fix-assessor", severity: "high" })` (a fix-introduced regression is a real defect — `high`, or `blocker` if it breaks the deliverable). Omit `stage`. Do NOT call `haiku_feedback_advance_hat`.
    - **Finding is invalid** → call `haiku_feedback_reject { intent: "<%= slug %>", feedback_id: <%= fbNum %>, reason: "<concrete reason>" }` — omit `stage`. Do NOT call `haiku_feedback_advance_hat`.
 <%= step++ %>. Return `fix-assessor: closed | open | rejected — <reason>`. Verb of completed action; zero hedging.
 <% } else { %><%= step++ %>. **Verify the finding before editing.** Read the flagged artifact(s) and check three failure modes routing to `haiku_feedback_reject` (omit `stage` — intent scope) instead of an edit:

@@ -99,6 +99,30 @@ export default defineTool({
 				}),
 			)
 		}
+		// Completed = work done. A completed unit's terminal hat advanced and its
+		// code already merged into the stage branch; resetting it would clear the
+		// engine's bookkeeping but could NOT un-merge the code — it only desyncs
+		// state from the on-disk reality. Reset is a recovery primitive for
+		// WEDGED IN-FLIGHT units (bolt cap, wrong premise mid-run), never a way
+		// to undo finished, integrated work. To redo a completed unit, drive the
+		// stage's fix-loop (file feedback) or revisit the stage — not reset.
+		if (status === "completed") {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: JSON.stringify({
+							error: "unit_completed_not_resettable",
+							slug,
+							stage,
+							unit,
+							message: `Unit '${unit}' is completed — its work is already merged into the stage branch. Reset cannot un-merge it and would only desync engine state from the code on disk. Reset is for wedged in-flight units only. To change completed work, file feedback against the stage (fix-loop) or revisit the stage.`,
+						}),
+					},
+				],
+				isError: true,
+			}
+		}
 
 		const result = await runPicker({
 			intentSlug: slug,

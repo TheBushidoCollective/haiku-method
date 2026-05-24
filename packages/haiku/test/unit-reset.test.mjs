@@ -260,3 +260,49 @@ test("haiku_unit_reset cancel mutates nothing", async () => {
 		rmSync(tmp, { recursive: true, force: true })
 	}
 })
+
+test("haiku_unit_reset refuses a completed unit — work is merged, unresettable", async () => {
+	if (!HAS_GIT) return
+	const slug = "reset-completed"
+	const { tmp, stage, intentDir } = setup(slug)
+	const orig = process.cwd()
+	try {
+		process.chdir(tmp)
+		const { deriveUnitStatus } = await import(`${SRC}/state-tools.ts`)
+		// Auto-confirm the picker — the guard must refuse BEFORE the picker is
+		// ever reached, so even a "yes" never gets the chance to mutate.
+		const parsed = await runReset(slug, stage, "unit-01-done", "reset")
+		assert.strictEqual(
+			parsed.error,
+			"unit_completed_not_resettable",
+			`got ${JSON.stringify(parsed)}`,
+		)
+		// FM untouched — still completed.
+		const fm = matter(
+			readFileSync(
+				join(intentDir, "stages", stage, "units", "unit-01-done.md"),
+				"utf8",
+			),
+		).data
+		assert.strictEqual(
+			deriveUnitStatus(fm),
+			"completed",
+			"completed unit stays completed — reset must not touch it",
+		)
+		assert.ok(
+			Array.isArray(fm.iterations) && fm.iterations.length === 1,
+			"iterations untouched",
+		)
+		assert.ok(
+			fm.approvals && Object.keys(fm.approvals).length > 0,
+			"approvals untouched",
+		)
+	} finally {
+		try {
+			process.chdir(orig)
+		} catch {
+			process.chdir(tmpdir())
+		}
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})

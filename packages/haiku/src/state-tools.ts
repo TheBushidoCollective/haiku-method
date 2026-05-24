@@ -29,6 +29,7 @@ import { Ajv } from "ajv"
 import matter from "gray-matter"
 import { features, resolvePluginRoot } from "./config.js"
 import { buildFbHatDispatchBlock } from "./orchestrator/fb-dispatch-builder.js"
+import { resolveRejectTarget } from "./orchestrator/hat-loop-routing.js"
 import {
 	resolveIntentStages,
 	resolveStageFixHats,
@@ -10103,17 +10104,15 @@ export function handleStateTool(
 				rejectStage,
 				args.unit as string,
 			)
-			const hatIdx = stageHats.indexOf(currentHat)
-			// Feedback-assessor rejections always bolt to the FIRST hat
-			// (designer) — the assessor is verifying the work itself, not the
-			// prior reviewer's judgment, so the fix requires new artifact
-			// output, not a re-review. All other hat rejections step back one.
-			const prevHat =
-				currentHat === FEEDBACK_ASSESSOR_HAT
-					? stageHats[0]
-					: hatIdx > 0
-						? stageHats[hatIdx - 1]
-						: stageHats[0]
+			// Reject bounces to the prior hat. Shared resolver (used by the
+			// feedback fix-loop too) — step back one, with the unit-track
+			// feedback-assessor → first-hat special case (the assessor verifies
+			// the work itself, so its reject needs fresh output, not a re-review).
+			const { targetHat: prevHat } = resolveRejectTarget(
+				stageHats,
+				currentHat,
+				{ assessorToFirst: true, assessorHat: FEEDBACK_ASSESSOR_HAT },
+			)
 
 			// Auto-escalate model tier on rejection (gated by features.modelSelection)
 			if (features.modelSelection) {
@@ -13265,8 +13264,13 @@ export function handleStateTool(
 			const newStoredIdxRej = callingIdxRej - 2
 			const newStoredHatRej =
 				newStoredIdxRej >= 0 ? fixHatsRej[newStoredIdxRej] : ""
-			const nextDispatchedHatRej =
-				callingIdxRej > 0 ? fixHatsRej[callingIdxRej - 1] : callingHatRej
+			// Reject bounces to the prior hat — shared resolver (used by the
+			// unit hat loop too). Storage bookkeeping (newStoredHatRej) stays
+			// feedback-specific; the target decision is the shared one.
+			const { targetHat: nextDispatchedHatRej } = resolveRejectTarget(
+				fixHatsRej,
+				callingHatRej,
+			)
 
 			// Append rejection iteration record (the calling hat's work was
 			// rejected) and bump bolt.

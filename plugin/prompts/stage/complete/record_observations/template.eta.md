@@ -2,6 +2,8 @@
 
 The **<%= it.stage %>** stage of intent **<%= it.slug %>** has every approval signed. Before the engine merges the stage and advances, write a brief reflection at `.haiku/intents/<%= it.slug %>/stages/<%= it.stage %>/observations.md` that captures the parts of this stage that **artifacts on disk don't already show**.
 
+> **Path is repo-relative — the project working tree, NOT the engine metadata dir.** Write to `.haiku/intents/<%= it.slug %>/stages/<%= it.stage %>/observations.md` *under your repo root* — the same `.haiku/intents/<%= it.slug %>/` tree that already holds `units/`, `feedback/`, and `BRIEF.md`. Do **NOT** write it into the `~/.haiku/projects/…` directory where this prompt file lives (that's engine bookkeeping; the engine reads observations.md only from the repo tree, and a file written to the metadata dir is invisible — the tick will re-emit `record_observations` and make no progress).
+
 What's already captured elsewhere — don't repeat it:
 
 - Which hats fired and how many bolts they took → **`iterations` on each unit's FM**

@@ -322,7 +322,7 @@ Each stage's inputs reference specific outputs from prior stages. If a required 
 | **product** | product, specification, validator | completeness | external, ask | Acceptance criteria, behavioral specs, coverage validation |
 | **development** | planner, builder, reviewer | correctness, security, performance, architecture, test-quality + design:consistency, design:accessibility, product:completeness | ask | Implementation with quality gates |
 | **operations** | ops-engineer, sre | reliability, observability + development:security | auto | Deployment, monitoring, runbooks |
-| **security** | threat-modeler, red-team, blue-team, security-reviewer | threat-coverage, mitigation-effectiveness + development:security, development:architecture, operations:reliability | external, ask | Threat modeling, vulnerability assessment |
+| **security** | threat-modeler, security-engineer, security-reviewer | red-team, threat-coverage, mitigation-effectiveness + development:security, development:architecture, operations:reliability | external, ask | Threat modeling, vulnerability assessment (red-team adversarial review runs at the stage level + a fix loop, not as in-loop hats) |
 
 ### Ideation Studio Stages
 

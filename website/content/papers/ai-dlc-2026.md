@@ -1687,7 +1687,7 @@ Hat-based orchestration becomes concrete through **named workflows**—predefine
 | Workflow | Hat Sequence | Purpose |
 |----------|-------------|---------|
 | **default** | planner → builder → reviewer | Standard execution cycle for most units |
-| **adversarial** | red-team → blue-team | Security-focused testing — red team attempts to break the implementation, blue team hardens it |
+| **adversarial** | red-team (review) → fix loop | Security-focused testing — a red-team review agent attempts to break the assembled implementation; the fix loop hardens and re-attacks the patch (stage-level, not in-loop hats) |
 | **design** | planner → designer → reviewer | Visual/UX-focused execution for design-discipline units |
 | **hypothesis** | observer → hypothesizer → experimenter → analyst | Scientific debugging and investigation methodology |
 | **tdd** | test-writer → implementer → refactorer | Test-driven development with explicit Red-Green-Refactor phases |

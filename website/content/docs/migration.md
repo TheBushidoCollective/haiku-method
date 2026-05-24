@@ -60,7 +60,7 @@ AI-DLC's named workflows (default, adversarial, design, hypothesis, TDD) defined
 | Old Workflow | New Approach |
 |-------------|--------------|
 | `default` | Software studio, development stage (planner → builder → reviewer) |
-| `adversarial` | Software studio, security stage (threat-modeler → red-team → blue-team → security-reviewer) |
+| `adversarial` | Software studio, security stage (threat-modeler → security-engineer → security-reviewer per unit; red-team adversarial review + fix loop run at the stage level) |
 | `design` | Software studio, design stage (designer → design-reviewer) |
 | `hypothesis` | Not a separate workflow; use the ideation studio or define a custom stage |
 | `tdd` | A custom stage or configuration within the development stage |

@@ -345,6 +345,33 @@ body that exists on disk but no iterations were recorded
 	assert.match(after, /result: advance/)
 })
 
+await test("set_unit_iterations rejects an EXPLICIT empty array → points at haiku_unit_reset", async () => {
+	// Footgun guard (bug report Issue 4): iterations: [] is the intuitive
+	// "reset" call but would synthesize a COMPLETED unit. It must reject and
+	// point at the real recovery primitive. (unit-99 exists from the prior
+	// test; the guard fires before touching its iterations.)
+	const res = await fetch(
+		`${baseUrl}/api/debug/intents/${intentSlug}/ops/set_unit_iterations`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				stage: "design",
+				unit: "unit-99-legacy-no-iters",
+				iterations: [],
+			}),
+		},
+	)
+	assert.strictEqual(res.status, 200)
+	const data = await res.json()
+	assert.strictEqual(
+		data.result.ok,
+		false,
+		`explicit [] must reject; got ${JSON.stringify(data.result)}`,
+	)
+	assert.strictEqual(data.result.error, "use_haiku_unit_reset")
+})
+
 await test("set_unit_iterations rejects missing stage_or_unit", async () => {
 	const res = await fetch(
 		`${baseUrl}/api/debug/intents/${intentSlug}/ops/set_unit_iterations`,

@@ -445,6 +445,23 @@ export function setUnitIterations(args: {
 	}
 	const unitPath = join(unitsDir, found)
 
+	// Footgun guard (bug report Issue 4): an EXPLICIT empty array is the
+	// intuitive "reset this unit" call, but the synthesize-branch below would
+	// instead mark it COMPLETED (one advance per hat) — the opposite. There
+	// is now a real recovery primitive; point the caller at it. `undefined`
+	// (the arg omitted) still falls through to synthesize — that's the
+	// documented force_stage_complete recovery shape.
+	if (Array.isArray(args.iterations) && args.iterations.length === 0) {
+		return {
+			ok: false,
+			error: "use_haiku_unit_reset",
+			details: {
+				message:
+					"Passing iterations: [] does NOT reset a unit — set_unit_iterations with no entries synthesizes a COMPLETED state (one advance per hat). To return a unit to pending (clear iterations, discard its worktree), use haiku_unit_reset { intent, stage, unit }.",
+			},
+		}
+	}
+
 	let iterations: Array<{ hat: string; result: string; at: string }>
 	if (args.iterations && args.iterations.length > 0) {
 		const nowIso = new Date().toISOString()

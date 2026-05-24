@@ -344,6 +344,7 @@ export function syncBranchDownstream(slug: string): PreCursorSyncResult {
 				intentMain,
 				currentBranch,
 				`haiku: merge ${mainlineRef} → ${intentMain} (pre-cursor sync)`,
+				slug,
 			)
 			if (!step1.ok) {
 				return {
@@ -377,6 +378,7 @@ export function syncBranchDownstream(slug: string): PreCursorSyncResult {
 			const step2 = mergeRefInPlace(
 				intentMain,
 				`haiku: merge ${intentMain} → ${currentBranch} (pre-cursor sync)`,
+				slug,
 			)
 			if (!step2.ok) {
 				return {
@@ -403,6 +405,7 @@ function mergeRefIntoBranch(
 	targetBranch: string,
 	currentBranch: string,
 	message: string,
+	slug: string,
 ): {
 	ok: boolean
 	performed: boolean
@@ -410,51 +413,15 @@ function mergeRefIntoBranch(
 	message?: string
 } {
 	if (currentBranch === targetBranch) {
-		return mergeRefInPlace(sourceRef, message)
+		return mergeRefInPlace(sourceRef, message, slug)
 	}
 	// Temp worktree path: merge in isolation, no risk to the agent's tree.
+	// Same engine-state guard as the in-place path — the temp worktree is on
+	// `targetBranch`, the authoritative side for engine state.
 	try {
-		const tmpResult = withWorktreeOnBranch(targetBranch, (tmpPath) => {
-			try {
-				execFileSync(
-					"git",
-					[
-						"-C",
-						tmpPath,
-						"merge",
-						sourceRef,
-						"--no-ff",
-						"--no-edit",
-						"-m",
-						message,
-					],
-					{ stdio: "pipe" },
-				)
-				return { ok: true, performed: true, conflictFiles: [] as string[] }
-			} catch (err) {
-				const conflicts = tryRun(
-					["git", "-C", tmpPath, "diff", "--name-only", "--diff-filter=U"],
-					tmpPath,
-				)
-					.split("\n")
-					.filter(Boolean)
-				if (conflicts.length === 0) {
-					tryRun(["git", "-C", tmpPath, "merge", "--abort"], tmpPath)
-					return {
-						ok: false,
-						performed: false,
-						conflictFiles: [],
-						message: err instanceof Error ? err.message : String(err),
-					}
-				}
-				return {
-					ok: false,
-					performed: false,
-					conflictFiles: conflicts,
-					message: `Merge ${sourceRef} → ${targetBranch} left conflicts in ${conflicts.length} file(s).`,
-				}
-			}
-		})
+		const tmpResult = withWorktreeOnBranch(targetBranch, (tmpPath) =>
+			engineProtectedMergeInCwd(["-C", tmpPath], sourceRef, slug, message),
+		)
 		return tmpResult
 	} catch (err) {
 		return {
@@ -466,8 +433,35 @@ function mergeRefIntoBranch(
 }
 
 /** Helper: merge `sourceRef` into the currently-checked-out branch. */
-function mergeRefInPlace(
+/**
+ * Engine-state-protected merge of `sourceRef` into the branch checked out at
+ * `gitC`'s cwd. This is the downstream-sync analogue of the guard in
+ * `mergeUnitWorktree` / `mergeFixChainWorktree`.
+ *
+ * Why (bug report BUG-2/3, downstream-sync-clobber.test.mjs): the per-tick
+ * `syncBranchDownstream` merges intent-main → the active stage branch (and
+ * mainline → intent-main). The TARGET of each of those merges is always the
+ * branch that is AHEAD for engine-owned state — the stage branch is always
+ * ahead of intent main (the stage-branch invariant), and intent main is always
+ * ahead of mainline for `.haiku/intents/<slug>/`. So when the source carries a
+ * diverged copy of a unit/feedback/intent file the target did NOT touch since
+ * the fork, git's 3-way merge silently auto-resolves to the source's (stale /
+ * skeleton) side with no conflict marker — reverting the target's authoritative
+ * frontmatter. A clobbered unit comes back as the `status:`-bearing v3 skeleton
+ * that then re-fires the migrator every tick ("migrated every tick" in the
+ * report), and silently reverts already-closed fixes (BUG-3).
+ *
+ * The fix mirrors the worktree-merge guard: merge `--no-commit`, then re-assert
+ * EVERY engine-owned state file from the target's pre-merge HEAD (still `HEAD`
+ * because we haven't committed), then commit. Code / non-engine files merge
+ * normally; only the workflow-owned `.haiku/` state is force-held to the
+ * authoritative target side. A genuine conflict on agent content surfaces
+ * unchanged for the caller to route to a resolver.
+ */
+function engineProtectedMergeInCwd(
+	gitC: string[],
 	sourceRef: string,
+	slug: string,
 	message: string,
 ): {
 	ok: boolean
@@ -475,33 +469,75 @@ function mergeRefInPlace(
 	conflictFiles?: string[]
 	message?: string
 } {
+	let mergeErr: unknown = null
 	try {
-		execFileSync(
-			"git",
-			["merge", sourceRef, "--no-ff", "--no-edit", "-m", message],
-			{ stdio: "pipe" },
-		)
-		return { ok: true, performed: true }
+		run(["git", ...gitC, "merge", sourceRef, "--no-ff", "--no-commit"])
 	} catch (err) {
-		const conflicts = tryRun(["git", "diff", "--name-only", "--diff-filter=U"])
-			.split("\n")
-			.filter(Boolean)
-		if (conflicts.length === 0) {
-			tryRun(["git", "merge", "--abort"])
+		mergeErr = err
+	}
+	// `--no-commit` leaves MERGE_HEAD set when a merge actually started.
+	// "Already up to date" exits 0 and sets nothing → nothing to do.
+	const inProgress = !!tryRun([
+		"git",
+		...gitC,
+		"rev-parse",
+		"--quiet",
+		"--verify",
+		"MERGE_HEAD",
+	])
+	if (!inProgress) {
+		// Either already up to date (clean no-op) or a hard pre-merge refusal
+		// (e.g. dirty tree). If git threw with no merge started, surface it.
+		if (mergeErr) {
 			return {
 				ok: false,
 				performed: false,
 				conflictFiles: [],
-				message: err instanceof Error ? err.message : String(err),
+				message:
+					mergeErr instanceof Error ? mergeErr.message : String(mergeErr),
 			}
 		}
+		return { ok: true, performed: false }
+	}
+	// Re-assert the target's authoritative engine state over any silent
+	// auto-resolve to the source side. `HEAD` is still the pre-merge target
+	// (we passed `--no-commit`).
+	restoreEngineStateFromBase(gitC, "HEAD", slug)
+	// Any remaining unresolved paths are genuine conflicts on non-engine
+	// (agent) content — surface them; the engine guard already settled the
+	// `.haiku/` state.
+	const conflicts = tryRun([
+		"git",
+		...gitC,
+		"diff",
+		"--name-only",
+		"--diff-filter=U",
+	])
+		.split("\n")
+		.filter(Boolean)
+	if (conflicts.length > 0) {
 		return {
 			ok: false,
 			performed: false,
 			conflictFiles: conflicts,
-			message: `Merge ${sourceRef} → current left conflicts in ${conflicts.length} file(s).`,
+			message: `Merge ${sourceRef} left conflicts in ${conflicts.length} file(s): ${conflicts.join(", ")}.`,
 		}
 	}
+	run(["git", ...gitC, "commit", "--no-edit", "-m", message])
+	return { ok: true, performed: true }
+}
+
+function mergeRefInPlace(
+	sourceRef: string,
+	message: string,
+	slug: string,
+): {
+	ok: boolean
+	performed: boolean
+	conflictFiles?: string[]
+	message?: string
+} {
+	return engineProtectedMergeInCwd([], sourceRef, slug, message)
 }
 
 /** Detect the mainline branch.

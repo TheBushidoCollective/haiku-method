@@ -67,9 +67,23 @@ If something blocks (spec compliance fails, substantive code-quality issue), fil
 
 Do not block on low-confidence style issues. Style is for the linter; substantive concerns are for review.
 
+### Sibling-dependency gate failures — verify in isolation, defer integration (CRITICAL)
+
+You run in this unit's **isolated worktree**, forked from the stage branch. A sibling unit's code is NOT present here until that sibling merges. So before you reject for a failing gate, **trace why it fails**:
+
+- **The failure is in this unit's own surface** — its logic, its own tests, its outputs — → reject the builder normally. This is the builder's job.
+- **The failure traces to a sibling's unmerged output** — a `ReferenceError` on a helper another unit owns, a missing table from another unit's schema, an import of a module another unit produces — → **do NOT reject the builder.** It cannot make a sibling's code appear, and rejecting burns the unit's whole bolt budget re-rejecting a condition no builder pass can fix. This is the exact loop that wedged unit-015 (2026-05-24): the reviewer re-ran the full integration suite *inside the isolated worktree*, where the dependency's schema was absent, and rejected for the absence.
+
+The cross-unit integration gate is **not your job to enforce in isolation** — it runs at the stage's post-execute approval track, on the **merged** stage branch where the sibling IS present. A genuine integration failure surfaces there as a stage-scoped finding that drives the fix-loop; it does not belong in your per-unit reject loop. So:
+
+- Verify this unit's **own isolation-buildable surface** (its pure logic, the tests that can pass without siblings). If that's sound, `advance_hat`, and name in the baton which assertions you deferred to the merged branch and why.
+- If the unit reads a sibling's output but declares no `depends_on:` on it, or the completion gate is scoped wider than this unit can ever satisfy in isolation, file ONE stage-scoped finding via `haiku_feedback` (no `target_invalidates: ["builder"]` — it is not the builder's defect) naming the undeclared dependency or mis-scoped gate, then `advance_hat`. That routes the scheduling/decompose defect to where it gets fixed.
+- **Consistency across passes:** once a failure is classified sibling-dependent, it stays sibling-dependent. Never re-classify the same failure as a builder blocker on a later pass — that oscillation (one pass waves it as "acceptable scope", the next rejects for it) is what spends the bolt budget on the wrong problem and wedges the unit.
+
 ## Anti-patterns (RFC 2119)
 
 - The agent **MUST NOT** approve without running verification commands fresh — claims ("I tested it") never substitute for evidence
 - The agent **MUST NOT** approve code that lacks tests for new functionality
 - The agent **MUST** flag obvious TDD violations — implementation commits with no preceding failing-test commit, or tests that pass on first run with no RED-state evidence
 - The agent **MUST NOT** expand scope beyond verification — fixes are the fix-loop's job, not the verifier's
+- The agent **MUST NOT** reject the builder for a gate failure that traces to a sibling's unmerged output — it is not a builder defect and no builder pass can fix it; verify this unit's own surface, advance, and let the merged-branch stage gate own the integration assertion

@@ -3598,6 +3598,37 @@ function findWorktreeForBranch(branch: string): string | null {
 	return null
 }
 
+/** True iff `worktreePath` is an ACTUAL registered git worktree, not a bare
+ *  leftover directory. A linked worktree always carries a `.git` marker FILE
+ *  (`gitdir: …/.git/worktrees/<name>`); an empty orphan shell — left behind
+ *  when `git worktree remove --force` failed on an already-unregistered dir —
+ *  has no such marker. The fix-chain integration scan keys off directory
+ *  existence alone, so without this an empty shell trips a phantom
+ *  `integrate_fix_chains` "unresolved conflict" on an already-merged FB
+ *  (reported 2026-05-22, automated-starlink-rental-platform pickup). */
+export function isLiveWorktree(worktreePath: string): boolean {
+	return existsSync(join(worktreePath, ".git"))
+}
+
+/** Best-effort prune of a dead worktree shell (a directory that is NOT a
+ *  registered worktree — see `isLiveWorktree`). Runs `git worktree prune` to
+ *  clear any stale admin entry, then removes the leftover directory so the
+ *  integration scan stops re-tripping on it. Never throws. */
+function pruneDeadWorktreeShell(worktreePath: string): void {
+	try {
+		execFileSync("git", ["worktree", "prune"], {
+			stdio: ["ignore", "ignore", "ignore"],
+		})
+	} catch {
+		/* prune is advisory */
+	}
+	try {
+		rmSync(worktreePath, { recursive: true, force: true })
+	} catch {
+		/* leftover dir removal is best-effort */
+	}
+}
+
 /** Inspect the worktree at `path` and report whether it has anything
  *  blocking a safe merge. Returns null when clean; otherwise returns a
  *  struct describing what's dirty so `withWorktreeOnBranch` can build
@@ -4460,10 +4491,17 @@ export function mergeFixChainWorktree(
 	// stranding the chain.
 	ensureIntentGitAttributes(slug)
 
-	if (!existsSync(worktreePath)) {
-		// Nothing to merge — either never created, or previous tick cleaned
-		// up. Also defensively delete the branch if it's still around with
-		// no worktree backing it.
+	if (!existsSync(worktreePath) || !isLiveWorktree(worktreePath)) {
+		// Nothing to merge — either never created, previous tick cleaned up,
+		// or a bare leftover SHELL (dir exists but isn't a registered
+		// worktree: no `.git` marker). The shell case is the 2026-05-22
+		// phantom-conflict source — without the `isLiveWorktree` guard the
+		// merge proceeds against an empty dir, fails, and the gate re-surfaces
+		// `integrate_fix_chains` on an already-merged FB forever. Prune the
+		// shell so the scan stops tripping, then take the clean no-op path.
+		if (existsSync(worktreePath)) pruneDeadWorktreeShell(worktreePath)
+		// Defensively delete the branch if it's still around with no worktree
+		// backing it.
 		deleteBranchWithWarning(
 			fixBranch,
 			`fix-chain cleanup (no worktree) for ${slug}/${scope}/${feedbackId}`,

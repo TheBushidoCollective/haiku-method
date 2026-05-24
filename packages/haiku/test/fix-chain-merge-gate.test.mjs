@@ -6,7 +6,13 @@
 
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { test } from "node:test"
@@ -141,6 +147,80 @@ test("fix-chain merge gate completes a closed chain's pending merge, skips a rej
 		assert.throws(
 			() => git(tmp, "show", `haiku/${slug}/${stage}:FB-002.txt`),
 			"rejected chain's code must NOT reach the stage branch",
+		)
+	} finally {
+		try {
+			process.chdir(orig)
+		} catch {
+			process.chdir(tmpdir())
+		}
+		const { _resetIsGitRepoForTests } = await import(`${SRC}/state-tools.ts`)
+		_resetIsGitRepoForTests()
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})
+
+test("fix-chain merge gate ignores an empty orphan worktree SHELL (no phantom integrate_fix_chains)", async () => {
+	if (!HAS_GIT) return
+	const slug = "test-fc-shell"
+	const stage = "design"
+	const tmp = mkdtempSync(join(tmpdir(), "haiku-fc-shell-"))
+	const orig = process.cwd()
+	try {
+		git(tmp, "init", "-q", "-b", "main")
+		git(tmp, "config", "user.email", "test@haiku")
+		git(tmp, "config", "user.name", "haiku-test")
+		git(tmp, "config", "commit.gpgsign", "false")
+		writeFileSync(join(tmp, "README.md"), "# t\n")
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-q", "-m", "init")
+		git(tmp, "checkout", "-q", "-b", `haiku/${slug}/main`)
+		git(tmp, "checkout", "-q", "-b", `haiku/${slug}/${stage}`)
+
+		const intentDir = join(tmp, ".haiku", "intents", slug)
+		const fbDir = join(intentDir, "stages", stage, "feedback")
+		mkdirSync(fbDir, { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("# t\n", {
+				title: "t",
+				studio: "software",
+				mode: "continuous",
+				plugin_version: "9.0.0",
+				stages: [stage],
+			}),
+		)
+		// FB-003 is CLOSED and already merged; only a bare empty directory
+		// remains at its worktree path (a `git worktree remove --force` that
+		// failed on an unregistered dir). It is NOT a registered worktree.
+		seedFb(fbDir, { id: "FB-003", status: "closed" })
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-q", "-m", "seed")
+
+		process.env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT
+		process.chdir(tmp)
+		const { _resetIsGitRepoForTests } = await import(`${SRC}/state-tools.ts`)
+		_resetIsGitRepoForTests()
+		const { fixChainWorktreePath, isLiveWorktree } = await import(
+			`${SRC}/git-worktree.ts`
+		)
+		const { completePendingFixChainMerges } = await import(
+			`${SRC}/orchestrator/workflow/fix-chain-merge-gate.ts`
+		)
+
+		const shell = fixChainWorktreePath(slug, stage, "FB-003")
+		mkdirSync(shell, { recursive: true }) // bare empty shell, no .git marker
+		assert.ok(!isLiveWorktree(shell), "the shell is NOT a registered worktree")
+
+		const { action } = completePendingFixChainMerges(slug, "software")
+		assert.strictEqual(
+			action,
+			null,
+			"an empty orphan shell must NOT surface a phantom integrate_fix_chains",
+		)
+		assert.ok(
+			!existsSync(shell),
+			"the dead shell is pruned so the scan stops re-tripping on it",
 		)
 	} finally {
 		try {

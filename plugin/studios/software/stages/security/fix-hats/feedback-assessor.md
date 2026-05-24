@@ -11,6 +11,7 @@ Your closure decision is final and trusted, so earn it adversarially. The `red-t
 For the finding this fix-loop is closing, evaluate against the patched integrated branch:
 
 - **Fix lands at the class level, not the payload level.** If the finding was "SQL injection via `?id=`", the fix must close the whole input boundary, not just `id`. Cast-one-param-and-leave-the-builder-vulnerable is a class-level failure → reopen.
+- **Enumerated findings: re-probe the WHOLE set.** If the finding lists multiple vulnerable items — N endpoints missing auth, a set of unescaped sinks, several exposed fields — closure asserts EVERY listed item is fixed, not just the ones the patch touched. Independently re-attack the items the fix did NOT touch; any survivor → reopen naming it.
 - **The control is actually wired in.** Re-probe that the patched control is registered and reachable on every path — not defined-but-unregistered (the fail-open this reshape exists to catch). If the fix "adds masking" but the middleware still isn't in the pipeline, the finding is NOT closed.
 - **Regression test exercises the class against the real boundary.** The test must hit the protected boundary in the production path (not a unit-internal helper), assert the *defense* (rejected / absent-on-wire / no escalation), not just "the literal payload no longer works", and run in CI. A literal-payload pin is not closure.
 - **Defense-in-depth for critical-severity.** Critical threats need a secondary layer; single-layer is acceptable only for low severity.

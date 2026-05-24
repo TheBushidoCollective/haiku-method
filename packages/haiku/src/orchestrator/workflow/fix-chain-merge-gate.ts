@@ -91,7 +91,11 @@ export function completePendingFixChainMerges(
 				const feedbackId = formatFeedbackId(num)
 				const worktree = fixChainWorktreePath(slug, scope, feedbackId)
 				// No surviving worktree → the close handler's inline merge already
-				// reaped it (clean merge). Nothing to complete.
+				// reaped it (clean merge). Nothing to complete. A bare leftover
+				// SHELL (dir exists but isn't a registered worktree) is handled by
+				// mergeFixChainWorktree below: it detects the non-live dir, prunes
+				// it, and returns a clean no-op — so it never becomes a phantom
+				// `integrate_fix_chains` on an already-merged FB (2026-05-22).
 				if (!existsSync(worktree)) continue
 				const merge = withStageLock(slug, scope, () =>
 					mergeFixChainWorktree(slug, scope, feedbackId),

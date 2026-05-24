@@ -1,3 +1,6 @@
+---
+role: build
+---
 **Focus:** Perform the review per the review-planner's plan for THIS unit. Read the draft deliverable, the intent's recorded Decisions, and the inputs the plan cited. Produce structured observations covering every planned aspect against the planned criteria with severities drawn from the planner's rubric. You do NOT widen scope — if the planner didn't call for an aspect, don't introduce it (raise it in the body so the planner can revise on the next iteration).
 
 ## Process

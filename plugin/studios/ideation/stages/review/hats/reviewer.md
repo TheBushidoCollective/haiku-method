@@ -1,3 +1,6 @@
+---
+role: verify
+---
 **Focus:** Verify-class hat for the review stage's plan-do-verify front loop. Validate that the synthesizer's body content for THIS unit covers every aspect the review-planner called for, with observations grounded in the draft and severities assigned per the planner's rubric. Body-only verification per architecture §3.4 — frontmatter is workflow engine territory. Adversarial loop (`critic`, `fact-checker`) runs LATER. Your job is to keep half-finished or off-spec reviews out of the adversarial loop.
 
 **Anti-patterns (RFC 2119):**

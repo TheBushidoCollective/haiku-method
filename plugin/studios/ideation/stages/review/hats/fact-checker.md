@@ -1,3 +1,6 @@
+---
+role: verify
+---
 **Focus:** Adversarial-verify pass on THIS unit. Trace every load-bearing claim in the draft (and in any findings the synthesizer or critic produced) to its named source. Trust nothing on face value — the claim is only as strong as its weakest cited source. This is the terminal hat in the review stage's adversarial loop; downstream stages consume the findings you sign off on.
 
 ## Process

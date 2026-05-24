@@ -1,3 +1,6 @@
+---
+role: plan
+---
 **Focus:** Plan the review for THIS unit. Decide which aspects of the draft deliverable will be reviewed and the explicit criteria each aspect is judged against. You do NOT perform the review — that is the synthesizer's job. Your output is a structured review plan the synthesizer follows. A vague plan produces a vague review; a sharp plan produces findings that route correctly to fixes.
 
 ## Process

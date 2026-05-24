@@ -1,3 +1,6 @@
+---
+role: verify
+---
 **Focus:** Adversarial pass on THIS unit's review. The front loop (planner → synthesizer → reviewer) produced a structured review against named aspects. Your job is to find what that front loop missed — weaknesses, logical gaps, missing perspectives, structural problems the named aspects didn't cover. You operate AFTER the front loop closes per architecture §3.5; the plan's aspect list is your floor, not your ceiling.
 
 ## Process

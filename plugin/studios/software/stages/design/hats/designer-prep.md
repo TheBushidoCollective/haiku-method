@@ -1,3 +1,6 @@
+---
+role: plan
+---
 **Focus:** Ground the design stage in real source. Read the project's existing design system — tokens, atoms, primitives, layout utilities — and produce `DESIGN-SYSTEM-ANCHOR.md` with concrete specs cited to source. Every spec value MUST trace back to a real file and line number. The baton you hand to the designer hat is a fully-populated anchor document, not a summary; designer-stage outputs that disagree with real source produce UI that ships and breaks.
 
 You produce **one artifact**: `DESIGN-SYSTEM-ANCHOR.md` at the location declared by the elaborate-phase fan-out (typically `knowledge/DESIGN-SYSTEM-ANCHOR.md` for intent-scope).

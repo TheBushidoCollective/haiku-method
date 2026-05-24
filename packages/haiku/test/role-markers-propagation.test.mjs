@@ -78,3 +78,26 @@ test("exploitation: a verifier reject routes to the nearest builder (attack-oper
 	const r2 = resolveRejectTarget(hats, "exploit-reviewer", { roleOf })
 	assert.strictEqual(r2.targetHat, "exploit-developer")
 })
+
+test("software/design hats carry plan/build/verify roles (convention sweep)", () => {
+	const { defs } = rolesFor("software", "design")
+	assert.strictEqual(defs["designer-prep"]?.role, "plan")
+	assert.strictEqual(defs.designer?.role, "build")
+	assert.strictEqual(defs["design-reviewer"]?.role, "verify")
+})
+
+test("software/design: design-reviewer reject → designer (build); named plan-defect → designer-prep", () => {
+	const { roleOf } = rolesFor("software", "design")
+	const hats = ["designer-prep", "designer", "design-reviewer"]
+	// default: a build defect rewinds to the builder.
+	const r = resolveRejectTarget(hats, "design-reviewer", { roleOf })
+	assert.strictEqual(r.targetHat, "designer")
+	// named plan-defect target: rewind to the planner (the upstream-FB bandaid
+	// this replaced).
+	const r2 = resolveRejectTarget(hats, "design-reviewer", {
+		roleOf,
+		namedTarget: "designer-prep",
+	})
+	assert.strictEqual(r2.targetHat, "designer-prep")
+	assert.strictEqual(r2.via, "named-target")
+})

@@ -1,3 +1,6 @@
+---
+role: verify
+---
 **Focus:** Verify the designer hat's body output for THIS design unit substantively delivers a producable design: real tokens (not raw values), full state coverage, responsive behavior named at each breakpoint, accessibility considered, and consistency with the project's design system anchor. You are the **verify** role for design — the terminal hat in the per-unit hat sequence. Body-only verification per architecture §3.4; the workflow engine owns frontmatter and DAG checks.
 
 The baton you receive is the designer's body — references to the produced mockup artifacts plus the design rationale. Your decision (`advance` vs `reject`) is what the workflow engine trusts to move the unit forward.
@@ -37,9 +40,7 @@ Apply each criterion. Any single failure is a reject with the criterion named.
 ### 3. Issue verdict
 
 - All criteria pass → call `haiku_unit_advance_hat`.
-- Any criterion fails → call `haiku_unit_reject_hat` with a message naming the specific failed criterion. The cursor rewinds to the responsible hat (typically `designer`) within this unit.
-
-If the failure traces back to a missing input (e.g., the anchor itself is wrong because the designer-prep hat misread source), file feedback against the upstream hat via `haiku_feedback` rather than rejecting this unit — rejection only rewinds within the current unit's chain.
+- Any criterion fails → call `haiku_unit_reject_hat` with a message naming the specific failed criterion. The reject routes to the hat that can fix it: a build defect rewinds to `designer` (the default — the nearest build hat); a defect that traces to a wrong input (e.g. the anchor itself is wrong because `designer-prep` misread source) is a PLAN defect — name `target_hat: "designer-prep"` so the reject rewinds to the planner to re-ground the design, then the designer rebuilds against it. Rejecting in-loop is correct; you do NOT file feedback for an in-stage defect.
 
 ## Anti-patterns (RFC 2119)
 

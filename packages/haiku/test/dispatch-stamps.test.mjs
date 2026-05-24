@@ -185,6 +185,88 @@ test("dispatch_review: drain skips units with open invalidating FBs filed since 
 	})
 })
 
+test("dispatch_review: a sub-threshold (low) finding does NOT withhold the stamp (BUG-1 1a)", async () => {
+	await withRepo(async (root) => {
+		writeIntent(root)
+		const u2 = writeUnit(root, "inception", "unit-02")
+
+		const { stashPendingDispatch, drainPendingDispatches } = await import(
+			"../src/orchestrator/workflow/dispatch-stamps.js"
+		)
+		stashPendingDispatch("test-intent", "review", "inception", "spec", [
+			"unit-02",
+		])
+
+		// A `low` nit invalidating spec — advisory, must NOT withhold the
+		// stamp. The lens signs off; the nit stays open without blocking.
+		writeFeedback(root, "inception", "001", {
+			severity: "low",
+			targets: { unit: "unit-02", invalidates: ["spec"] },
+			created_at: new Date(Date.now() + 1000).toISOString(),
+		})
+
+		drainPendingDispatches("test-intent")
+		assert.ok(
+			readFm(u2).reviews?.spec?.at,
+			"a low finding must not withhold the review stamp",
+		)
+	})
+})
+
+test("dispatch_review: a blocking (high) finding still withholds the stamp", async () => {
+	await withRepo(async (root) => {
+		writeIntent(root)
+		const u2 = writeUnit(root, "inception", "unit-02")
+
+		const { stashPendingDispatch, drainPendingDispatches } = await import(
+			"../src/orchestrator/workflow/dispatch-stamps.js"
+		)
+		stashPendingDispatch("test-intent", "review", "inception", "spec", [
+			"unit-02",
+		])
+		writeFeedback(root, "inception", "001", {
+			severity: "high",
+			targets: { unit: "unit-02", invalidates: ["spec"] },
+			created_at: new Date(Date.now() + 1000).toISOString(),
+		})
+
+		drainPendingDispatches("test-intent")
+		assert.strictEqual(
+			readFm(u2).reviews?.spec,
+			undefined,
+			"a high finding must still withhold the review stamp",
+		)
+	})
+})
+
+test("dispatch_review: a REJECTED blocking finding releases the stamp hold (BUG-1 round-3→4)", async () => {
+	await withRepo(async (root) => {
+		writeIntent(root)
+		const u2 = writeUnit(root, "inception", "unit-02")
+
+		const { stashPendingDispatch, drainPendingDispatches } = await import(
+			"../src/orchestrator/workflow/dispatch-stamps.js"
+		)
+		stashPendingDispatch("test-intent", "review", "inception", "spec", [
+			"unit-02",
+		])
+		// A blocker that was adjudicated invalid (rejected_at set) must stop
+		// withholding the stamp — otherwise the unit is re-reviewed forever.
+		writeFeedback(root, "inception", "001", {
+			severity: "blocker",
+			targets: { unit: "unit-02", invalidates: ["spec"] },
+			created_at: new Date(Date.now() + 1000).toISOString(),
+			rejected_at: new Date(Date.now() + 2000).toISOString(),
+		})
+
+		drainPendingDispatches("test-intent")
+		assert.ok(
+			readFm(u2).reviews?.spec?.at,
+			"a rejected finding must release the stamp hold",
+		)
+	})
+})
+
 test("dispatch_approval: stash + drain stamps approvals.<role>", async () => {
 	await withRepo(async (root) => {
 		writeIntent(root)

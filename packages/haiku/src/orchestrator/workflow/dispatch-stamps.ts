@@ -55,6 +55,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { isFixBlockingSeverity } from "../../state/schemas/index.js"
 import {
 	findHaikuRoot,
 	parseFrontmatter,
@@ -418,13 +419,29 @@ function hasOpenInvalidatingFeedback(args: {
 		const raw = readFileSync(path, "utf8")
 		const parsed = parseFrontmatter(raw)
 		const fm = parsed.data as Record<string, unknown>
-		if (fm.closed_at) continue
+		// Terminal FBs release any stamp-hold. Both closure AND rejection
+		// are terminal: a REJECTED finding has been adjudicated invalid, so
+		// it must stop withholding the unit's review stamp — otherwise a
+		// rejection (no content edit) leaves the unit un-stamped, the cursor
+		// re-reviews byte-identical specs, and the nondeterministic lens
+		// emits fresh findings forever (BUG-1 round-3→4 smoking gun: only
+		// rejections occurred, yet 8 new findings appeared).
+		if (fm.closed_at || fm.rejected_at) continue
 		const targets = (fm.targets as Record<string, unknown>) ?? {}
 		if (targets.unit !== args.targetUnit) continue
 		const invalidates = Array.isArray(targets.invalidates)
 			? (targets.invalidates as string[])
 			: []
 		if (!invalidates.includes(args.role)) continue
+		// Severity gate (BUG-1 convergence): only a BLOCKING-severity finding
+		// withholds the review/approval stamp. A sub-threshold nit (low/medium
+		// under the default `high` threshold) is advisory — the lens still
+		// signs off the unit and the nit stays open without blocking the gate.
+		// Without this, every finding (even a nondeterministic low) kept the
+		// unit un-stamped and forced an endless re-review of byte-identical
+		// specs. Unclassified findings are treated as blocking (the classifier
+		// must run to rank them).
+		if (!isFixBlockingSeverity(fm.severity)) continue
 		// Filed since the dispatch landed.
 		const createdAt = (fm.created_at as string) ?? ""
 		if (createdAt && createdAt < args.sinceIso) continue
@@ -446,12 +463,21 @@ function hasOpenInvalidatingIntentFeedback(args: {
 		const raw = readFileSync(path, "utf8")
 		const parsed = parseFrontmatter(raw)
 		const fm = parsed.data as Record<string, unknown>
-		if (fm.closed_at) continue
+		// Terminal FBs release any stamp-hold. Both closure AND rejection
+		// are terminal: a REJECTED finding has been adjudicated invalid, so
+		// it must stop withholding the unit's review stamp — otherwise a
+		// rejection (no content edit) leaves the unit un-stamped, the cursor
+		// re-reviews byte-identical specs, and the nondeterministic lens
+		// emits fresh findings forever (BUG-1 round-3→4 smoking gun: only
+		// rejections occurred, yet 8 new findings appeared).
+		if (fm.closed_at || fm.rejected_at) continue
 		const targets = (fm.targets as Record<string, unknown>) ?? {}
 		const invalidates = Array.isArray(targets.invalidates)
 			? (targets.invalidates as string[])
 			: []
 		if (!invalidates.includes(args.role)) continue
+		// Severity gate (BUG-1) — see the stage-scope twin above.
+		if (!isFixBlockingSeverity(fm.severity)) continue
 		const createdAt = (fm.created_at as string) ?? ""
 		if (createdAt && createdAt < args.sinceIso) continue
 		return true

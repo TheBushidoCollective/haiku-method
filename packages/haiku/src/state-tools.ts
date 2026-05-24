@@ -2576,6 +2576,16 @@ function computeStageScope(
 		".integrity.json",
 		// Discovery knowledge (populated by early hats, read by later)
 		"knowledge/**",
+		// Engine-owned intent-root telemetry. The engine writes these itself
+		// (the record-agent-write hook appends to action-log.jsonl on every
+		// legit in-scope edit; drift baseline + the tick counter are pure
+		// engine bookkeeping). They live at the intent root — NOT under any
+		// stage — so without listing them here the scope validator flags the
+		// engine's OWN write as a unit_scope_violation and blocks the advance.
+		"action-log.jsonl",
+		"write-audit.jsonl",
+		"baseline.json",
+		"intent-tick.json",
 	]
 	const repoGlobs: string[] = []
 	let repoWildcard = false

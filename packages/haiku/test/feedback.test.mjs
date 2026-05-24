@@ -913,6 +913,71 @@ try {
 		assert.strictEqual(parsed.current_severity, "medium")
 	})
 
+	// ── anti-churn: settled-duplicate warning ─────────────────────────────────
+
+	console.log("\n=== settled-duplicate warning ===")
+
+	test("re-filing a finding that matches a rejected one warns (reword-resistant)", () => {
+		// File a finding, reject it with a reason.
+		const orig = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "Null crash in payment handler",
+			body: "Payment handler dereferences a null customer object and crashes.",
+			origin: "adversarial-review",
+			severity: "high",
+		})
+		const origId = JSON.parse(getTextResult(orig)).feedback_id
+		const origNum = Number.parseInt(origId.replace(/^FB-/, ""), 10)
+		const rej = handleStateTool("haiku_feedback_reject", {
+			intent: intentSlug,
+			stage: stageName,
+			feedback_id: origNum,
+			reason:
+				"Not a bug — the customer object is guaranteed non-null by the caller.",
+		})
+		assert.ok(!rej.isError, getTextResult(rej))
+
+		// File a REWORDED restatement of the same finding.
+		const dup = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "Payment handler null crash",
+			body: "Payment handler crashes on a null customer object dereference.",
+			origin: "adversarial-review",
+			severity: "high",
+		})
+		assert.ok(!dup.isError, getTextResult(dup))
+		const dupParsed = JSON.parse(getTextResult(dup))
+		assert.ok(
+			dupParsed.duplicate_warning,
+			`expected a duplicate_warning on the reworded re-file; got ${JSON.stringify(dupParsed)}`,
+		)
+		assert.strictEqual(dupParsed.duplicate_warning.matches, origId)
+		assert.strictEqual(dupParsed.duplicate_warning.settled_status, "rejected")
+		assert.ok(
+			/dismissed/.test(dupParsed.duplicate_warning.resolution),
+			`expected the rejection reason surfaced; got ${dupParsed.duplicate_warning.resolution}`,
+		)
+	})
+
+	test("a genuinely new finding does NOT warn", () => {
+		const fresh = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "Missing rate limit on the export endpoint",
+			body: "The CSV export endpoint has no rate limiting and can be abused.",
+			origin: "adversarial-review",
+			severity: "medium",
+		})
+		assert.ok(!fresh.isError, getTextResult(fresh))
+		const freshParsed = JSON.parse(getTextResult(fresh))
+		assert.ok(
+			!freshParsed.duplicate_warning,
+			`a distinct finding must not warn; got ${JSON.stringify(freshParsed.duplicate_warning)}`,
+		)
+	})
+
 	// ── haiku_feedback_update MCP tool ────────────────────────────────────────
 
 	console.log("\n=== haiku_feedback_update MCP tool ===")

@@ -22,6 +22,10 @@ Read each unit's spec live via `haiku_unit_read` (returns body + title, engine f
 <% if (existingFeedback) { %>
 <%~ existingFeedback %>
 <% } %>
+## Re-approval — focus on what changed
+
+The units below are ONLY the ones whose approval is currently unsigned for you — either you've never approved them, or their built work CHANGED since you last did (almost always a fix-loop edit landing on disk). The engine does NOT re-send units you already approved whose work is unchanged. So if you recognize a unit here, don't re-derive your whole critique from scratch: read the existing-feedback list for its `resolved:` notes (what the fix-hat actually did) and audit THAT delta. Re-flagging something you can see was already addressed — or that a prior reviewer dismissed — is the churn this list exists to stop.
+
 ## Procedure (authoritative)
 
 1. Read your mandate. For each unit, read its spec (above) and note what it promised to produce.

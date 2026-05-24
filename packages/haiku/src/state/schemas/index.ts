@@ -53,7 +53,9 @@ export {
 	FEEDBACK_SEVERITIES,
 	FSM_DRIVEN_FB_FIELDS,
 	feedbackSeverityRank,
+	fixSeverityThresholdRank,
 	HAIKU_FEEDBACK_INPUT_SCHEMA,
+	isFixBlockingSeverity,
 	validateHaikuFeedbackInputSchema,
 } from "./feedback.js"
 export type {

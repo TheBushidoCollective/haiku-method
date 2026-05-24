@@ -410,16 +410,36 @@ export function buildExistingFeedbackBlock(
 
 	const CAP = 50
 	const shown = items.slice(0, CAP)
+	const clip = (s: string, n: number): string =>
+		s.length > n ? `${s.slice(0, n)}…` : s
 	const lines = shown.map((it) => {
 		const scopeTag = it.file.includes("/stages/") ? "stage" : "intent"
+		const sevTag = it.severity ? `${it.severity} · ` : ""
 		const gistRaw = (it.body || "")
 			.replace(/```[\s\S]*?```/g, " ")
 			.replace(/\s+/g, " ")
 			.trim()
-		const gist = gistRaw.length > 140 ? `${gistRaw.slice(0, 140)}…` : gistRaw
-		return `- \`${it.id}\` [${it.status} · ${it.origin} · ${scopeTag}] ${it.title}${
+		const gist = clip(gistRaw, 140)
+		// Surface HOW a terminal finding was settled so a re-reviewing agent
+		// audits the delta (or respects the dismissal) instead of re-deriving
+		// the same critique and re-filing it — the core anti-churn lever.
+		// `resolved:` = the terminal fix-hat's closure_reply (what was done);
+		// `dismissed:` = the reject reason (why it was thrown out, parsed from
+		// the body tail haiku_feedback_reject appends).
+		let resolution = ""
+		const closure = it.closure_reply?.text?.replace(/\s+/g, " ").trim()
+		if (closure) {
+			resolution = ` · resolved: ${clip(closure, 160)}`
+		} else if (it.status === "rejected") {
+			const m = (it.body || "").match(/\*\*Rejection reason:\*\*\s*([\s\S]+)$/)
+			const reason = m ? m[1].replace(/\s+/g, " ").trim() : ""
+			resolution = reason
+				? ` · dismissed: ${clip(reason, 160)}`
+				: " · dismissed"
+		}
+		return `- \`${it.id}\` [${sevTag}${it.status} · ${it.origin} · ${scopeTag}] ${it.title}${
 			gist ? ` — ${gist}` : ""
-		}`
+		}${resolution}`
 	})
 	const overflow =
 		items.length > CAP ? `\n_(+${items.length - CAP} more on record)_` : ""
@@ -427,7 +447,7 @@ export function buildExistingFeedbackBlock(
 	return [
 		"## Existing feedback on this scope — do NOT re-raise",
 		"",
-		"These findings are already on record — open, being fixed, addressed, answered, closed, or dismissed. Read them BEFORE you file anything. If your observation is already captured here, do NOT file a duplicate: the engine is already tracking it, or a human/agent already decided it. Reserve new findings for genuinely new problems this list doesn't cover. If you think an existing finding was resolved wrong, say so in your closing summary instead of re-filing it.",
+		"These findings are already on record — open, being fixed, addressed, answered, closed, or dismissed. Read them BEFORE you file anything. If your observation is already captured here, do NOT file a duplicate: the engine is already tracking it, or a human/agent already decided it. A `resolved:` note shows what the fix-hat actually did — verify THAT delta rather than re-deriving your critique from scratch; a `dismissed:` note shows why a prior reviewer threw the finding out — respect it unless you have new evidence. Reserve new findings for genuinely new problems this list doesn't cover. If you think an existing finding was resolved wrong, say so in your closing summary instead of re-filing it.",
 		"",
 		...lines,
 		overflow,

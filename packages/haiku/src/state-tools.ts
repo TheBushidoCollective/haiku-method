@@ -2901,7 +2901,17 @@ export function countConsecutiveSameRejects(
 }
 
 /** Build a loop-detection signature from a list of feedback titles.
- *  Stable hash of the sorted, normalized title set. */
+ *  Stable hash of the sorted, normalized title set.
+ *
+ *  NOTE (2026-05-23): the v4 stage-iteration loop detector that consumed
+ *  this is dormant — `appendStageIteration` is only ever called with
+ *  `{trigger: "initial"}`, never with feedback titles, so `loopDetected`
+ *  never fires. Anti-churn moved to two LIVE, reword-resistant mechanisms
+ *  instead: the existing-feedback dedup block (preventive — every
+ *  reviewer sees settled findings + their resolutions before filing) and
+ *  `detectSettledDuplicate` below (detective — a create-time warning when
+ *  a finding restates one already closed/rejected). Kept for the seam in
+ *  case the stage-iteration path is revived. */
 export function computeFeedbackSignature(titles: string[]): string {
 	const norm = titles
 		.map((t) => (t || "").trim().toLowerCase())
@@ -2918,6 +2928,149 @@ export function computeFeedbackSignature(titles: string[]): string {
 		hash = ((hash << 5) + hash + 0x2c) | 0 // comma separator
 	}
 	return `sig:${(hash >>> 0).toString(16)}`
+}
+
+// Stopwords + structural noise stripped before comparing two findings.
+// Keeps the comparison on the load-bearing nouns/verbs so a reworded
+// re-file of the same finding still overlaps heavily.
+const FINDING_STOPWORDS = new Set([
+	"the",
+	"a",
+	"an",
+	"is",
+	"are",
+	"was",
+	"were",
+	"be",
+	"been",
+	"to",
+	"of",
+	"in",
+	"on",
+	"at",
+	"for",
+	"and",
+	"or",
+	"but",
+	"this",
+	"that",
+	"it",
+	"its",
+	"with",
+	"as",
+	"by",
+	"from",
+	"should",
+	"must",
+	"needs",
+	"need",
+	"has",
+	"have",
+	"not",
+	"no",
+	"we",
+	"you",
+	"i",
+	"if",
+	"then",
+	"than",
+	"there",
+	"here",
+	"when",
+	"which",
+	"what",
+	"does",
+	"do",
+	"did",
+	"can",
+	"will",
+])
+
+/** Normalize a finding's title+body into a set of significant word
+ *  tokens — lowercased, code-fences stripped, punctuation removed,
+ *  stopwords + short tokens dropped. Reword-resistant: two phrasings of
+ *  the same finding share most of their significant tokens. */
+function findingTokenSet(title: string, body: string): Set<string> {
+	const raw = `${title} ${body}`
+		.replace(/```[\s\S]*?```/g, " ") // drop code blocks
+		.replace(/`[^`]*`/g, " ") // drop inline code
+		.replace(/\*\*Rejection reason:\*\*[\s\S]*$/i, " ") // drop reject tail
+		.toLowerCase()
+		.replace(/[^a-z0-9\s]/g, " ")
+	const tokens = raw
+		.split(/\s+/)
+		.filter((t) => t.length >= 3 && !FINDING_STOPWORDS.has(t))
+	return new Set(tokens)
+}
+
+/** Jaccard overlap of two token sets (|A∩B| / |A∪B|), 0..1. */
+function findingSimilarity(a: Set<string>, b: Set<string>): number {
+	if (a.size === 0 || b.size === 0) return 0
+	let inter = 0
+	for (const t of a) if (b.has(t)) inter++
+	const union = a.size + b.size - inter
+	return union === 0 ? 0 : inter / union
+}
+
+/** Similarity threshold above which a new finding is treated as a
+ *  re-statement of an already-settled one. Tuned so a genuine reword
+ *  trips it but two distinct findings on the same artifact don't. */
+const SETTLED_DUPLICATE_THRESHOLD = 0.6
+
+/** Detect whether a candidate finding restates one that's already been
+ *  CLOSED or REJECTED on the same scope (stage + intent). Reword-
+ *  resistant: compares significant-token overlap, not exact title/body,
+ *  and only matches findings targeting the same unit (or intent-scope).
+ *  Returns the settled match + how it was resolved, or null. This is the
+ *  detective half of anti-churn — the preventive half is the
+ *  existing-feedback block every reviewer already sees. */
+export function detectSettledDuplicate(
+	slug: string,
+	stage: string,
+	candidate: { title: string; body: string; targetUnit?: string | null },
+): { id: string; status: string; resolution: string } | null {
+	let items: ReturnType<typeof readFeedbackFiles>
+	try {
+		const stageItems = stage ? readFeedbackFiles(slug, stage) : []
+		const intentItems = readFeedbackFiles(slug, "")
+		items = [...stageItems, ...intentItems]
+	} catch {
+		return null
+	}
+	const candTokens = findingTokenSet(candidate.title, candidate.body)
+	if (candTokens.size === 0) return null
+	const candUnit = candidate.targetUnit ?? null
+	let best: {
+		id: string
+		status: string
+		resolution: string
+		sim: number
+	} | null = null
+	for (const it of items) {
+		if (it.status !== "closed" && it.status !== "rejected") continue
+		// Only compare findings on the same unit (or both intent-scope) —
+		// the same words on a different artifact is a different finding.
+		const itUnit = it.targets?.unit ?? null
+		if (candUnit !== itUnit) continue
+		const sim = findingSimilarity(
+			candTokens,
+			findingTokenSet(it.title, it.body),
+		)
+		if (sim < SETTLED_DUPLICATE_THRESHOLD) continue
+		const closure = it.closure_reply?.text?.replace(/\s+/g, " ").trim()
+		let resolution = closure ? `resolved: ${closure}` : ""
+		if (!resolution && it.status === "rejected") {
+			const m = (it.body || "").match(/\*\*Rejection reason:\*\*\s*([\s\S]+)$/)
+			resolution = m
+				? `dismissed: ${m[1].replace(/\s+/g, " ").trim()}`
+				: "dismissed"
+		}
+		if (!best || sim > best.sim) {
+			best = { id: it.id, status: it.status, resolution, sim }
+		}
+	}
+	if (!best) return null
+	return { id: best.id, status: best.status, resolution: best.resolution }
 }
 
 export interface AppendIterationResult {
@@ -5933,6 +6086,11 @@ export interface FeedbackItem {
 	// closed before this field existed.
 	closure_reply: { text: string; at: string } | null
 	closure_reply_unread: boolean
+	// Routing targets — which unit this FB counter-signals (null =
+	// intent-scope) and which approval roles its closure invalidates.
+	// Read-side mirror of the write-path `targets` block; used for
+	// same-unit duplicate detection and SPA display.
+	targets: { unit: string | null; invalidates: string[] } | null
 }
 
 /**
@@ -6269,6 +6427,18 @@ export function readFeedbackFiles(slug: string, stage: string): FeedbackItem[] {
 					? ((data as { closure_reply_unread?: boolean })
 							.closure_reply_unread as boolean)
 					: false,
+			targets: (() => {
+				const t = (data as { targets?: unknown }).targets
+				if (!t || typeof t !== "object") return null
+				const obj = t as Record<string, unknown>
+				const unit = typeof obj.unit === "string" ? obj.unit : null
+				const invalidates = Array.isArray(obj.invalidates)
+					? (obj.invalidates as unknown[]).filter(
+							(x): x is string => typeof x === "string",
+						)
+					: []
+				return { unit, invalidates }
+			})(),
 		})
 	}
 
@@ -11954,6 +12124,25 @@ export function handleStateTool(
 				file: result.file,
 				status: "pending",
 				message: `Feedback ${result.feedback_id} created.`,
+			}
+			// Anti-churn (detective): warn when this finding restates one
+			// already closed/rejected on the same scope. The new FB is
+			// `pending`, so it can't match itself. Advisory only — a bad
+			// fix can legitimately re-raise a closed finding — so we don't
+			// block the create; we hand the agent the settled match + its
+			// resolution and let it decide (proceed, or reject as dup).
+			const settledDup = detectSettledDuplicate(intent, stage, {
+				title,
+				body,
+				targetUnit: targetUnitArg ?? null,
+			})
+			if (settledDup) {
+				response.duplicate_warning = {
+					matches: settledDup.id,
+					settled_status: settledDup.status,
+					resolution: settledDup.resolution,
+					message: `This finding closely matches ${settledDup.id}, already ${settledDup.status} (${settledDup.resolution || "no resolution recorded"}). If that resolution still stands, reject this as a duplicate via haiku_feedback_reject; only keep it if you have new evidence the prior resolution was wrong.`,
+				}
 			}
 			return reply(injectPushWarning(response, gitResult))
 		}

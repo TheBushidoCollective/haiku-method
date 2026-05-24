@@ -86,6 +86,36 @@ export function feedbackSeverityRank(severity: unknown): number {
 	}
 }
 
+// ── Fix-loop activation threshold ─────────────────────────────────────
+//
+// A finding is "blocking" — it TRIGGERS a fix wave and HOLDS the stage
+// gate — when its severity is at or above this threshold. Findings below
+// it never trigger a wave on their own and never block the gate; they
+// ride along (get swept) only when a blocking finding already forced a
+// wave open. Override with HAIKU_FIX_SEVERITY_THRESHOLD
+// (`blocker` | `high` | `medium` | `low`); default `high` (blocker + high
+// block; medium + low ride along). Read at call time so tests + operators
+// can flip it without a rebuild.
+export function fixSeverityThresholdRank(): number {
+	const raw = (process.env.HAIKU_FIX_SEVERITY_THRESHOLD || "high")
+		.trim()
+		.toLowerCase()
+	return (FEEDBACK_SEVERITIES as readonly string[]).includes(raw)
+		? feedbackSeverityRank(raw)
+		: feedbackSeverityRank("high")
+}
+
+// Whether a finding triggers a fix wave / holds the gate. Unclassified
+// findings (no severity yet — a user/SPA finding the classifier hasn't
+// ranked) ALWAYS block: the classifier fix-hat has to run to assign a
+// severity, and we can't know it's sub-threshold until it does. Agent-
+// filed findings carry a severity from creation, so a reviewer's stream
+// of `low`s is correctly non-blocking from the first tick.
+export function isFixBlockingSeverity(severity: unknown): boolean {
+	if (typeof severity !== "string" || severity.length === 0) return true
+	return feedbackSeverityRank(severity) <= fixSeverityThresholdRank()
+}
+
 // FB-NN identifier shape — `FB-` followed by one or more digits, OR
 // just digits (the handler accepts either).
 export const FB_ID_PATTERN = "^(?:FB-)?\\d+$"

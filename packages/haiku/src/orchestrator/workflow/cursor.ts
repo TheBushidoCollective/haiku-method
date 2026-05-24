@@ -54,7 +54,10 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import matter from "gray-matter"
-import { feedbackSeverityRank } from "../../state/schemas/index.js"
+import {
+	feedbackSeverityRank,
+	isFixBlockingSeverity,
+} from "../../state/schemas/index.js"
 import {
 	findHaikuRoot,
 	MAX_CONCURRENT_SUBAGENTS,
@@ -1031,6 +1034,10 @@ function walkFeedbackTrack(args: {
 		// from the FB's frontmatter; null/absent for not-yet-classified
 		// findings, which rank alongside `medium`.
 		severity: string | null
+		// True when the FB already has an open fix-chain (≥1 iteration).
+		// In-flight chains always continue (finish what you started); only
+		// the START of a NEW chain is severity-threshold-gated.
+		inFlight: boolean
 	}
 	const dispatches: FbDispatch[] = []
 
@@ -1041,14 +1048,16 @@ function walkFeedbackTrack(args: {
 			// Non-dispatch action — return immediately, can't be batched.
 			return action
 		}
-		const fbSeverity =
-			((readFm(fbPath)?.data as Record<string, unknown> | undefined)
-				?.severity as string | undefined) ?? null
+		const fbFm = readFm(fbPath)?.data as Record<string, unknown> | undefined
+		const fbSeverity = (fbFm?.severity as string | undefined) ?? null
+		const fbInFlight = Array.isArray(fbFm?.iterations)
+			? (fbFm.iterations as unknown[]).length > 0
+			: false
 		// Pull the single FB ID out of the action's dispatches array
 		// (nextActionForFeedback always returns a single-entry array).
 		const entry = action.dispatches[0]
 		if (!entry) return null
-		dispatches.push({ ...entry, severity: fbSeverity })
+		dispatches.push({ ...entry, severity: fbSeverity, inFlight: fbInFlight })
 		return null
 	}
 
@@ -1174,6 +1183,22 @@ function walkFeedbackTrack(args: {
 		if (stillOpen) verifiedBatch.push(d)
 	}
 	if (verifiedBatch.length === 0) return null
+
+	// Severity-threshold activation gate. Only START a fix wave when at
+	// least one finding is BLOCKING (severity at/above
+	// HAIKU_FIX_SEVERITY_THRESHOLD, default `high`; unclassified always
+	// blocks so the classifier runs). A wave already in progress
+	// (`inFlight`) always continues — you finish chains you started. When
+	// neither holds, every open finding is a sub-threshold ride-along
+	// (e.g. a reviewer's stream of `low` nits) with nothing to ride: emit
+	// no wave, leave them open + advisory, and let Track A advance the
+	// stage. Once a blocker DOES force a wave open, the whole batch
+	// dispatches together (severity-ordered below), so the lows get swept
+	// in the same pass rather than spinning their own worktrees.
+	const waveActive = verifiedBatch.some(
+		(d) => d.inFlight || isFixBlockingSeverity(d.severity),
+	)
+	if (!waveActive) return null
 
 	// Severity-first ordering: dispatch the findings that matter most
 	// before the rest. A stable sort by severity rank (blocker < high <

@@ -303,12 +303,8 @@ stateDiagram-v2
       security_execute_threat_modeler --> security_execute_security_engineer : hat.advance
       security_execute_security_engineer --> security_execute_security_reviewer : hat.advance
       security_execute_security_engineer --> security_execute_threat_modeler : hat.reject
-      security_execute_security_reviewer --> security_execute_red_team : hat.advance
+      security_execute_security_reviewer --> security_execute_done : hat.advance
       security_execute_security_reviewer --> security_execute_security_engineer : hat.reject
-      security_execute_red_team --> security_execute_blue_team : hat.advance
-      security_execute_red_team --> security_execute_security_reviewer : hat.reject
-      security_execute_blue_team --> security_execute_done : hat.advance
-      security_execute_blue_team --> security_execute_red_team : hat.reject
       security_execute_done --> [*]
     }
     security_execute --> security_review

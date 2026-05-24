@@ -105,6 +105,7 @@ import {
 	readStageArtifactDefs,
 	readStageBody,
 	readStageDef,
+	readStudioFixHatDefs,
 	resolveHatPath,
 	resolveStudio,
 } from "./studio-reader.js"
@@ -10104,14 +10105,29 @@ export function handleStateTool(
 				rejectStage,
 				args.unit as string,
 			)
+			// Role map for role-aware reject routing (skip verify hats → nearest
+			// builder). Inert until the stage's hats declare `role:`; degrades to
+			// step-back-one otherwise.
+			const rejectStudio =
+				(parseFrontmatter(
+					readFileSync(`${intentDir(args.intent as string)}/intent.md`, "utf8"),
+				).data.studio as string) || ""
+			const rejectHatRoles = rejectStudio
+				? readHatDefs(rejectStudio, rejectStage)
+				: {}
 			// Reject bounces to the prior hat. Shared resolver (used by the
-			// feedback fix-loop too) — step back one, with the unit-track
-			// feedback-assessor → first-hat special case (the assessor verifies
-			// the work itself, so its reject needs fresh output, not a re-review).
+			// feedback fix-loop too) — step back one, or to the nearest build hat
+			// when roles are declared, with the unit-track feedback-assessor →
+			// first-hat special case (the assessor verifies the work itself, so
+			// its reject needs fresh output, not a re-review).
 			const { targetHat: prevHat } = resolveRejectTarget(
 				stageHats,
 				currentHat,
-				{ assessorToFirst: true, assessorHat: FEEDBACK_ASSESSOR_HAT },
+				{
+					assessorToFirst: true,
+					assessorHat: FEEDBACK_ASSESSOR_HAT,
+					roleOf: (h) => rejectHatRoles[h]?.role,
+				},
 			)
 
 			// Auto-escalate model tier on rejection (gated by features.modelSelection)
@@ -13266,10 +13282,16 @@ export function handleStateTool(
 				newStoredIdxRej >= 0 ? fixHatsRej[newStoredIdxRej] : ""
 			// Reject bounces to the prior hat — shared resolver (used by the
 			// unit hat loop too). Storage bookkeeping (newStoredHatRej) stays
-			// feedback-specific; the target decision is the shared one.
+			// feedback-specific; the target decision is the shared one. Role
+			// map (stage `hats/` for stage-scope FBs, studio `fix-hats/` for
+			// intent-scope) drives the skip-verify-hats routing when declared.
+			const rejFixHatRoles = stageArg
+				? readHatDefs(studioNameRej, stageArg)
+				: readStudioFixHatDefs(studioNameRej)
 			const { targetHat: nextDispatchedHatRej } = resolveRejectTarget(
 				fixHatsRej,
 				callingHatRej,
+				{ roleOf: (h) => rejFixHatRoles[h]?.role },
 			)
 
 			// Append rejection iteration record (the calling hat's work was

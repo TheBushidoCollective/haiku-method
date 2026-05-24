@@ -72,7 +72,21 @@ export interface HatDef {
 	agent_type?: string // e.g., "general-purpose", "plan", custom
 	model?: string // e.g., "opus", "sonnet", "haiku"
 	run_quality_gates?: boolean // when true, advance_hat from this hat runs the unit's quality_gates and auto-rejects (bolt+1) on failure
+	// Loop role within the plan→do→verify sequence. Drives reject routing:
+	// a reject bounces to the nearest preceding `build` hat (the doer),
+	// skipping `verify` hats which can only judge, not fix. Optional —
+	// stages without role markers keep the legacy step-back-one routing.
+	role?: "plan" | "build" | "verify"
 	raw: string // full file content
+}
+
+/** Coerce a frontmatter `role:` value to the HatDef union, or undefined if
+ *  absent/unrecognized (so an unmarked or typo'd role degrades to the
+ *  legacy routing rather than mis-classifying the hat). */
+function parseHatRole(value: unknown): "plan" | "build" | "verify" | undefined {
+	return value === "plan" || value === "build" || value === "verify"
+		? value
+		: undefined
 }
 
 /**
@@ -122,6 +136,7 @@ export function readHatDefs(
 				agent_type: (data.agent_type as string) || undefined,
 				model: (data.model as string) || undefined,
 				run_quality_gates: data.run_quality_gates === true ? true : undefined,
+				role: parseHatRole(data.role),
 				raw,
 			}
 		}
@@ -506,6 +521,7 @@ export function readStudioFixHatDefs(studio: string): Record<string, HatDef> {
 				content: body,
 				agent_type: (data.agent_type as string) || undefined,
 				model: (data.model as string) || undefined,
+				role: parseHatRole(data.role),
 				raw,
 			}
 		}

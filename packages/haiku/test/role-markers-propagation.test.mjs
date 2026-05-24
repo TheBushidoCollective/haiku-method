@@ -79,6 +79,30 @@ test("exploitation: a verifier reject routes to the nearest builder (attack-oper
 	assert.strictEqual(r2.targetHat, "exploit-developer")
 })
 
+test("gamedev/prototype hats carry build/build/verify/verify roles", () => {
+	const { defs } = rolesFor("gamedev", "prototype")
+	assert.strictEqual(defs["prototype-engineer"]?.role, "build")
+	assert.strictEqual(defs["game-designer"]?.role, "build")
+	// playtester gathers evidence and changes nothing buildable — verify-class.
+	assert.strictEqual(defs.playtester?.role, "verify")
+	assert.strictEqual(defs.verifier?.role, "verify")
+})
+
+test("gamedev/prototype: a verifier reject skips playtester (also verify) → game-designer", () => {
+	const { roleOf } = rolesFor("gamedev", "prototype")
+	const hats = ["prototype-engineer", "game-designer", "playtester", "verifier"]
+	// Without role markers, step-back-one would land on playtester — another
+	// verify hat that just re-tests the unchanged build → ping-pong to the bolt
+	// cap. Role-aware routing skips it to the nearest builder.
+	const r = resolveRejectTarget(hats, "verifier", { roleOf })
+	assert.strictEqual(r.targetHat, "game-designer")
+	assert.strictEqual(r.via, "nearest-build")
+	// playtester (mid-loop verify) also routes back to the builder, not to
+	// prototype-engineer-then-forward.
+	const r2 = resolveRejectTarget(hats, "playtester", { roleOf })
+	assert.strictEqual(r2.targetHat, "game-designer")
+})
+
 test("software/design hats carry plan/build/verify roles (convention sweep)", () => {
 	const { defs } = rolesFor("software", "design")
 	assert.strictEqual(defs["designer-prep"]?.role, "plan")

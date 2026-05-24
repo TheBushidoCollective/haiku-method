@@ -229,6 +229,27 @@ Examples of illegitimate verify-role rules (these are workflow engine responsibi
 - ❌ Is the YAML frontmatter schema valid?
 - ❌ Does the unit's `inputs:` match the prior stage's `outputs:`?
 
+### 3.4.1 Reject routing and `role:` markers
+
+When a verify hat rejects, the engine rewinds the loop to a hat that can actually *fix* the defect — a build hat. `resolveRejectTarget` (`orchestrator/hat-loop-routing.ts`) decides where the baton lands:
+
+- **Default (no markers):** step back one hat. For a clean `plan → do → verify` sequence this is correct — a `verify` reject lands on the `do` hat.
+- **Role-aware (markers present):** a reject from any verify hat skips *all* intervening verify hats to the nearest prior **build** hat (`via: "nearest-build"`). A rejection MAY also name a specific prior non-verify hat (`via: "named-target"`) when the defect is upstream of the builder (e.g. a plan-level gap routes to the planner).
+
+The marker is a one-line frontmatter block on the hat file:
+
+```yaml
+---
+role: build   # or: plan | verify
+---
+```
+
+The engine reads it (`parseHatRole` in `studio-reader.ts`); the agent never sees it — `haiku_read_hat` strips frontmatter and returns only the body. So a `role:` marker on a hat file is NOT the "MUST NOT read unit frontmatter" anti-pattern (§3.4) — that rule is about the *unit's* FM, not the hat's.
+
+**When markers are REQUIRED:** any stage whose `hats:` sequence has **two or more verify hats that are adjacent, or a verify hat that is not last**. Without markers, a reject step-backs from one verify hat into another verify hat, which re-checks the unchanged build and rejects again — ping-pong to the bolt cap. This is the same failure class that motivated pulling adversarial review out of the loop (§3.5). Stages that need markers today: `software/design`, `software/security`, `ideation/review`, `security-assessment/exploitation`, `gamedev/prototype`.
+
+**When markers are OPTIONAL:** a clean three-hat `plan → do → verify` (or any single-terminal-verify) sequence routes correctly on the step-back-one default. Adding markers there is harmless consistency but changes no behavior, so it is not required.
+
 ### 3.5 Adversarial review is a STAGE concern, NOT in-loop hats
 
 Adversarial workflows (software/security, security-assessment, ideation/review) do **NOT** staple adversarial hats onto the per-unit `hats:` sequence. That was the old model — `red-team`/`blue-team` after the verify hat — and it's removed (2026-05-23). It was a category error: an adversarial agent can't build (so a reject from it has no builder to bounce to — it ping-pongs verifier→verifier to the bolt cap), its real findings are cross-unit *integration* properties invisible from any one unit's isolated worktree (a control defined but registered nowhere), and its stated deliverable — augment the unit body — is impossible while the unit is active.

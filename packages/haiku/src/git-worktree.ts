@@ -4227,17 +4227,29 @@ export function mergeDiscoveryWorktree(
 		}
 
 		const onBaseBranch = getCurrentBranch() === baseBranch
+		// Engine-state guard (BUG-2 class): the discovery branch carries a
+		// frozen-at-fork snapshot of every unit/feedback/intent file, and a
+		// silent 3-way auto-resolve would revert the stage branch's
+		// authoritative frontmatter. `engineProtectedMergeInCwd` merges
+		// --no-commit then re-asserts engine state from the stage (target)
+		// HEAD before committing — same protection mergeUnitWorktree and
+		// mergeFixChainWorktree already apply.
 		const mergeHere = (cwd?: string) => {
-			run([
-				"git",
-				...(cwd ? ["-C", cwd] : []),
-				"merge",
+			const gitC = (cwd ? ["-C", cwd] : []) as string[]
+			const r = engineProtectedMergeInCwd(
+				gitC,
 				discBranch,
-				"--no-ff",
-				"--no-edit",
-				"-m",
+				slug,
 				`haiku: merge discovery ${template} into ${stage}`,
-			])
+			)
+			if (!r.ok) {
+				const e = new Error(r.message ?? "discovery forward-merge failed")
+				if (r.conflictFiles && r.conflictFiles.length > 0) {
+					;(e as unknown as { conflictPaths: string[] }).conflictPaths =
+						r.conflictFiles
+				}
+				throw e
+			}
 		}
 		if (onBaseBranch) {
 			// Discovery branches commit engine-owned state inside
@@ -4287,6 +4299,20 @@ export function mergeDiscoveryWorktree(
 			message: `merged ${discBranch} → ${baseBranch}`,
 		}
 	} catch (err) {
+		// A real agent-content conflict at the forward-merge surfaces as a
+		// structured isConflict envelope so the caller dispatches the
+		// integrator instead of treating it as a hard failure — matching
+		// mergeFixChainWorktree.
+		const conflictPaths = (err as { conflictPaths?: string[] } | null)
+			?.conflictPaths
+		if (Array.isArray(conflictPaths) && conflictPaths.length > 0) {
+			return {
+				success: false,
+				isConflict: true,
+				conflictFiles: conflictPaths,
+				message: `merge conflict in ${conflictPaths.length} file(s) while merging discovery ${template} into ${stage}: ${conflictPaths.join(", ")}`,
+			}
+		}
 		return {
 			success: false,
 			message: err instanceof Error ? err.message : String(err),

@@ -31,7 +31,13 @@
 
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { test } from "node:test"
@@ -125,8 +131,14 @@ test("mergeUnitWorktree silently reverts a SIBLING unit's frontmatter (protect-l
 			}),
 		)
 		// Decompose: BOTH units written rich. This commit is the merge base.
-		writeFileSync(join(intentDir, "stages", stage, "units", `${mergedUnit}.md`), richUnit("Executing Unit"))
-		writeFileSync(join(intentDir, "stages", stage, "units", `${siblingUnit}.md`), richUnit("Sibling Unit"))
+		writeFileSync(
+			join(intentDir, "stages", stage, "units", `${mergedUnit}.md`),
+			richUnit("Executing Unit"),
+		)
+		writeFileSync(
+			join(intentDir, "stages", stage, "units", `${siblingUnit}.md`),
+			richUnit("Sibling Unit"),
+		)
 		git(tmp, "add", "-A")
 		git(tmp, "commit", "-q", "-m", "decompose: rich units")
 
@@ -134,9 +146,8 @@ test("mergeUnitWorktree silently reverts a SIBLING unit's frontmatter (protect-l
 		process.chdir(tmp)
 		const { _resetIsGitRepoForTests } = await import(`${SRC}/state-tools.ts`)
 		_resetIsGitRepoForTests()
-		const { createUnitWorktree, mergeUnitWorktree, unitWorktreePath } = await import(
-			`${SRC}/git-worktree.ts`
-		)
+		const { createUnitWorktree, mergeUnitWorktree, unitWorktreePath } =
+			await import(`${SRC}/git-worktree.ts`)
 
 		// Fork the executing unit's worktree off the (rich) stage branch.
 		const wt = createUnitWorktree(slug, mergedUnit, stage)
@@ -155,9 +166,19 @@ test("mergeUnitWorktree silently reverts a SIBLING unit's frontmatter (protect-l
 		// On the stage branch the engine advances the MERGED unit's own FM (a
 		// review stamp) — a real divergence so its merge is a true conflict the
 		// protect-list must resolve. The SIBLING is left exactly as decomposed.
-		const stageMerged = matter(readFileSync(join(intentDir, "stages", stage, "units", `${mergedUnit}.md`), "utf8"))
-		stageMerged.data.reviews = { spec: { at: "2026-05-22T00:00:00Z", body_sha256: "deadbeef" } }
-		writeFileSync(join(intentDir, "stages", stage, "units", `${mergedUnit}.md`), matter.stringify(stageMerged.content, stageMerged.data))
+		const stageMerged = matter(
+			readFileSync(
+				join(intentDir, "stages", stage, "units", `${mergedUnit}.md`),
+				"utf8",
+			),
+		)
+		stageMerged.data.reviews = {
+			spec: { at: "2026-05-22T00:00:00Z", body_sha256: "deadbeef" },
+		}
+		writeFileSync(
+			join(intentDir, "stages", stage, "units", `${mergedUnit}.md`),
+			matter.stringify(stageMerged.content, stageMerged.data),
+		)
 		git(tmp, "add", "-A")
 		git(tmp, "commit", "-q", "-m", "stage: stamp spec review on executing unit")
 
@@ -176,10 +197,15 @@ test("mergeUnitWorktree silently reverts a SIBLING unit's frontmatter (protect-l
 		// "ours" guard restored the stage's authoritative frontmatter. Its rich
 		// fields survive. (Passes today — proves the guard works for named units.)
 		assert.ok(
-			Array.isArray(mergedAfter.quality_gates) && mergedAfter.quality_gates.length === 2,
+			Array.isArray(mergedAfter.quality_gates) &&
+				mergedAfter.quality_gates.length === 2,
 			`CONTROL: merged unit '${mergedUnit}' should keep its quality_gates (protect-list covers it); got keys: ${Object.keys(mergedAfter).join(", ")}`,
 		)
-		assert.equal(mergedAfter.status, undefined, "merged unit should not carry the v3 `status` skeleton field")
+		assert.equal(
+			mergedAfter.status,
+			undefined,
+			"merged unit should not carry the v3 `status` skeleton field",
+		)
 
 		// THE BREAK: the sibling unit is NOT in the protect-list, so the merge
 		// silently took the worktree's stale skeleton. Its rich frontmatter is
@@ -187,7 +213,8 @@ test("mergeUnitWorktree silently reverts a SIBLING unit's frontmatter (protect-l
 		// current engine — that is the bug we are proving. After the fix it
 		// must pass.
 		assert.ok(
-			Array.isArray(siblingAfter.quality_gates) && siblingAfter.quality_gates.length === 2,
+			Array.isArray(siblingAfter.quality_gates) &&
+				siblingAfter.quality_gates.length === 2,
 			`BREAK: sibling unit '${siblingUnit}' silently lost its quality_gates through mergeUnitWorktree — siblings are absent from engineOwnedRelPaths. Resulting frontmatter keys: ${Object.keys(siblingAfter).join(", ")}`,
 		)
 		assert.ok(
@@ -248,7 +275,10 @@ test("mergeFixChainWorktree does not silently revert a bystander unit's frontmat
 			}),
 		)
 		// Bystander sibling decomposed rich (the merge base).
-		writeFileSync(join(intentDir, "stages", stage, "units", `${sibling}.md`), richUnit("Quote Request"))
+		writeFileSync(
+			join(intentDir, "stages", stage, "units", `${sibling}.md`),
+			richUnit("Quote Request"),
+		)
 		git(tmp, "add", "-A")
 		git(tmp, "commit", "-q", "-m", "decompose: rich sibling")
 
@@ -256,7 +286,9 @@ test("mergeFixChainWorktree does not silently revert a bystander unit's frontmat
 		process.chdir(tmp)
 		const { _resetIsGitRepoForTests } = await import(`${SRC}/state-tools.ts`)
 		_resetIsGitRepoForTests()
-		const { createFixChainWorktree, mergeFixChainWorktree } = await import(`${SRC}/git-worktree.ts`)
+		const { createFixChainWorktree, mergeFixChainWorktree } = await import(
+			`${SRC}/git-worktree.ts`
+		)
 
 		// Fix chain (against some OTHER finding) forks off the stage branch and
 		// lands a real code correction. Its worktree's frozen snapshot of the
@@ -267,21 +299,141 @@ test("mergeFixChainWorktree does not silently revert a bystander unit's frontmat
 		writeFileSync(join(wt, "fix.txt"), "fix-chain correction\n")
 		writeFileSync(join(wt, siblingRel), skeletonUnit("Quote Request"))
 		git(wt, "add", "-A")
-		git(wt, "commit", "-q", "-m", "haiku: builder fix for FB-007 (+ stale sibling snapshot)")
+		git(
+			wt,
+			"commit",
+			"-q",
+			"-m",
+			"haiku: builder fix for FB-007 (+ stale sibling snapshot)",
+		)
 
 		const res = mergeFixChainWorktree(slug, stage, "FB-007")
-		assert.ok(res.success, `fix-chain merge should succeed; got: ${res.message}`)
+		assert.ok(
+			res.success,
+			`fix-chain merge should succeed; got: ${res.message}`,
+		)
 
 		const stageBranch = `haiku/${slug}/${stage}`
 		// The fix code landed.
-		assert.match(git(tmp, "show", `${stageBranch}:fix.txt`), /fix-chain correction/, "fix code merged onto the stage branch")
+		assert.match(
+			git(tmp, "show", `${stageBranch}:fix.txt`),
+			/fix-chain correction/,
+			"fix code merged onto the stage branch",
+		)
 		// The bystander sibling kept its rich frontmatter (the break, fixed).
 		const siblingAfter = fmOnBranch(tmp, stageBranch, siblingRel)
 		assert.ok(
-			Array.isArray(siblingAfter.quality_gates) && siblingAfter.quality_gates.length === 2,
+			Array.isArray(siblingAfter.quality_gates) &&
+				siblingAfter.quality_gates.length === 2,
 			`bystander unit '${sibling}' must keep its quality_gates through mergeFixChainWorktree; got keys: ${Object.keys(siblingAfter).join(", ")}`,
 		)
-		assert.equal(siblingAfter.status, undefined, "bystander unit must not revert to the v3 `status` skeleton")
+		assert.equal(
+			siblingAfter.status,
+			undefined,
+			"bystander unit must not revert to the v3 `status` skeleton",
+		)
+	} finally {
+		try {
+			process.chdir(orig)
+		} catch {
+			process.chdir(tmpdir())
+		}
+		const { _resetIsGitRepoForTests } = await import(`${SRC}/state-tools.ts`)
+		_resetIsGitRepoForTests()
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})
+
+test("mergeDiscoveryWorktree does not silently revert a bystander unit's frontmatter (engine-state guard parity)", async () => {
+	if (!HAS_GIT) return
+	const slug = "test-disc-sibling-clobber"
+	const stage = "development"
+	const template = "data-model"
+	const sibling = "unit-002-data-contracts"
+	const unitsRel = `.haiku/intents/${slug}/stages/${stage}/units`
+	const siblingRel = `${unitsRel}/${sibling}.md`
+
+	const tmp = mkdtempSync(join(tmpdir(), "haiku-disc-sibling-"))
+	const orig = process.cwd()
+	try {
+		git(tmp, "init", "-q", "-b", "main")
+		git(tmp, "config", "user.email", "test@haiku")
+		git(tmp, "config", "user.name", "haiku-test")
+		git(tmp, "config", "commit.gpgsign", "false")
+		writeFileSync(join(tmp, "README.md"), "# test\n")
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-q", "-m", "init")
+		git(tmp, "checkout", "-q", "-b", `haiku/${slug}/main`)
+		git(tmp, "checkout", "-q", "-b", `haiku/${slug}/${stage}`)
+
+		const intentDir = join(tmp, ".haiku", "intents", slug)
+		mkdirSync(join(intentDir, "stages", stage, "units"), { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("# test\n", {
+				title: "test",
+				studio: "software",
+				mode: "continuous",
+				plugin_version: "9.0.0",
+				stages: [stage],
+			}),
+		)
+		writeFileSync(
+			join(intentDir, "stages", stage, "units", `${sibling}.md`),
+			richUnit("Data Contracts"),
+		)
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-q", "-m", "decompose: rich sibling")
+
+		process.env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT
+		process.chdir(tmp)
+		const { _resetIsGitRepoForTests } = await import(`${SRC}/state-tools.ts`)
+		_resetIsGitRepoForTests()
+		const { createDiscoveryWorktree, mergeDiscoveryWorktree } = await import(
+			`${SRC}/git-worktree.ts`
+		)
+
+		// Discovery worktree forks off the stage branch, writes its artifact,
+		// and its frozen snapshot of the bystander sibling gets rewritten to
+		// the v3 skeleton (per-tick migration / stale resurrection), committed
+		// via `git add -A`.
+		const wt = createDiscoveryWorktree(slug, stage, template)
+		assert.ok(wt, "discovery worktree created")
+		mkdirSync(join(wt, ".haiku", "intents", slug, "knowledge"), {
+			recursive: true,
+		})
+		writeFileSync(
+			join(wt, ".haiku", "intents", slug, "knowledge", "DATA-MODEL.md"),
+			"# data model\n",
+		)
+		writeFileSync(join(wt, siblingRel), skeletonUnit("Data Contracts"))
+		git(wt, "add", "-A")
+		git(
+			wt,
+			"commit",
+			"-q",
+			"-m",
+			"haiku: discovery artifact (+ stale sibling snapshot)",
+		)
+
+		const res = mergeDiscoveryWorktree(slug, stage, template)
+		assert.ok(
+			res.success,
+			`discovery merge should succeed; got: ${res.message}`,
+		)
+
+		const stageBranch = `haiku/${slug}/${stage}`
+		const siblingAfter = fmOnBranch(tmp, stageBranch, siblingRel)
+		assert.ok(
+			Array.isArray(siblingAfter.quality_gates) &&
+				siblingAfter.quality_gates.length === 2,
+			`bystander unit '${sibling}' must keep its quality_gates through mergeDiscoveryWorktree; got keys: ${Object.keys(siblingAfter).join(", ")}`,
+		)
+		assert.equal(
+			siblingAfter.status,
+			undefined,
+			"bystander unit must not revert to the v3 `status` skeleton",
+		)
 	} finally {
 		try {
 			process.chdir(orig)

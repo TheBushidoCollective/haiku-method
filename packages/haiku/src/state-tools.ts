@@ -3971,6 +3971,14 @@ export function validateUnitFrontmatter(
 		unit: string
 		/** Names of all sibling units (without .md), used for DAG validation. */
 		siblingUnits: string[]
+		/** Map of sibling unit name → its declared `outputs:` file paths. Lets
+		 *  the validator require that an `inputs:` entry which reads a sibling's
+		 *  output also declares that sibling in `depends_on:` — the wave
+		 *  scheduler sequences ONLY on depends_on, so an undeclared producer
+		 *  gets co-scheduled and the input doesn't exist when this unit runs.
+		 *  Absent = the check is skipped (callers that don't resolve it get no
+		 *  new requirement). */
+		siblingOutputs?: Record<string, string[]>
 		/** What the unit's stage produces, from STAGE.md `produces:`. Build
 		 *  stages require a `quality_gates:` field on producing units; knowledge
 		 *  stages don't. Absent / "knowledge" = lenient (the safe default), so
@@ -4034,6 +4042,37 @@ export function validateUnitFrontmatter(
 				errors.push(
 					`inputs_unit_name_not_path: inputs entry '${entry}' looks like a unit name, but \`inputs:\` must list file PATHS the unit reads (e.g. \`product/ACCEPTANCE-CRITERIA.md\`, a prior-stage artifact, or a sibling unit's declared output file). To express ordering on another unit, add it to \`depends_on:\` and put that unit's actual output path in \`inputs:\`.`,
 				)
+			}
+		}
+	}
+
+	// Step 3b: an `inputs:` entry that reads a SIBLING's declared output is a
+	// real ordering dependency — the producing sibling must merge before this
+	// unit can read it. The wave scheduler sequences ONLY on `depends_on:`, so
+	// a producer that isn't declared there gets co-scheduled with this unit and
+	// the input file doesn't exist when this unit runs (or its gate can't pass
+	// in isolation). This is the structural twin of the unit-015 bolt-cap death
+	// (2026-05-24): a unit whose gate needed a sibling's unmerged output, with
+	// the dependency living only in plan prose. Require the producer in
+	// depends_on. Skipped when the caller didn't resolve sibling outputs.
+	if (Array.isArray(frontmatter.inputs) && context.siblingOutputs) {
+		const declaredDeps = Array.isArray(frontmatter.depends_on)
+			? (frontmatter.depends_on as unknown[]).filter(
+					(d): d is string => typeof d === "string",
+				)
+			: []
+		for (const entry of frontmatter.inputs) {
+			if (typeof entry !== "string") continue
+			const inputPath = entry.trim()
+			for (const [sib, outs] of Object.entries(context.siblingOutputs)) {
+				if (sib === context.unit) continue
+				if (!outs.includes(inputPath)) continue
+				const declared = declaredDeps.some((d) => resolvesToUnit(d, sib))
+				if (!declared) {
+					errors.push(
+						`inputs_undeclared_producer: inputs entry '${inputPath}' is a declared output of sibling unit '${sib}', but '${sib}' is not in \`depends_on:\`. The wave scheduler sequences only on depends_on — without it, '${context.unit}' is co-scheduled with its producer and the input won't exist when it runs. Add '${sib}' to \`depends_on:\`.`,
+					)
+				}
 			}
 		}
 	}
@@ -10788,11 +10827,29 @@ export function handleStateTool(
 			// is included so self-reference detection works.
 			const stageUnitsDir = join(stageDir(intentArg, stageArg), "units")
 			const siblingUnits: string[] = []
+			// Sibling name → its declared output paths, for the
+			// inputs-reads-a-sibling-output → must-declare-depends_on guard.
+			// Best-effort: a sibling whose FM won't parse contributes no outputs
+			// (it can't gate this write); failure never blocks the write.
+			const siblingOutputs: Record<string, string[]> = {}
 			if (existsSync(stageUnitsDir)) {
 				for (const f of readdirSync(stageUnitsDir).filter((n) =>
 					n.endsWith(".md"),
 				)) {
-					siblingUnits.push(f.replace(/\.md$/, ""))
+					const sibName = f.replace(/\.md$/, "")
+					siblingUnits.push(sibName)
+					try {
+						const sibFm = parseFrontmatter(
+							readFileSync(join(stageUnitsDir, f), "utf8"),
+						).data
+						if (Array.isArray(sibFm.outputs)) {
+							siblingOutputs[sibName] = (sibFm.outputs as unknown[])
+								.filter((o): o is string => typeof o === "string")
+								.map((o) => o.trim())
+						}
+					} catch {
+						/* unparseable sibling contributes no outputs */
+					}
 				}
 			}
 			if (!siblingUnits.includes(unitName)) siblingUnits.push(unitName)
@@ -10827,6 +10884,7 @@ export function handleStateTool(
 				stage: stageArg,
 				unit: unitName,
 				siblingUnits,
+				siblingOutputs,
 				stageProduces,
 			})
 			if (!validation.valid) {

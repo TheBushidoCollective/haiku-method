@@ -36,7 +36,8 @@ function git(cwd, ...args) {
 	}).trim()
 }
 
-const BODY = "# Unit\n\nImplement the widget service and its contract tests so the public API is exercised end to end.\n\n## Completion Criteria\n\n- The service responds and the contract test passes.\n"
+const BODY =
+	"# Unit\n\nImplement the widget service and its contract tests so the public API is exercised end to end.\n\n## Completion Criteria\n\n- The service responds and the contract test passes.\n"
 
 // ── Part A: validateUnitFrontmatter unit-level rule ──────────────────────────
 
@@ -44,7 +45,13 @@ test("validateUnitFrontmatter: build stage + outputs + NO quality_gates field �
 	const { validateUnitFrontmatter } = await import(`${SRC}/state-tools.ts`)
 	const r = validateUnitFrontmatter(
 		{ title: "t", inputs: ["product/SPEC.md"], outputs: ["src/widget.ts"] },
-		{ intent: "i", stage: "development", unit: "unit-001-x", siblingUnits: ["unit-001-x"], stageProduces: "build" },
+		{
+			intent: "i",
+			stage: "development",
+			unit: "unit-001-x",
+			siblingUnits: ["unit-001-x"],
+			stageProduces: "build",
+		},
 	)
 	assert.equal(r.valid, false, "should be invalid")
 	assert.ok(
@@ -57,16 +64,36 @@ test("validateUnitFrontmatter: build stage + outputs + explicit quality_gates: [
 	const { validateUnitFrontmatter } = await import(`${SRC}/state-tools.ts`)
 	const r = validateUnitFrontmatter(
 		{ title: "t", outputs: ["src/widget.ts"], quality_gates: [] },
-		{ intent: "i", stage: "development", unit: "unit-001-x", siblingUnits: ["unit-001-x"], stageProduces: "build" },
+		{
+			intent: "i",
+			stage: "development",
+			unit: "unit-001-x",
+			siblingUnits: ["unit-001-x"],
+			stageProduces: "build",
+		},
 	)
-	assert.equal(r.valid, true, `explicit [] is a deliberate choice and must pass; got ${JSON.stringify(r)}`)
+	assert.equal(
+		r.valid,
+		true,
+		`explicit [] is a deliberate choice and must pass; got ${JSON.stringify(r)}`,
+	)
 })
 
 test("validateUnitFrontmatter: build stage + outputs + real gates → allowed", async () => {
 	const { validateUnitFrontmatter } = await import(`${SRC}/state-tools.ts`)
 	const r = validateUnitFrontmatter(
-		{ title: "t", outputs: ["src/widget.ts"], quality_gates: [{ name: "tests", command: "true" }] },
-		{ intent: "i", stage: "development", unit: "unit-001-x", siblingUnits: ["unit-001-x"], stageProduces: "build" },
+		{
+			title: "t",
+			outputs: ["src/widget.ts"],
+			quality_gates: [{ name: "tests", command: "true" }],
+		},
+		{
+			intent: "i",
+			stage: "development",
+			unit: "unit-001-x",
+			siblingUnits: ["unit-001-x"],
+			stageProduces: "build",
+		},
 	)
 	assert.equal(r.valid, true, `got ${JSON.stringify(r)}`)
 })
@@ -75,27 +102,164 @@ test("validateUnitFrontmatter: build stage + NO outputs → exempt (output-less 
 	const { validateUnitFrontmatter } = await import(`${SRC}/state-tools.ts`)
 	const r = validateUnitFrontmatter(
 		{ title: "t", inputs: ["product/SPEC.md"] },
-		{ intent: "i", stage: "development", unit: "unit-001-x", siblingUnits: ["unit-001-x"], stageProduces: "build" },
+		{
+			intent: "i",
+			stage: "development",
+			unit: "unit-001-x",
+			siblingUnits: ["unit-001-x"],
+			stageProduces: "build",
+		},
 	)
-	assert.equal(r.valid, true, `output-less unit must be exempt; got ${JSON.stringify(r)}`)
+	assert.equal(
+		r.valid,
+		true,
+		`output-less unit must be exempt; got ${JSON.stringify(r)}`,
+	)
+})
+
+// ── inputs-reads-a-sibling-output → must declare depends_on (unit-015 twin) ──
+
+test("validateUnitFrontmatter: inputs reads a sibling's output but no depends_on → rejected", async () => {
+	const { validateUnitFrontmatter } = await import(`${SRC}/state-tools.ts`)
+	const r = validateUnitFrontmatter(
+		{
+			title: "t",
+			inputs: ["lib/db/schema.ts"],
+			outputs: ["app/api/quotes/route.ts"],
+			quality_gates: [],
+		},
+		{
+			intent: "i",
+			stage: "development",
+			unit: "unit-015-quotes",
+			siblingUnits: ["unit-015-quotes", "unit-002-db-schema"],
+			siblingOutputs: { "unit-002-db-schema": ["lib/db/schema.ts"] },
+			stageProduces: "build",
+		},
+	)
+	assert.equal(
+		r.valid,
+		false,
+		"reading a sibling's output without depends_on must be rejected",
+	)
+	assert.ok(
+		r.errors.some((e) => e.startsWith("inputs_undeclared_producer")),
+		`expected inputs_undeclared_producer; got ${JSON.stringify(r.errors)}`,
+	)
+})
+
+test("validateUnitFrontmatter: inputs reads a sibling's output WITH depends_on declared → allowed", async () => {
+	const { validateUnitFrontmatter } = await import(`${SRC}/state-tools.ts`)
+	const r = validateUnitFrontmatter(
+		{
+			title: "t",
+			inputs: ["lib/db/schema.ts"],
+			depends_on: ["unit-002-db-schema"],
+			outputs: ["app/api/quotes/route.ts"],
+			quality_gates: [],
+		},
+		{
+			intent: "i",
+			stage: "development",
+			unit: "unit-015-quotes",
+			siblingUnits: ["unit-015-quotes", "unit-002-db-schema"],
+			siblingOutputs: { "unit-002-db-schema": ["lib/db/schema.ts"] },
+			stageProduces: "build",
+		},
+	)
+	assert.equal(
+		r.valid,
+		true,
+		`declared producer must pass; got ${JSON.stringify(r)}`,
+	)
+})
+
+test("validateUnitFrontmatter: inputs reads a PRIOR-STAGE path (not a sibling output) → allowed", async () => {
+	const { validateUnitFrontmatter } = await import(`${SRC}/state-tools.ts`)
+	// product/ACCEPTANCE-CRITERIA.md is a prior-stage artifact, not any
+	// sibling's output — no depends_on should be demanded.
+	const r = validateUnitFrontmatter(
+		{
+			title: "t",
+			inputs: ["product/ACCEPTANCE-CRITERIA.md"],
+			outputs: ["app/x.ts"],
+			quality_gates: [],
+		},
+		{
+			intent: "i",
+			stage: "development",
+			unit: "unit-015-quotes",
+			siblingUnits: ["unit-015-quotes", "unit-002-db-schema"],
+			siblingOutputs: { "unit-002-db-schema": ["lib/db/schema.ts"] },
+			stageProduces: "build",
+		},
+	)
+	assert.equal(
+		r.valid,
+		true,
+		`prior-stage input must not demand depends_on; got ${JSON.stringify(r)}`,
+	)
+})
+
+test("validateUnitFrontmatter: no siblingOutputs in context → producer check skipped (back-compat)", async () => {
+	const { validateUnitFrontmatter } = await import(`${SRC}/state-tools.ts`)
+	const r = validateUnitFrontmatter(
+		{
+			title: "t",
+			inputs: ["lib/db/schema.ts"],
+			outputs: ["app/x.ts"],
+			quality_gates: [],
+		},
+		{
+			intent: "i",
+			stage: "development",
+			unit: "unit-015-quotes",
+			siblingUnits: ["unit-015-quotes"],
+			stageProduces: "build",
+		},
+	)
+	assert.equal(
+		r.valid,
+		true,
+		`without siblingOutputs the check is skipped; got ${JSON.stringify(r)}`,
+	)
 })
 
 test("validateUnitFrontmatter: knowledge stage + outputs + NO gates → allowed (no requirement)", async () => {
 	const { validateUnitFrontmatter } = await import(`${SRC}/state-tools.ts`)
 	const r = validateUnitFrontmatter(
 		{ title: "t", outputs: ["product/ACCEPTANCE-CRITERIA.md"] },
-		{ intent: "i", stage: "product", unit: "unit-001-x", siblingUnits: ["unit-001-x"], stageProduces: "knowledge" },
+		{
+			intent: "i",
+			stage: "product",
+			unit: "unit-001-x",
+			siblingUnits: ["unit-001-x"],
+			stageProduces: "knowledge",
+		},
 	)
-	assert.equal(r.valid, true, `knowledge stage must not require gates; got ${JSON.stringify(r)}`)
+	assert.equal(
+		r.valid,
+		true,
+		`knowledge stage must not require gates; got ${JSON.stringify(r)}`,
+	)
 })
 
 test("validateUnitFrontmatter: stageProduces absent → lenient (no requirement)", async () => {
 	const { validateUnitFrontmatter } = await import(`${SRC}/state-tools.ts`)
 	const r = validateUnitFrontmatter(
 		{ title: "t", outputs: ["src/widget.ts"] },
-		{ intent: "i", stage: "development", unit: "unit-001-x", siblingUnits: ["unit-001-x"] },
+		{
+			intent: "i",
+			stage: "development",
+			unit: "unit-001-x",
+			siblingUnits: ["unit-001-x"],
+		},
 	)
-	assert.equal(r.valid, true, `absent stageProduces must default lenient; got ${JSON.stringify(r)}`)
+	assert.equal(
+		r.valid,
+		true,
+		`absent stageProduces must default lenient; got ${JSON.stringify(r)}`,
+	)
 })
 
 // ── Part B: end-to-end through haiku_unit_write (produces resolved from STAGE.md) ──
@@ -128,7 +292,9 @@ async function withRepo(fn) {
 	git(repo, "commit", "-q", "-m", "init")
 	process.env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT
 	process.chdir(repo)
-	const { _resetIsGitRepoForTests, handleStateTool } = await import(`${SRC}/state-tools.ts`)
+	const { _resetIsGitRepoForTests, handleStateTool } = await import(
+		`${SRC}/state-tools.ts`
+	)
 	_resetIsGitRepoForTests()
 	try {
 		await fn(repo, handleStateTool)
@@ -157,13 +323,22 @@ test("haiku_unit_write: build stage (software/development) rejects a producing u
 			stage: "development",
 			unit: "unit-001-widget",
 			body: BODY,
-			frontmatter: { title: "Widget", inputs: ["product/SPEC.md"], outputs: ["src/widget.ts"] },
+			frontmatter: {
+				title: "Widget",
+				inputs: ["product/SPEC.md"],
+				outputs: ["src/widget.ts"],
+			},
 		})
 		const parsed = parseResp(resp)
-		assert.ok(resp.isError, `write should be rejected; got ${JSON.stringify(parsed).slice(0, 300)}`)
+		assert.ok(
+			resp.isError,
+			`write should be rejected; got ${JSON.stringify(parsed).slice(0, 300)}`,
+		)
 		assert.equal(parsed.error, "frontmatter_validation_failed")
 		assert.ok(
-			(parsed.errors || []).some((e) => e.startsWith("build_unit_missing_quality_gates")),
+			(parsed.errors || []).some((e) =>
+				e.startsWith("build_unit_missing_quality_gates"),
+			),
 			`expected build_unit_missing_quality_gates; got ${JSON.stringify(parsed.errors)}`,
 		)
 	})
@@ -178,10 +353,18 @@ test("haiku_unit_write: build stage accepts the same unit once quality_gates: []
 			stage: "development",
 			unit: "unit-001-widget",
 			body: BODY,
-			frontmatter: { title: "Widget", inputs: ["product/SPEC.md"], outputs: ["src/widget.ts"], quality_gates: [] },
+			frontmatter: {
+				title: "Widget",
+				inputs: ["product/SPEC.md"],
+				outputs: ["src/widget.ts"],
+				quality_gates: [],
+			},
 		})
 		const parsed = parseResp(resp)
-		assert.ok(!resp.isError, `explicit [] should pass; got ${JSON.stringify(parsed).slice(0, 300)}`)
+		assert.ok(
+			!resp.isError,
+			`explicit [] should pass; got ${JSON.stringify(parsed).slice(0, 300)}`,
+		)
 	})
 })
 
@@ -194,9 +377,16 @@ test("haiku_unit_write: knowledge stage (software/product) allows a producing un
 			stage: "product",
 			unit: "unit-001-spec",
 			body: BODY,
-			frontmatter: { title: "Spec", inputs: ["knowledge/DISCOVERY.md"], outputs: ["product/ACCEPTANCE-CRITERIA.md"] },
+			frontmatter: {
+				title: "Spec",
+				inputs: ["knowledge/DISCOVERY.md"],
+				outputs: ["product/ACCEPTANCE-CRITERIA.md"],
+			},
 		})
 		const parsed = parseResp(resp)
-		assert.ok(!resp.isError, `knowledge stage must not require gates; got ${JSON.stringify(parsed).slice(0, 300)}`)
+		assert.ok(
+			!resp.isError,
+			`knowledge stage must not require gates; got ${JSON.stringify(parsed).slice(0, 300)}`,
+		)
 	})
 })

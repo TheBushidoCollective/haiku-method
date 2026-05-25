@@ -6,8 +6,8 @@ Run the full H·AI·K·U lifecycle autonomously from description to delivery. Au
 
 ## Process
 
-1. **If no active intent exists**, create one with `/haiku:haiku-start`, passing `mode: autopilot` to `haiku_intent_create`.
-2. **For an existing intent**, set the mode via `haiku_intent_set { intent: "<slug>", field: "mode", value: "autopilot" }`. The tool validates the mode enum against `INTENT_FRONTMATTER_SCHEMA` and produces a clean git audit entry. Do NOT use `haiku_human_write` for this — that mis-attributes the write as `human-via-mcp` and bypasses schema validation. Do NOT set a separate `autopilot: true` boolean — that is a deprecated pattern.
+1. **If no active intent exists**, create one with `/haiku:haiku-start`, then set autopilot with `haiku_select_mode { intent: "<slug>", modes: ["autopilot"] }`. Passing a single mode auto-selects it (no picker pause) and writes `mode: autopilot` plus the studio's full stage list. Do NOT pass `mode` to `haiku_intent_create` — studio/mode/stage are engine-managed and start unset.
+2. **For an existing intent**, set the mode with `haiku_select_mode { intent: "<slug>", modes: ["autopilot"] }` — a single-option list auto-selects with no picker pause and writes `mode` (+ stages) through the one engine-sanctioned path. Do NOT use `haiku_intent_set { field: "mode" }` or `haiku_human_write` — `mode` is an engine-managed field that both reject (`intent_field_engine_only`); `haiku_select_mode` is the ONLY mode setter. Do NOT set a separate `autopilot: true` boolean — that is a deprecated pattern. (If the intent has already started a stage, `select_mode` refuses transitions into/out of `quick`; surface that to the user.)
 3. **Optional: skip the final intent review** by calling `haiku_intent_set { intent: "<slug>", field: "intent_completion_review", value: false }`. Do NOT set this unless the user explicitly wants truly headless completion; the completion review is the bookend that prevents silent intent-completion on stage-gate pass.
 4. **Drive the loop** by calling `haiku_run_next { intent: "<slug>" }`. Repeat on every return. When a subagent returns, re-call `haiku_run_next` to advance.
 

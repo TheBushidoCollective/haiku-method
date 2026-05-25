@@ -138,7 +138,7 @@ const ITEM_LEADER = "↳"
 // uses a gold/amber that reads as yellow with contrast.)
 const SEG_FG: Record<HatSegment, string> = {
 	done: "\x1b[38;5;71m", // green = hat advanced
-	active: "\x1b[1;38;5;33m", // blue = hat in progress
+	active: "\x1b[1;38;2;255;255;0m", // pure yellow (#ffff00, truecolor) = hat in progress
 	rejected: "\x1b[1;38;5;167m", // soft red = hat last rejected
 	pending: "\x1b[38;5;250m", // faint = not reached
 }

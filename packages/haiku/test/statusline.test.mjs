@@ -338,7 +338,10 @@ test("renderStatusline: itemBars color each hat by status (green/amber/red)", as
 	assert.ok(out.includes("\n"), "color mode still emits the second line")
 	assert.ok(/\x1b\[38;5;71m▰/.test(line2), "done hat → green (71)")
 	assert.ok(/\x1b\[1;38;5;167m▰/.test(line2), "rejected hat → red (167)")
-	assert.ok(/\x1b\[1;38;5;33m▰/.test(line2), "active hat → blue (33)")
+	assert.ok(
+		/\x1b\[1;38;2;255;255;0m▰/.test(line2),
+		"active hat → pure yellow (#ffff00 truecolor)",
+	)
 })
 
 // ── state resolution (disk) ──────────────────────────────────────────

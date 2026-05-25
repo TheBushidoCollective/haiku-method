@@ -95,8 +95,16 @@ export interface StatuslineState {
 	 *  `pending` (not reached — faint empty). So the bar shows true per-hat
 	 *  state, including a bounce-back. Absent/null/empty for every other
 	 *  phase (and an idle pool) → no second line. Capped at the concurrency
-	 *  limit by the caller so the line can't overflow. */
-	itemBars?: Array<{ id: string; segments: HatSegment[] }> | null
+	 *  limit by the caller so the line can't overflow. During `fixloop` each
+	 *  entry also carries `severity` (the FB's classified urgency, or null
+	 *  when unclassified) — rendered as a leading colored glyph and used by
+	 *  the caller to order the bars highest-first, mirroring fix-loop
+	 *  dispatch. */
+	itemBars?: Array<{
+		id: string
+		segments: HatSegment[]
+		severity?: "blocker" | "high" | "medium" | "low" | null
+	}> | null
 	/** Per-agent status chips for the SECOND line during the await phases
 	 *  (pre-execute review, post-execute approval, quality gates, the
 	 *  intent-completion review). One chip per known review/approval role
@@ -148,6 +156,23 @@ const AGENT_CHIP: Record<
 	pending: { bg: "\x1b[48;5;248m", fg: "\x1b[38;5;240m", mark: "" }, // soft grey = queued
 	failed: { bg: "\x1b[48;5;217m", fg: "\x1b[1;38;5;124m", mark: " ✗" }, // pastel red = failure signal
 }
+// Feedback-severity glyph for the fix-loop bars — a leading dot colored by
+// urgency, read on the near-white chip box (dark FGs, like SEG_FG). `mark` is
+// the NO_COLOR-legible prefix so severity survives when escape codes are
+// stripped. Classified = filled `●`; unclassified (classifier hasn't run) =
+// hollow `○`. Mirrors the SPA's feedback-status palette family (red/orange/
+// gold/grey) so terminal and SPA agree at a glance.
+const SEVERITY_DOT: Record<
+	"blocker" | "high" | "medium" | "low",
+	{ fg: string; mark: string }
+> = {
+	blocker: { fg: "\x1b[1;38;5;160m", mark: "!" }, // red
+	high: { fg: "\x1b[1;38;5;166m", mark: "^" }, // orange
+	medium: { fg: "\x1b[38;5;172m", mark: "~" }, // gold
+	low: { fg: "\x1b[38;5;244m", mark: "." }, // grey
+}
+const SEVERITY_UNCLASSIFIED = { fg: "\x1b[38;5;250m", mark: "?" } // faint grey
+
 // Combining long stroke overlay — fakes a strikethrough per-character for
 // the no-color path (where ANSI SGR 9 is stripped). Color mode uses real
 // ANSI strikethrough (C.strike) instead; this keeps the "struck" semantic
@@ -303,17 +328,30 @@ export function renderStatusline(
 	// hat by its real status — green done, amber active, red rejected,
 	// faint pending. NO_COLOR drops the bg/color and renders any non-pending
 	// hat as a filled pip, pending as empty (`U-01 ▰▰▱▱▱`).
-	const barChip = (it: { id: string; segments: HatSegment[] }): string => {
+	const barChip = (it: {
+		id: string
+		segments: HatSegment[]
+		severity?: "blocker" | "high" | "medium" | "low" | null
+	}): string => {
+		// Severity prefix — fix-loop bars only (unit bars pass no `severity`).
+		// `undefined` = a unit bar (no prefix); `null` = an unclassified FB
+		// (hollow `?`/`○`); a value = the classified dot.
+		const hasSev = it.severity !== undefined
+		const sev = it.severity ? SEVERITY_DOT[it.severity] : SEVERITY_UNCLASSIFIED
 		if (!color) {
 			const bar = it.segments
 				.map((s) => (s === "pending" ? PIP_PENDING : PIP_DONE))
 				.join("")
-			return `${it.id} ${bar}`
+			const mark = hasSev ? `${sev.mark} ` : ""
+			return `${mark}${it.id} ${bar}`
 		}
 		const pips = it.segments
 			.map((s) => `${SEG_FG[s]}${s === "pending" ? PIP_PENDING : PIP_DONE}`)
 			.join("")
-		return `${C.chipBg} ${C.chipLabel}${it.id} ${pips} ${C.reset}`
+		const dot = hasSev
+			? `${sev.fg}${it.severity ? "●" : "○"}${C.chipLabel} `
+			: ""
+		return `${C.chipBg} ${dot}${C.chipLabel}${it.id} ${pips} ${C.reset}`
 	}
 
 	// An agent chip: a solid pastel status box (no bar). The box color IS

@@ -19,6 +19,11 @@ import {
 	resolveStudioFixHats,
 } from "../orchestrator/studio.js"
 import {
+	computeUnitWaves,
+	currentWaveNumber,
+	listUnits,
+} from "../orchestrator/units.js"
+import {
 	type CursorAction,
 	derivePosition,
 	findCurrentStage,
@@ -28,6 +33,10 @@ import {
 	deriveProgressRoleSteps,
 	deriveProgressTrack,
 } from "../orchestrator/workflow/progress-track.js"
+import {
+	type FeedbackSeverity,
+	feedbackSeverityRank,
+} from "../state/schemas/index.js"
 import {
 	findHaikuRoot,
 	intentDir,
@@ -283,7 +292,14 @@ function feedbackProgress(
 	return { closed, total }
 }
 
-type ItemBar = { id: string; segments: HatSegment[] }
+type ItemBar = {
+	id: string
+	segments: HatSegment[]
+	/** Feedback severity (fix-loop bars only); null = unclassified (the
+	 *  classifier hasn't ranked it yet). Drives the leading severity glyph
+	 *  and the highest-first bar order, mirroring fix-loop dispatch. */
+	severity?: FeedbackSeverity | null
+}
 type AgentChip = {
 	id: string
 	status: "done" | "active" | "pending" | "failed"
@@ -419,9 +435,12 @@ function feedbackBars(dir: string, fixHats: string[]): ItemBar[] {
 		const iters = Array.isArray(fm.iterations)
 			? (fm.iterations as Array<Record<string, unknown>>)
 			: []
+		const severity =
+			typeof fm.severity === "string" ? (fm.severity as FeedbackSeverity) : null
 		out.push({
 			id: `FB-${fileNumber(f)}`,
 			segments: hatSegments(iters, fixHats),
+			severity,
 		})
 	}
 	return out
@@ -589,6 +608,23 @@ export function resolveStatuslineState(): StatuslineState | null {
 	if (kind === "execute" && activeStage) {
 		const { done, total } = unitProgress(slug, studio, activeStage, iDir)
 		if (total > 0) aggregate = `${done}/${total} units`
+		// Append the current wave when the stage runs in more than one — the
+		// units execute in dependency waves (the cursor's barrier), so
+		// "7/12 units · wave 2/4" tells you which wave is in flight. Reuses the
+		// cursor's own wave computation so the numbers match the real pool, not
+		// a parallel reinvention. Single-wave stages omit it (no signal).
+		try {
+			const wUnits = listUnits(iDir, activeStage)
+			if (wUnits.length > 0) {
+				const { unitWave, totalWaves } = computeUnitWaves(wUnits)
+				if (totalWaves > 1) {
+					const cur = currentWaveNumber(wUnits, unitWave, totalWaves)
+					aggregate = `${aggregate || `${total} units`} · wave ${cur + 1}/${totalWaves}`
+				}
+			}
+		} catch {
+			/* best-effort — never let the wave annotation break the line */
+		}
 	} else if (kind === "fixloop") {
 		// Show OPEN findings remaining, not `closed/total`. A fix-loop
 		// always has ≥1 open finding by definition, so `0/1 closed` would
@@ -677,6 +713,14 @@ export function resolveStatuslineState(): StatuslineState | null {
 		}
 		bars.push(
 			...feedbackBars(join(iDir, "feedback"), resolveStudioFixHats(studio)),
+		)
+		// Highest-severity first across BOTH scopes — mirrors the fix-loop's
+		// dispatch order (`feedbackSeverityRank`: blocker < high < medium <
+		// low; unclassified ranks as medium). Stable sort keeps same-severity
+		// bars in their file order.
+		bars.sort(
+			(a, b) =>
+				feedbackSeverityRank(a.severity) - feedbackSeverityRank(b.severity),
 		)
 		if (bars.length > 0) itemBars = bars.slice(0, MAX_CONCURRENT_SUBAGENTS)
 	}

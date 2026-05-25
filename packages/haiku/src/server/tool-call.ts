@@ -328,18 +328,9 @@ export async function handleToolCall(
 		)
 	}
 
-	// Report tool — submit user feedback/bug reports to Sentry
+	// Report tool — submit user feedback/bug reports to Sentry, or fall back
+	// to a durable local sink when no DSN is configured.
 	if (name === "haiku_report") {
-		if (!isSentryConfigured()) {
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: "Feedback is not available in this installation (Sentry DSN not configured).",
-					},
-				],
-			}
-		}
 		const typedArgs = (args ?? {}) as Record<string, unknown>
 		const message = typedArgs.message as string | undefined
 		if (!message) {
@@ -355,6 +346,51 @@ export async function handleToolCall(
 		const sessionCtx = typedArgs._session_context as
 			| Record<string, string>
 			| undefined
+		// BUG-5 (admin-portal-reimagine): without a Sentry DSN this used to
+		// return a no-op success, silently DROPPING every engine-class finding
+		// from record_reflection (all dev builds have no DSN). Write the report
+		// to a durable local sink so findings land somewhere instead of a dead
+		// sink, and return success referencing the path.
+		if (!isSentryConfigured()) {
+			try {
+				const reportsDir = join(findHaikuRoot(), "reports")
+				mkdirSync(reportsDir, { recursive: true })
+				const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+				const reportPath = join(reportsDir, `${stamp}.json`)
+				writeFileSync(
+					reportPath,
+					`${JSON.stringify(
+						{
+							recorded_at: new Date().toISOString(),
+							message,
+							contact_email: contactEmail ?? null,
+							name: userName ?? null,
+							session_context: sessionCtx ?? null,
+						},
+						null,
+						2,
+					)}\n`,
+				)
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Sentry is not configured in this installation; report written locally to ${reportPath}.`,
+						},
+					],
+				}
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Sentry is not configured and the local report sink failed: ${err instanceof Error ? err.message : String(err)}`,
+						},
+					],
+					isError: true,
+				}
+			}
+		}
 		reportFeedback(message, sessionCtx, contactEmail, userName)
 		return {
 			content: [

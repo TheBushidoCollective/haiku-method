@@ -219,6 +219,7 @@ import {
 import {
 	findFeedbackFile,
 	findHaikuRoot,
+	gitCommitState,
 	intentDir,
 	intentFromCurrentBranch,
 	isGitRepo,
@@ -1288,6 +1289,17 @@ export default defineTool({
 				const intentMd = join(findHaikuRoot(), "intents", slug, "intent.md")
 				if (existsSync(intentMd)) {
 					setFrontmatterField(intentMd, "sealed_at", new Date().toISOString())
+					// BUG-4 (admin-portal-reimagine): COMMIT the seal stamp. A raw
+					// setFrontmatterField is not a commit, so the branch never goes
+					// ahead-of-origin and the end-of-tick auto-push (guarded on
+					// branchAheadOfOrigin) silently skips — leaving the sealed
+					// intent unpushed and the delivery PR's CI running on stale
+					// pre-fix code (observed: origin 20+ commits behind at seal).
+					// Committing here makes intent main ahead, so the existing
+					// auto-push below pushes it (and any agent-committed
+					// reflection.md). No-op in filesystem mode (gitCommitState
+					// guards on isGitRepo).
+					gitCommitState(`haiku: seal intent ${slug}`)
 					// pre-tick merge + cursor walk handle branch alignment
 					result = dispatchOrchestratorAction(slug)
 				}

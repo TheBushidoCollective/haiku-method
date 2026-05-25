@@ -41,6 +41,12 @@ export const feedbackStatusColors: Record<FeedbackStatus, string> = {
 	// matches agent/reply activity and distinguishes it from `closed`
 	// (code delta landed) in the at-a-glance list.
 	answered: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
+	// `non_actionable` — valid finding triaged as having no code fix (a
+	// question, out-of-scope note, immutable/superseded target). Terminally
+	// closed + acknowledged; slate distinguishes it from teal (answered),
+	// green (closed/fixed), and stone (rejected/invalid).
+	non_actionable:
+		"bg-slate-100 text-slate-700 dark:bg-slate-800/40 dark:text-slate-300",
 	// `escalated` — fix-loop bolt cap exceeded on an agent FB. Surfaced
 	// to a human reviewer; the engine has stopped retrying. Rose-leaning
 	// orange palette distinguishes it from amber (pending/fixing) and
@@ -70,6 +76,7 @@ export const statusDotClasses: Record<FeedbackStatus, string> = {
 	fixing: "bg-amber-600 dark:bg-amber-500",
 	addressed: "bg-blue-600 dark:bg-blue-500",
 	answered: "bg-teal-600 dark:bg-teal-400",
+	non_actionable: "bg-slate-500 dark:bg-slate-400",
 	escalated: "bg-orange-600 dark:bg-orange-400",
 	closed: "bg-green-600 dark:bg-green-400",
 	rejected: "bg-stone-600 dark:bg-stone-400",
@@ -82,6 +89,7 @@ export const statusBorderLeft: Record<FeedbackStatus, string> = {
 	fixing: "border-l-[3px] border-l-amber-400 dark:border-l-amber-500",
 	addressed: "border-l-[3px] border-l-blue-400 dark:border-l-blue-500",
 	answered: "border-l-[3px] border-l-teal-400 dark:border-l-teal-500",
+	non_actionable: "border-l-[3px] border-l-slate-400 dark:border-l-slate-500",
 	escalated: "border-l-[3px] border-l-orange-500 dark:border-l-orange-400",
 	closed: "border-l-[3px] border-l-green-500 dark:border-l-green-400",
 	rejected: "border-l-[3px] border-l-stone-400 dark:border-l-stone-500",
@@ -92,6 +100,7 @@ export const statusBackground: Record<FeedbackStatus, string> = {
 	fixing: "bg-amber-50/50 dark:bg-amber-950/20",
 	addressed: "bg-blue-50/50 dark:bg-blue-950/20",
 	answered: "bg-teal-50/50 dark:bg-teal-950/20",
+	non_actionable: "bg-slate-50/60 dark:bg-slate-950/25",
 	escalated: "bg-orange-50/60 dark:bg-orange-950/25",
 	closed: "bg-green-50/60 dark:bg-green-950/25",
 	rejected: "bg-stone-100 dark:bg-stone-800/50",

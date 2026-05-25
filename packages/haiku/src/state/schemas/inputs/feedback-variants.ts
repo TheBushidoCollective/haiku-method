@@ -277,6 +277,13 @@ export const HAIKU_FEEDBACK_ADVANCE_HAT_INPUT_SCHEMA = Type.Object(
 					"REQUIRED when this advance closes the feedback (terminal hat in fix_hats). A short plain-language explanation of what was changed, written to the requester. Stored on the FB frontmatter as `closure_reply` and surfaced in the SPA review timeline. Mid-chain advances may omit it.",
 			}),
 		),
+		resolution: Type.Optional(
+			Type.String({
+				enum: ["non_actionable"],
+				description:
+					"Set to `non_actionable` to TERMINAL-CLOSE this finding immediately from ANY hat, short-circuiting the rest of the fix_hats chain. Use ONLY when the finding is valid but has no code fix — a question you can answer in `message`/`reply`, an out-of-scope/process note, or an immutable/already-superseded target. The FB closes as `non_actionable` (distinct from a fixed-closure and from `haiku_feedback_reject`'s invalid-rejection) and is never re-dispatched. Omit for a normal advance.",
+			}),
+		),
 		state_file: stateFile,
 	},
 	{ additionalProperties: false },

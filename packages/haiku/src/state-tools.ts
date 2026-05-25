@@ -5162,6 +5162,7 @@ export const FEEDBACK_STATUSES = [
 	"fixing",
 	"addressed",
 	"answered",
+	"non_actionable",
 	"closed",
 	"rejected",
 ] as const
@@ -5247,6 +5248,13 @@ export function deriveFeedbackStatus(
 		if (typeof resolution === "string" && resolution === "answered") {
 			return "answered"
 		}
+		// A finding triaged as having no code fix (a question, an out-of-scope
+		// note, an immutable/superseded target) is terminally CLOSED but
+		// distinct from a fixed-closure and from an invalid rejection — it was
+		// valid and acknowledged, just not code-actionable (BUG-6).
+		if (typeof resolution === "string" && resolution === "non_actionable") {
+			return "non_actionable"
+		}
 		return "closed"
 	}
 	// Legacy `status:` field fallback. v7→v8 migrates it away on write,
@@ -5260,6 +5268,7 @@ export function deriveFeedbackStatus(
 		if (s === "rejected") return "rejected"
 		if (s === "addressed") return "addressed"
 		if (s === "answered") return "answered"
+		if (s === "non_actionable") return "non_actionable"
 		if (s === "closed") return "closed"
 		if (s === "fixing") return "fixing"
 	}
@@ -13110,7 +13119,11 @@ export function handleStateTool(
 			// closed_at is also stamped, so cursor and lifecycle-guard now
 			// agree on the closure signal.
 			const advStatus = deriveFeedbackStatus(advFm)
-			if (advStatus === "closed" || advStatus === "rejected") {
+			if (
+				advStatus === "closed" ||
+				advStatus === "rejected" ||
+				advStatus === "non_actionable"
+			) {
 				return reply(
 					{
 						error: "lifecycle_violation",
@@ -13192,6 +13205,97 @@ export function handleStateTool(
 				)
 			}
 			const isLast = callingIdx === fixHats.length - 1
+
+			// BUG-6 (admin-portal-reimagine): non_actionable terminal close. A
+			// fix-hat (typically the classifier, first in the chain) can
+			// short-circuit the WHOLE chain when the finding is valid but has no
+			// code fix — a question answerable inline, an out-of-scope/process
+			// note, or an immutable/already-superseded target. Pre-fix, such a
+			// finding reached the builder, which can't edit files to advance and
+			// can't close — only reject_hat, which bounced to the classifier and
+			// looped to the bolt cap. Close it as `non_actionable` (distinct from
+			// a fixed-closure and from reject's invalid-rejection); isFbTerminal
+			// sees closed_at and never re-dispatches it. No code landed, so
+			// discard any fix-chain worktree (mirrors reject), then relay the
+			// next undispatched FB for slot replenishment.
+			const resolutionArg =
+				typeof args.resolution === "string" ? (args.resolution as string) : ""
+			if (resolutionArg === "non_actionable") {
+				const naReason =
+					(typeof args.reply === "string"
+						? (args.reply as string).trim()
+						: "") ||
+					(typeof args.message === "string"
+						? (args.message as string).trim()
+						: "")
+				if (!naReason) {
+					return reply(
+						{
+							error: "reason_required",
+							feedback_id: feedbackId,
+							message: `Closing FB '${feedbackId}' as non_actionable requires a \`message\` (or \`reply\`) explaining why it has no code fix — the answer to the question, why it's out of scope, or why the target is immutable/superseded.`,
+						},
+						{ isError: true },
+					)
+				}
+				const naIters = Array.isArray(advFm.iterations)
+					? (advFm.iterations as Array<Record<string, unknown>>).slice()
+					: []
+				const naLast = naIters[naIters.length - 1]
+				const naEntry = {
+					bolt: curBolt,
+					hat: callingHat,
+					completed_at: timestamp(),
+					result: "closed",
+					message: naReason,
+				}
+				if (
+					naLast &&
+					(naLast.result === null || naLast.result === undefined) &&
+					naLast.hat === callingHat
+				) {
+					naIters[naIters.length - 1] = { ...naLast, ...naEntry }
+				} else {
+					naIters.push(naEntry)
+				}
+				const naFm: Record<string, unknown> = {
+					...advFm,
+					hat: callingHat,
+					iterations: naIters,
+					status: "non_actionable",
+					resolution: "non_actionable",
+					closed_at: timestamp(),
+					closed_by: `${callingHat}:non_actionable`,
+					closure_reply: { text: naReason, at: timestamp() },
+					closure_reply_unread: true,
+				}
+				writeFileSync(advPath, matter.stringify(`${advBody.trimEnd()}\n`, naFm))
+				sealIntentState(intentArg)
+				const naScope = stageArg || "intent"
+				cleanupFixChainWorktree(intentArg, naScope, feedbackId)
+				gitCommitState(`haiku: close fix-chain ${feedbackId} (non-actionable)`)
+				emitTelemetry("haiku.feedback.non_actionable", {
+					intent: intentArg,
+					stage: stageArg || "",
+					feedback_id: feedbackId,
+					hat: callingHat,
+				})
+				const naRelay = pickUndispatchedFbBlock(intentArg, studioName)
+				return text(
+					JSON.stringify({
+						action: "feedback_non_actionable",
+						feedback_id: feedbackId,
+						resolution: "non_actionable",
+						hat: callingHat,
+						next_subagent_dispatch_block: naRelay,
+						message:
+							`FB '${feedbackId}' closed as non-actionable by '${callingHat}': ${naReason}` +
+							(naRelay
+								? " Spawn the relayed <subagent> block below."
+								: ` Call haiku_run_next { intent: "${intentArg}" }.`),
+					}),
+				)
+			}
 
 			// Reply-on-closure: when this advance closes the FB, require a
 			// short human-readable explanation of what was done. The reply

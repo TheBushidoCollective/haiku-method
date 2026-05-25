@@ -69,12 +69,13 @@ export const FeedbackStatusSchema = z
 		"fixing",
 		"addressed",
 		"answered",
+		"non_actionable",
 		"escalated",
 		"closed",
 		"rejected",
 	])
 	.describe(
-		"Lifecycle: pending -> fixing -> addressed -> closed, or pending -> answered (question resolved by reply, no code delta), or pending -> rejected, or pending|fixing -> escalated (bolt cap exceeded on agent FBs). Only pending/fixing block the stage gate; escalated is a human-intervention waypoint, not a blocker.",
+		"Lifecycle: pending -> fixing -> addressed -> closed, or pending -> answered (question resolved by reply, no code delta), or pending -> non_actionable (valid but no code fix — a question, out-of-scope note, or immutable/superseded target; terminally closed and acknowledged, distinct from rejected/invalid), or pending -> rejected, or pending|fixing -> escalated (bolt cap exceeded on agent FBs). Only pending/fixing block the stage gate; escalated is a human-intervention waypoint, not a blocker.",
 	)
 export type FeedbackStatus = z.infer<typeof FeedbackStatusSchema>
 

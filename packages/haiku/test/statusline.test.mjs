@@ -339,8 +339,8 @@ test("renderStatusline: itemBars color each hat by status (green/amber/red)", as
 	assert.ok(/\x1b\[38;5;71m▰/.test(line2), "done hat → green (71)")
 	assert.ok(/\x1b\[1;38;5;167m▰/.test(line2), "rejected hat → red (167)")
 	assert.ok(
-		/\x1b\[1;38;2;255;255;0m▰/.test(line2),
-		"active hat → pure yellow (#ffff00 truecolor)",
+		/\x1b\[1;38;5;166m▰/.test(line2),
+		"active hat (default palette) → amber (166)",
 	)
 })
 
@@ -1348,6 +1348,13 @@ test("renderStatusline: fix-loop bars show severity (NO_COLOR marks + color chip
 	assert.ok(
 		!/[●○]/.test(colored),
 		"no leading severity dot — the chip box carries severity now",
+	)
+	// Pips are chip-dependent: the blocker box's active pip is blue (27), not
+	// the default amber — a warm active pip would wash out on the warm tint.
+	assert.match(
+		colored,
+		/\x1b\[1;38;5;27m▰/,
+		"blocker box → blue (27) active pip (chip-dependent)",
 	)
 })
 

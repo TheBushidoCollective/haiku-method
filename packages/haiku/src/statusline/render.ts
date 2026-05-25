@@ -132,16 +132,22 @@ const PIP_DONE = "▰"
 const PIP_PENDING = "▱"
 // Leader for the second (per-item pool) line.
 const ITEM_LEADER = "↳"
-// Per-hat segment colors for the unit/feedback bars, tuned to read on the
-// near-white chip box: green done, gold/amber active, soft red rejected,
-// faint empty pending. (Pure yellow is invisible on white, so "active"
-// uses a gold/amber that reads as yellow with contrast.)
-const SEG_FG: Record<HatSegment, string> = {
+// A pip palette = one foreground per hat-segment state. The DEFAULT palette
+// reads on the near-white unit chip; each severity box (below) overrides it
+// so pips always contrast against their tint. The active pip is the tricky
+// one — a warm pip vanishes on a warm tint, so the warm boxes flip it to
+// blue and the cool boxes keep amber. pending is dark enough that the empty
+// `▱` outline shows on every box.
+type PipPalette = Record<HatSegment, string>
+const SEG_FG: PipPalette = {
 	done: "\x1b[38;5;71m", // green = hat advanced
-	active: "\x1b[1;38;2;255;255;0m", // pure yellow (#ffff00, truecolor) = hat in progress
+	active: "\x1b[1;38;5;166m", // amber = hat in progress (reads on near-white)
 	rejected: "\x1b[1;38;5;167m", // soft red = hat last rejected
-	pending: "\x1b[38;5;250m", // faint = not reached
+	pending: "\x1b[38;5;244m", // grey = not reached (darker than the box, so the outline shows)
 }
+// Dark-grey pending pip for the colored severity boxes — reads on the warm
+// tints + lavender where the lighter near-white grey (244) would wash.
+const SEV_PEND = "\x1b[38;5;240m"
 // Agent-status chip palette (the await-phase second line). Pastel solid
 // boxes — `bg`/`fg` paint the box body, `mark` is the NO_COLOR-legible
 // status glyph appended to the role name (so status survives when bg is
@@ -166,14 +172,55 @@ const AGENT_CHIP: Record<
 // palette family (red/orange/gold) so terminal and SPA agree at a glance.
 const SEVERITY_CHIP: Record<
 	"blocker" | "high" | "medium" | "low",
-	{ bg: string; mark: string }
+	{ bg: string; mark: string; pips: PipPalette }
 > = {
-	blocker: { bg: "\x1b[48;5;210m", mark: "!" }, // red (deeper — 224 read too faint)
-	high: { bg: "\x1b[48;5;216m", mark: "^" }, // light orange
-	medium: { bg: "\x1b[48;5;223m", mark: "~" }, // light gold
-	low: { bg: "\x1b[48;5;254m", mark: "." }, // near-white baseline
+	// Warm boxes: dark-green done, BLUE active (a warm pip would vanish on a
+	// warm tint), very-dark-red rejected, dark-grey pending.
+	blocker: {
+		bg: "\x1b[48;5;210m", // red (deeper — 224 read too faint)
+		mark: "!",
+		pips: {
+			done: "\x1b[1;38;5;22m",
+			active: "\x1b[1;38;5;27m",
+			rejected: "\x1b[1;38;5;52m",
+			pending: SEV_PEND,
+		},
+	},
+	high: {
+		bg: "\x1b[48;5;216m", // light orange
+		mark: "^",
+		pips: {
+			done: "\x1b[1;38;5;22m",
+			active: "\x1b[1;38;5;27m",
+			rejected: "\x1b[1;38;5;88m",
+			pending: SEV_PEND,
+		},
+	},
+	medium: {
+		bg: "\x1b[48;5;223m", // light gold
+		mark: "~",
+		pips: {
+			done: "\x1b[1;38;5;22m",
+			active: "\x1b[1;38;5;27m",
+			rejected: "\x1b[1;38;5;88m",
+			pending: SEV_PEND,
+		},
+	},
+	// near-white baseline — same box + pips as the default unit chip.
+	low: { bg: "\x1b[48;5;254m", mark: ".", pips: SEG_FG },
 }
-const SEVERITY_UNCLASSIFIED = { bg: "\x1b[48;5;189m", mark: "?" } // light lavender
+// Cool lavender box: dark-green done, amber active (warm pip pops on the
+// cool tint), dark-red rejected, dark-grey pending.
+const SEVERITY_UNCLASSIFIED = {
+	bg: "\x1b[48;5;189m",
+	mark: "?",
+	pips: {
+		done: "\x1b[1;38;5;28m",
+		active: "\x1b[1;38;5;130m",
+		rejected: "\x1b[1;38;5;124m",
+		pending: SEV_PEND,
+	} as PipPalette,
+}
 
 // Combining long stroke overlay — fakes a strikethrough per-character for
 // the no-color path (where ANSI SGR 9 is stripped). Color mode uses real
@@ -335,24 +382,29 @@ export function renderStatusline(
 		segments: HatSegment[]
 		severity?: "blocker" | "high" | "medium" | "low" | null
 	}): string => {
-		// Severity tint — fix-loop bars only (unit bars pass no `severity`).
-		// `undefined` = a unit bar (default chip box); `null` = an unclassified
-		// FB (lavender box / `?` mark); a value = the urgency-tinted box. The
-		// box itself carries severity in color mode (no leading dot); the
-		// NO_COLOR path keeps the `mark` prefix since there's no bg to tint.
-		const hasSev = it.severity !== undefined
-		const sev = it.severity ? SEVERITY_CHIP[it.severity] : SEVERITY_UNCLASSIFIED
+		// Resolve the chip's box + pip palette from severity. `undefined` = a
+		// unit bar (default near-white box, default pips); `null` = an
+		// unclassified FB (lavender box / `?` mark); a value = the urgency-
+		// tinted box. The box carries severity in color mode (no leading dot);
+		// the NO_COLOR path keeps the `mark` prefix since there's no bg to tint.
+		// Pips come from the resolved box's palette so they contrast on the tint.
+		const sev = !(it.severity !== undefined)
+			? null
+			: it.severity
+				? SEVERITY_CHIP[it.severity]
+				: SEVERITY_UNCLASSIFIED
+		const pal = sev ? sev.pips : SEG_FG
 		if (!color) {
 			const bar = it.segments
 				.map((s) => (s === "pending" ? PIP_PENDING : PIP_DONE))
 				.join("")
-			const mark = hasSev ? `${sev.mark} ` : ""
+			const mark = sev ? `${sev.mark} ` : ""
 			return `${mark}${it.id} ${bar}`
 		}
 		const pips = it.segments
-			.map((s) => `${SEG_FG[s]}${s === "pending" ? PIP_PENDING : PIP_DONE}`)
+			.map((s) => `${pal[s]}${s === "pending" ? PIP_PENDING : PIP_DONE}`)
 			.join("")
-		const chipBg = hasSev ? sev.bg : C.chipBg
+		const chipBg = sev ? sev.bg : C.chipBg
 		return `${chipBg} ${C.chipLabel}${it.id} ${pips} ${C.reset}`
 	}
 

@@ -1239,9 +1239,16 @@ test("isPastAllStages: intent-completion actions are past all stages, stage-scop
 test("hatSegments: derives done/active/rejected/pending from iteration history", async () => {
 	const { hatSegments } = await import(`${SRC}statusline/state.ts`)
 	const hats = ["planner", "builder", "reviewer", "verifier"]
-	// Nothing run yet → first hat active.
+	// Started, nothing run yet → first hat active (default started=true).
 	assert.deepEqual(hatSegments([], hats), [
 		"active",
+		"pending",
+		"pending",
+		"pending",
+	])
+	// NOT started (queued, never dispatched) → empty progress, no active pip.
+	assert.deepEqual(hatSegments([], hats, false), [
+		"pending",
 		"pending",
 		"pending",
 		"pending",

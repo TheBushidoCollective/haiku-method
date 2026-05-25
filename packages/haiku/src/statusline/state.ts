@@ -344,6 +344,7 @@ const REJECT_RESULTS = new Set(["reject", "rejected"])
 export function hatSegments(
 	iters: Array<Record<string, unknown>>,
 	hats: string[],
+	started = true,
 ): HatSegment[] {
 	const recent = new Map<string, unknown>()
 	for (const it of iters) {
@@ -357,6 +358,12 @@ export function hatSegments(
 		return "pending"
 	})
 	if (hats.length === 0) return segs
+	// Not started yet (queued, never dispatched) → empty progress, no
+	// in-progress indicator. Caller passes `started=false` when there's no
+	// dispatch signal (e.g. a feedback with zero iterations is queued, not
+	// mid-fix). An in-flight item carries an open `result:null` iteration
+	// instead, handled below.
+	if (!started) return segs
 	if (iters.length === 0) {
 		segs[0] = "active"
 		return segs
@@ -437,9 +444,13 @@ function feedbackBars(dir: string, fixHats: string[]): ItemBar[] {
 			: []
 		const severity =
 			typeof fm.severity === "string" ? (fm.severity as FeedbackSeverity) : null
+		// An FB is "started" iff it carries iterations — there's no separate
+		// started_at on feedback (deriveFeedbackStatus: iterations[] non-empty
+		// → "fixing"). A zero-iteration FB is queued, so it shows empty
+		// progress (no in-progress pip) until the fix loop dispatches it.
 		out.push({
 			id: `FB-${fileNumber(f)}`,
-			segments: hatSegments(iters, fixHats),
+			segments: hatSegments(iters, fixHats, iters.length > 0),
 			severity,
 		})
 	}

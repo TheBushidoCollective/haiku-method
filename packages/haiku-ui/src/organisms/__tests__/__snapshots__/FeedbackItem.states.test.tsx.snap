@@ -2,7 +2,7 @@
 
 exports[`FeedbackItem — state matrix > renders every (status × interaction) cell (snapshot with token-hash header) 1`] = `
 <div
-  data-token-hash="00a5d2cd526e0349"
+  data-token-hash="d61f9f085f138f46"
 >
   <div
     data-status-row="pending"

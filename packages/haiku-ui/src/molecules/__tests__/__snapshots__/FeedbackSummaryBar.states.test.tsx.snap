@@ -2,7 +2,7 @@
 
 exports[`FeedbackSummaryBar — state matrix > renders (active filter × status) + empty cells (snapshot) 1`] = `
 <div
-  data-token-hash="00a5d2cd526e0349"
+  data-token-hash="d61f9f085f138f46"
 >
   <div
     data-cell="active-none"
@@ -65,6 +65,26 @@ exports[`FeedbackSummaryBar — state matrix > renders (active filter × status)
         />
         <span>
           Answered
+        </span>
+        <span
+          class="tabular-nums"
+        >
+          0
+        </span>
+      </button>
+      <button
+        aria-label="Filter by non-actionable (0)"
+        aria-pressed="false"
+        class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-status="non_actionable"
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          class="h-2 w-2 rounded-full bg-slate-500 dark:bg-slate-400"
+        />
+        <span>
+          Non-actionable
         </span>
         <span
           class="tabular-nums"
@@ -203,6 +223,26 @@ exports[`FeedbackSummaryBar — state matrix > renders (active filter × status)
         </span>
       </button>
       <button
+        aria-label="Filter by non-actionable (0)"
+        aria-pressed="false"
+        class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-status="non_actionable"
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          class="h-2 w-2 rounded-full bg-slate-500 dark:bg-slate-400"
+        />
+        <span>
+          Non-actionable
+        </span>
+        <span
+          class="tabular-nums"
+        >
+          0
+        </span>
+      </button>
+      <button
         aria-label="Filter by escalated (0)"
         aria-pressed="false"
         class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
@@ -325,6 +365,26 @@ exports[`FeedbackSummaryBar — state matrix > renders (active filter × status)
         />
         <span>
           Answered
+        </span>
+        <span
+          class="tabular-nums"
+        >
+          0
+        </span>
+      </button>
+      <button
+        aria-label="Filter by non-actionable (0)"
+        aria-pressed="false"
+        class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-status="non_actionable"
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          class="h-2 w-2 rounded-full bg-slate-500 dark:bg-slate-400"
+        />
+        <span>
+          Non-actionable
         </span>
         <span
           class="tabular-nums"
@@ -463,6 +523,26 @@ exports[`FeedbackSummaryBar — state matrix > renders (active filter × status)
         </span>
       </button>
       <button
+        aria-label="Filter by non-actionable (0)"
+        aria-pressed="false"
+        class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-status="non_actionable"
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          class="h-2 w-2 rounded-full bg-slate-500 dark:bg-slate-400"
+        />
+        <span>
+          Non-actionable
+        </span>
+        <span
+          class="tabular-nums"
+        >
+          0
+        </span>
+      </button>
+      <button
         aria-label="Filter by escalated (0)"
         aria-pressed="false"
         class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
@@ -585,6 +665,26 @@ exports[`FeedbackSummaryBar — state matrix > renders (active filter × status)
         />
         <span>
           Answered
+        </span>
+        <span
+          class="tabular-nums"
+        >
+          0
+        </span>
+      </button>
+      <button
+        aria-label="Filter by non-actionable (0)"
+        aria-pressed="false"
+        class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-status="non_actionable"
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          class="h-2 w-2 rounded-full bg-slate-500 dark:bg-slate-400"
+        />
+        <span>
+          Non-actionable
         </span>
         <span
           class="tabular-nums"

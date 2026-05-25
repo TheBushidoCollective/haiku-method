@@ -2311,8 +2311,29 @@ export function unitIntentDir(slug: string, unit: string): string {
 }
 
 /**
+ * Existence check that treats a 0-byte regular file as NON-existent (BUG-3).
+ * A unit that `touch`es an output, or a misfired redirect that writes output
+ * *names* as empty files, must not pass output validation and commit hollow
+ * artifacts whose empty-file SHA then reads as "stable" to drift. Directories
+ * and non-empty files count as present; an empty regular file does not.
+ */
+function nonEmptyExists(resolved: string): boolean {
+	if (!existsSync(resolved)) return false
+	try {
+		const st = statSync(resolved)
+		if (st.isFile() && st.size === 0) return false
+	} catch {
+		// stat failed after existsSync passed (race / permissions) — treat as
+		// present to avoid spurious "missing output" on a transient error.
+		return true
+	}
+	return true
+}
+
+/**
  * Check if an intent-relative output path exists in either the unit's
  * worktree or the main intent dir. Returns true if present at EITHER location.
+ * A 0-byte file does not count as present (see `nonEmptyExists`, BUG-3).
  */
 export function unitOutputExists(
 	slug: string,
@@ -2321,13 +2342,13 @@ export function unitOutputExists(
 ): boolean {
 	// Intent-relative: main intent dir or the unit worktree's intent dir.
 	const mainResolved = resolve(intentDir(slug), outputPath)
-	if (existsSync(mainResolved)) return true
+	if (nonEmptyExists(mainResolved)) return true
 	// Unit worktrees live under the primary repo (see unitIntentDir).
 	const wtRoot = join(primaryRepoRoot(), ".haiku", "worktrees", slug, unit)
 	const wtIntentDir = join(wtRoot, ".haiku", "intents", slug)
 	if (existsSync(wtIntentDir)) {
 		const wtResolved = resolve(wtIntentDir, outputPath)
-		if (existsSync(wtResolved)) return true
+		if (nonEmptyExists(wtResolved)) return true
 	}
 	// Repo-relative: auto-populated outputs from `scope: repo` stages record
 	// paths like `packages/foo/src/bar.ts`. Resolve against the repo root
@@ -2344,11 +2365,11 @@ export function unitOutputExists(
 	})()
 	if (repoRoot) {
 		const repoResolved = resolve(repoRoot, outputPath)
-		if (existsSync(repoResolved)) return true
+		if (nonEmptyExists(repoResolved)) return true
 	}
 	if (existsSync(wtRoot)) {
 		const wtRepoResolved = resolve(wtRoot, outputPath)
-		if (existsSync(wtRepoResolved)) return true
+		if (nonEmptyExists(wtRepoResolved)) return true
 	}
 	return false
 }

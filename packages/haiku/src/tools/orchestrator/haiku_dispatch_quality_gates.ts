@@ -90,15 +90,25 @@ const GATE_DEFER_AFTER_ATTEMPTS = 2
 
 type FbOnDisk = { path: string; data: Record<string, unknown> }
 
-/** Engine-authored quality_gates FBs on disk for a target (`unit:<slug>`
- *  at stage scope, or `intent_quality_gates` at intent scope) — open or
- *  closed. Counts prior fix-loop attempts and lets the deferral close the
- *  still-open ones. */
+/** Engine-authored quality_gates FBs on disk for a target — open or
+ *  closed. `sourceRef` may be a single ref (`unit:<slug>`,
+ *  `unit:<slug>:<gate-name>`, or `intent_quality_gates`) or an array of
+ *  refs; an FB matches if its `source_ref` equals any of them. Counts
+ *  prior fix-loop attempts and lets the deferral close the still-open
+ *  ones.
+ *
+ *  BUG-1: deferral attempts are keyed per gate command
+ *  (`unit:<slug>:<gate-name>`) so a gate that first turns red on a late
+ *  dispatch counts attempts from when *it* went red, not from the unit's
+ *  accumulated total. Legacy `unit:<slug>` FBs (filed before the per-gate
+ *  split) are still matchable by passing both refs, preserving the
+ *  attempt count for in-flight intents. */
 function gateFbsFor(
 	slug: string,
 	stage: string,
-	sourceRef: string,
+	sourceRef: string | string[],
 ): FbOnDisk[] {
+	const refs = Array.isArray(sourceRef) ? sourceRef : [sourceRef]
 	const dir = stage
 		? join(intentDir(slug), "stages", stage, "feedback")
 		: join(intentDir(slug), "feedback")
@@ -113,7 +123,7 @@ function gateFbsFor(
 			>
 			if (
 				(data.author as string) === "engine" &&
-				(data.source_ref as string) === sourceRef
+				refs.includes(data.source_ref as string)
 			) {
 				out.push({ path: p, data })
 			}
@@ -249,44 +259,76 @@ function runStageScope(intent: string, stage: string, units: string[]) {
 			stampUnitApproval(unitPath, "quality_gates")
 			passed.push(unit)
 		} else {
-			const sourceRef = `unit:${unit}`
-			const priorAttempts = gateFbsFor(intent, stage, sourceRef).length
-			if (priorAttempts >= GATE_DEFER_AFTER_ATTEMPTS) {
-				// Non-convergent: the fix loop has had GATE_DEFER_AFTER_ATTEMPTS
-				// engine gate FBs (each up to MAX_FIX_LOOP_BOLTS bolts) and the
-				// gate still fails. Defer to CI rather than re-file a blocking
-				// FB that would keep the stage wedged. Stamp the approval
-				// deferred (so the cursor passes the gate), record the deferred
-				// gates on the unit, and close any still-open gate FBs with a
-				// DIRECT write (no invalidation hook → the deferral stamp
-				// survives).
-				const gateNames = result.failures.map((f) => f.name)
-				const reason = `quality_gates on \`${unit}\` (${gateNames.join(", ")}) stayed red across ${priorAttempts} local fix-loop attempt(s). Deferred to CI — CI runs them in a clean tree and is authoritative. A real defect surfaces as red CI on the PR; an environment-only failure (no local API, dep/codegen mismatch in the worktree) passes there.`
-				stampUnitGateDeferral(unitPath, result.failures)
-				for (const fb of gateFbsFor(intent, stage, sourceRef)) {
+			// BUG-1: attempts are counted PER GATE COMMAND, not per unit. A
+			// gate that first turns red on a late dispatch must get its full
+			// GATE_DEFER_AFTER_ATTEMPTS budget rather than inheriting the
+			// unit's accumulated FB count. Partition the failing gates into
+			// those that have exhausted their own budget (defer to CI) and
+			// those that still have local fix-loop attempts left (re-file a
+			// per-gate blocking FB).
+			const unitSourceRef = `unit:${unit}`
+			const gatesToDefer: GateFailure["failures"] = []
+			const gatesToRefile: GateFailure["failures"] = []
+			for (const failure of result.failures) {
+				const gateSourceRef = `${unitSourceRef}:${failure.name}`
+				// Count this gate's own FBs. Include legacy unit-scoped FBs so
+				// in-flight intents that accumulated attempts under the old
+				// per-unit key still defer correctly. Counting the legacy ref
+				// per-gate is intentionally conservative — it can only defer
+				// sooner, never wedge.
+				const priorAttempts = gateFbsFor(intent, stage, [
+					gateSourceRef,
+					unitSourceRef,
+				]).length
+				if (priorAttempts >= GATE_DEFER_AFTER_ATTEMPTS) {
+					gatesToDefer.push(failure)
+				} else {
+					gatesToRefile.push(failure)
+				}
+			}
+
+			if (gatesToDefer.length > 0) {
+				// Non-convergent gate(s): the fix loop has had
+				// GATE_DEFER_AFTER_ATTEMPTS engine gate FBs (each up to
+				// MAX_FIX_LOOP_BOLTS bolts) and these gates still fail. Defer
+				// them to CI rather than re-file a blocking FB that would keep
+				// the stage wedged. Close the open FBs for the deferred gates
+				// with a DIRECT write (no invalidation hook → the deferral
+				// stamp survives).
+				const gateNames = gatesToDefer.map((f) => f.name)
+				const reason = `quality_gates on \`${unit}\` (${gateNames.join(", ")}) stayed red across ${GATE_DEFER_AFTER_ATTEMPTS}+ local fix-loop attempt(s). Deferred to CI — CI runs them in a clean tree and is authoritative. A real defect surfaces as red CI on the PR; an environment-only failure (no local API, dep/codegen mismatch in the worktree) passes there.`
+				stampUnitGateDeferral(unitPath, gatesToDefer)
+				const deferRefs = [
+					unitSourceRef,
+					...gateNames.map((n) => `${unitSourceRef}:${n}`),
+				]
+				for (const fb of gateFbsFor(intent, stage, deferRefs)) {
 					if (isFbOpen(fb.data)) closeGateFbDeferred(fb.path, reason)
 				}
 				deferred.push({ unit, gates: gateNames, reason })
-			} else {
-				failures.push({ unit, failures: result.failures })
-				// File an FB targeting this unit, invalidating the
+			}
+
+			if (gatesToRefile.length > 0) {
+				failures.push({ unit, failures: gatesToRefile })
+				// File a per-gate FB targeting this unit, invalidating the
 				// quality_gates role. The fix loop addresses the gate
-				// failure; on its terminal advance, this approval
-				// reopens (as null) and the cursor re-dispatches the
-				// gates. Closure of the FB clears the invalidation.
-				const failureSummary = result.failures
-					.map((f) => `- ${f.name}: \`${f.command}\` exited ${f.exit_code}`)
-					.join("\n")
-				writeFeedbackFile(intent, stage, {
-					title: `quality_gates failure on ${unit}`,
-					body: `One or more declared quality_gates failed on unit \`${unit}\`:\n\n${failureSummary}\n\nThe fix loop should resolve the failure, then quality_gates re-runs on the next tick. If the gate keeps failing across attempts, the engine defers it to CI (environmental / non-source-convergent).`,
-					origin: "agent",
-					severity: "blocker",
-					author: "engine",
-					source_ref: sourceRef,
-					targetUnit: unit,
-					targetInvalidates: ["quality_gates"],
-				})
+				// failure; on its terminal advance, this approval reopens (as
+				// null) and the cursor re-dispatches the gates. Closure of the
+				// FB clears the invalidation. One FB per failing gate so each
+				// gate's attempts are counted from when *it* went red.
+				for (const failure of gatesToRefile) {
+					const gateSourceRef = `${unitSourceRef}:${failure.name}`
+					writeFeedbackFile(intent, stage, {
+						title: `quality_gates failure on ${unit} (${failure.name})`,
+						body: `Declared quality_gate \`${failure.name}\` failed on unit \`${unit}\`:\n\n- ${failure.name}: \`${failure.command}\` exited ${failure.exit_code}\n\nThe fix loop should resolve the failure, then quality_gates re-runs on the next tick. If this gate keeps failing across attempts, the engine defers it to CI (environmental / non-source-convergent).`,
+						origin: "agent",
+						severity: "blocker",
+						author: "engine",
+						source_ref: gateSourceRef,
+						targetUnit: unit,
+						targetInvalidates: ["quality_gates"],
+					})
+				}
 			}
 		}
 	}
@@ -316,7 +358,8 @@ function runStageScope(intent: string, stage: string, units: string[]) {
 function runIntentScope(intent: string) {
 	const intentRoot = intentDir(intent)
 	const stagesRoot = join(intentRoot, "stages")
-	const distinctGates = collectIntentScopeGates(stagesRoot)
+	const skipGates = readSkipGates(intentRoot)
+	const distinctGates = collectIntentScopeGates(stagesRoot, skipGates)
 	if (distinctGates.length === 0) {
 		// No declared gates anywhere — stamp clean and let the cursor
 		// fall through to seal.
@@ -466,12 +509,44 @@ function runIntentScope(intent: string) {
 	)
 }
 
+/** Read `skip_gates: [...]` from intent.md frontmatter — a list of gate
+ *  names (or `dir::command` keys) that should be excluded from the
+ *  intent-scope union. BUG-2: when a later owner decision relocates code
+ *  (e.g. moving a surface from one app to another), the frozen unit specs
+ *  still declare gates against the stale path that can never pass. Naming
+ *  them here lets the intent seal without re-emitting an unfixable gate
+ *  every dispatch. Backward-compatible: absent / non-array → empty set. */
+function readSkipGates(intentRoot: string): Set<string> {
+	const intentMdPath = join(intentRoot, "intent.md")
+	if (!existsSync(intentMdPath)) return new Set()
+	try {
+		const data = matter(readFileSync(intentMdPath, "utf8")).data as Record<
+			string,
+			unknown
+		>
+		const raw = data.skip_gates
+		if (!Array.isArray(raw)) return new Set()
+		return new Set(raw.filter((v): v is string => typeof v === "string"))
+	} catch {
+		return new Set()
+	}
+}
+
 /** Walk every `stages/<stage>/units/unit-*.md`, collect their
  *  `quality_gates[]`, dedupe by `command` (the canonical equality —
  *  same command at the same dir is the same gate), and return the
  *  distinct list with contributing unit slugs for the failure
- *  surface. */
-function collectIntentScopeGates(stagesRoot: string): IntentGate[] {
+ *  surface.
+ *
+ *  BUG-2: a gate entry carrying `superseded: true` is skipped (a later
+ *  relocation made its declaring unit's path non-convergent), as is any
+ *  gate whose `name` or `dir::command` key appears in the intent's
+ *  `skip_gates` set. Both are minimal, opt-in, and backward-compatible —
+ *  unmarked gates behave exactly as before. */
+function collectIntentScopeGates(
+	stagesRoot: string,
+	skipGates: Set<string> = new Set(),
+): IntentGate[] {
 	if (!existsSync(stagesRoot)) return []
 	const gateMap = new Map<string, IntentGate>()
 	const stageDirs = readdirSync(stagesRoot).filter((name) => {
@@ -506,6 +581,9 @@ function collectIntentScopeGates(stagesRoot: string): IntentGate[] {
 			for (const g of gates) {
 				if (!g || typeof g !== "object") continue
 				const obj = g as Record<string, unknown>
+				// BUG-2: skip gates explicitly marked non-convergent on the
+				// unit entry after a code relocation froze their path.
+				if (obj.superseded === true) continue
 				const name = typeof obj.name === "string" ? obj.name : ""
 				const command = typeof obj.command === "string" ? obj.command : ""
 				if (!command) continue
@@ -514,6 +592,9 @@ function collectIntentScopeGates(stagesRoot: string): IntentGate[] {
 						? obj.dir
 						: undefined
 				const key = `${dir ?? ""}::${command}`
+				// BUG-2: skip gates named in the intent's `skip_gates` FM list,
+				// matched by gate name OR by the canonical `dir::command` key.
+				if ((name && skipGates.has(name)) || skipGates.has(key)) continue
 				const existing = gateMap.get(key)
 				const contributorSlug = `${stage}/${file.replace(/\.md$/, "")}`
 				if (existing) {

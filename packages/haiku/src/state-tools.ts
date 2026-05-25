@@ -6120,6 +6120,157 @@ function pickUndispatchedFbBlock(slug: string, studio: string): string | null {
 	})
 }
 
+/** Pick up to `maxFill` COMPLETELY UNSTARTED units in the current stage
+ *  whose `depends_on` are all complete, claim each (so a concurrent
+ *  terminal advance can't grab the same one), and return their first-hat
+ *  `<subagent>` dispatch blocks. The unit-track analog of
+ *  `pickUndispatchedFbBlock`, with two differences feedback doesn't have:
+ *
+ *   1. **DAG gate.** A unit is pickable only when every `depends_on` is a
+ *      completed unit (its last iteration is a terminal advance on the
+ *      stage's last hat). The terminal advance that calls this has already
+ *      merged the just-completed unit under `withStageLock`, so a dependent
+ *      whose inputs reference that unit's outputs sees them on the stage
+ *      branch.
+ *   2. **Multi-fill.** One completion can unlock several successors (fan-out).
+ *      Picking only one would collapse the pool to serial, so we fill every
+ *      freed slot — up to `maxFill` — in a single response. `run_next` only
+ *      fires between waves; `advance_hat` owns within-wave replenishment.
+ *
+ *  The CLAIM mirrors the start-path: set `started_at`, open the first hat's
+ *  iteration, and stamp the dispatch lease. With the claim on the stage
+ *  branch the relayed subagent reads `iterations[]` non-empty and skips
+ *  `haiku_unit_start` (its template's first-call branch), and a concurrent
+ *  walk sees the unit as in-flight (started + leased) — never re-picking it.
+ *  MUST be called under `withIntentDispatchLock` so two simultaneous terminal
+ *  advances can't both claim the same unit; each claim removes the unit from
+ *  the zero-iteration set the next call sees. A candidate whose `inputs:` are
+ *  unsatisfied is skipped (not claimed) — it falls through to the next
+ *  between-wave `run_next`, where the cursor's pre-dispatch gates surface the
+ *  structured error instead of this best-effort picker swallowing it. */
+export function pickUndispatchedUnitBlocks(
+	slug: string,
+	studio: string,
+	maxFill: number,
+): string[] {
+	if (maxFill <= 0) return []
+	const iDir = intentDir(slug)
+	const stage = findCurrentStage(slug, studio, iDir) ?? ""
+	if (!stage) return []
+	const hats = resolveStageHats(slug, stage)
+	if (hats.length === 0) return []
+	const firstHat = hats[0]
+	const lastHat = hats[hats.length - 1]
+	const terminal = hats.length === 1
+	const unitsDir = join(stageDir(slug, stage), "units")
+	if (!existsSync(unitsDir)) return []
+
+	const files = readdirSync(unitsDir)
+		.filter((f) => f.endsWith(".md"))
+		.sort()
+	type UnitRow = { name: string; path: string; fm: Record<string, unknown> }
+	const rows: UnitRow[] = []
+	for (const file of files) {
+		const path = join(unitsDir, file)
+		let fm: Record<string, unknown> | undefined
+		try {
+			fm = parseFrontmatter(readFileSync(path, "utf8")).data
+		} catch {
+			fm = undefined
+		}
+		if (!fm) continue
+		rows.push({ name: file.replace(/\.md$/, ""), path, fm })
+	}
+
+	// Completed = last iteration is a terminal advance on the LAST hat
+	// (mirror of the cursor's `completedNames`). Used for the DAG gate.
+	const completedNames = new Set(
+		rows
+			.filter((r) => {
+				const its = Array.isArray(r.fm.iterations)
+					? (r.fm.iterations as Array<Record<string, unknown>>)
+					: []
+				const last = its[its.length - 1]
+				return last && last.result === "advance" && last.hat === lastHat
+			})
+			.map((r) => r.name),
+	)
+
+	const blocks: string[] = []
+	for (const row of rows) {
+		if (blocks.length >= maxFill) break
+		// UNSTARTED only: no started_at, zero iterations. A started unit is
+		// either in-flight (its own subagent self-relays) or already claimed
+		// by a concurrent terminal advance.
+		if (row.fm.started_at != null) continue
+		const its = Array.isArray(row.fm.iterations)
+			? (row.fm.iterations as unknown[])
+			: []
+		if (its.length > 0) continue
+		// DAG gate: every dependency must be complete.
+		const deps = Array.isArray(row.fm.depends_on)
+			? (row.fm.depends_on as string[])
+			: []
+		if (!deps.every((d) => completedNames.has(d))) continue
+		// Inputs gate (skip-on-fail, see docstring): the field must be
+		// declared and every declared path must exist on disk.
+		if (!("inputs" in row.fm)) continue
+		const inputs = Array.isArray(row.fm.inputs)
+			? (row.fm.inputs as string[])
+			: []
+		if (inputs.some((inp) => !unitOutputExists(slug, row.name, inp))) continue
+
+		// CLAIM — set started_at + open the first hat's iteration + lease it.
+		// Engine-owned start, so the relayed subagent skips haiku_unit_start.
+		setFrontmatterField(row.path, "started_at", timestamp())
+		startUnitIteration(row.path, firstHat)
+		stampUnitHatLease({ slug, stage, unit: row.name, hat: firstHat })
+		blocks.push(
+			buildUnitHatDispatchBlock({
+				slug,
+				studio,
+				unit: row.name,
+				stage,
+				hat: firstHat,
+				terminal,
+			}),
+		)
+	}
+	// One reseal covers all claims (started_at + iterations are UNIT_FIELDS).
+	if (blocks.length > 0) sealIntentState(slug)
+	return blocks
+}
+
+/** Count units in `stage` that are in flight — started, with at least one
+ *  hat still to run — excluding `excludeUnit` (the unit whose terminal
+ *  advance is asking, already merged/done). Mirrors the cursor's `inFlight`
+ *  so refill width math (`MAX_CONCURRENT_SUBAGENTS - inFlight`) agrees with
+ *  the wave cap. */
+export function countInFlightUnits(
+	slug: string,
+	stage: string,
+	excludeUnit: string,
+): number {
+	const hats = resolveStageHats(slug, stage)
+	if (hats.length === 0) return 0
+	const unitsDir = join(stageDir(slug, stage), "units")
+	if (!existsSync(unitsDir)) return 0
+	let count = 0
+	for (const file of readdirSync(unitsDir).filter((f) => f.endsWith(".md"))) {
+		const name = file.replace(/\.md$/, "")
+		if (name === excludeUnit) continue
+		let fm: Record<string, unknown> | undefined
+		try {
+			fm = parseFrontmatter(readFileSync(join(unitsDir, file), "utf8")).data
+		} catch {
+			continue
+		}
+		if (!fm || fm.started_at == null) continue
+		if (nextHatForUnit(fm, hats) !== null) count++
+	}
+	return count
+}
+
 /** Resolve the next sequential NN prefix in a feedback directory. */
 function nextFeedbackNumber(dir: string): number {
 	if (!existsSync(dir)) return 1
@@ -9331,6 +9482,29 @@ export function handleStateTool(
 					lastIter !== null &&
 					(lastIter.result === "advance" || lastIter.result === "closed")
 				if (startedAt && !isTerminal) {
+					// Idempotent pre-claim carve-out. The terminal-advance refill
+					// (`pickUndispatchedUnitBlocks`) engine-claims a freshly
+					// dispatched unit — sets started_at + opens ONE leased
+					// first-hat iteration — so the relayed subagent normally skips
+					// this call (its template only starts when iterations[] is
+					// empty). If a subagent calls it anyway, don't error: the unit
+					// IS started, by the engine, and the subagent should proceed.
+					// Signature: exactly one open iteration carrying a dispatch
+					// lease, zero completed hats.
+					const isEnginePreClaim =
+						iters.length === 1 &&
+						lastIter !== null &&
+						(lastIter.result === null || lastIter.result === undefined) &&
+						typeof lastIter.dispatched_at === "string" &&
+						(lastIter.dispatched_at as string).length > 0
+					if (isEnginePreClaim) {
+						const preScope = resolveStageScope(args.intent as string, stage)
+						return text(
+							preScope
+								? `ok (already started by the engine)\n\n${preScope}`
+								: "ok (already started by the engine)",
+						)
+					}
 					const scope = resolveStageScope(args.intent as string, stage)
 					const currentHat =
 						lastIter !== null && typeof lastIter.hat === "string"
@@ -9926,19 +10100,27 @@ export function handleStateTool(
 						? ""
 						: ` (${mergeResult.message})`
 
-				// Terminal advance: the unit's hat chain is done and its
-				// branch merged, so `computeUnitRelayBlock(intent, thisUnit)`
-				// returns null (this unit is no longer in the cursor's next
-				// dispatch batch). Deliberate — cross-unit wave replenishment
-				// is left to `haiku_run_next`, which dispatches the WHOLE next
-				// wave atomically. Relaying a different unit here would race
-				// the OTHER terminal advances completing in parallel: each
-				// would pick the same next wave-ready / in-flight sibling and
-				// the parent would double-spawn it (admin-portal-reimagine #5,
-				// 2026-05-20). The per-unit chain still self-relays on
-				// NON-terminal advances (below), so a wave costs only one
-				// extra run_next at its drain — no concurrent relays, no
-				// double-suggestion. (.claude/rules/no-agent-mechanics-teaching.md)
+				// Terminal advance: the unit's hat chain is done and its branch
+				// merged, so this unit frees a pool slot. `advance_hat` OWNS
+				// within-wave replenishment — `run_next` only fires between
+				// waves. Refill every freed slot now (matching the fix-loop's
+				// `pickUndispatchedFbBlock`): pick up to `MAX_CONCURRENT_SUBAGENTS
+				// − inFlight` deps-ready UNSTARTED units, claim each under
+				// `withIntentDispatchLock`, and relay all their blocks so the
+				// parent spawns fresh chains in the freed slots.
+				//
+				// Race-safe by construction (the admin-portal-reimagine #5
+				// double-pickup is closed, not reintroduced): a subagent only
+				// ever self-relays its OWN chain (non-terminal advance, below)
+				// or, on exhaustion, picks COMPLETELY UNSTARTED units — never an
+				// in-flight sibling. The claim stamps `started_at` + an open
+				// leased iteration on the stage branch, so two simultaneous
+				// terminal advances serialize through the lock and each sees the
+				// other's just-claimed unit as started → no double-spawn.
+				// Multi-fill (not one-at-a-time) so a fan-out unlock — one unit
+				// completing and freeing several dependents — fills the whole
+				// pool instead of draining serially.
+				// (.claude/rules/no-agent-mechanics-teaching.md)
 				const terminalPool = summarizeStageLoop(
 					intentDir(args.intent as string),
 					advStage,
@@ -9948,13 +10130,61 @@ export function handleStateTool(
 					`\n${args.unit as string}: ${currentHat} done — unit complete` +
 					(terminalPool ? `\n${terminalPool}` : "") +
 					pushWarning(completeGit)
-				const terminalRelay = computeUnitRelayBlock(
+
+				const refillStudio = (() => {
+					const iMd = join(intentDir(args.intent as string), "intent.md")
+					if (!existsSync(iMd)) return ""
+					const fm = matter(readFileSync(iMd, "utf8")).data as Record<
+						string,
+						unknown
+					>
+					return typeof fm.studio === "string" ? fm.studio : ""
+				})()
+				const inFlightSiblings = countInFlightUnits(
 					args.intent as string,
+					advStage,
 					args.unit as string,
 				)
-				return text(
-					appendRelay(baseTerminalText, terminalRelay, args.intent as string),
+				const refillBudget = Math.max(
+					0,
+					MAX_CONCURRENT_SUBAGENTS - inFlightSiblings,
 				)
+				const refillBlocks =
+					refillStudio && refillBudget > 0
+						? withIntentDispatchLock(args.intent as string, () =>
+								pickUndispatchedUnitBlocks(
+									args.intent as string,
+									refillStudio,
+									refillBudget,
+								),
+							)
+						: []
+				if (refillBlocks.length > 0) {
+					// Persist the refill claims (started_at + iterations are
+					// UNIT_FIELDS already resealed by the picker) so a crash /
+					// cross-machine pickup sees the in-flight stamp.
+					gitCommitState(
+						`haiku: refill ${refillBlocks.length} unit slot(s) after ${args.unit as string}`,
+					)
+				}
+
+				let terminalRelayText: string
+				if (refillBlocks.length > 0) {
+					const noun = refillBlocks.length === 1 ? "block" : "blocks"
+					terminalRelayText =
+						`${baseTerminalText}\n\n---\n\nWave still has work — spawn the ${refillBlocks.length} ${noun} below as your next Task call(s) to refill the freed slot(s):\n\n` +
+						refillBlocks.join("\n\n")
+				} else if (inFlightSiblings > 0) {
+					// Nothing unstarted is dispatchable yet, but siblings are
+					// still running — THEY own refilling as they finish. Do not
+					// call run_next mid-wave.
+					terminalRelayText = `${baseTerminalText}\n\nNo unstarted units are ready to dispatch right now; sibling subagents are still working and will refill the pool as they finish. Terminate this turn — do NOT call haiku_run_next.`
+				} else {
+					// Pool fully drained — this was the last in-flight unit and
+					// nothing is left to start. Cross to the next wave/phase.
+					terminalRelayText = `${baseTerminalText}\n\nWave done — call \`haiku_run_next { intent: "${args.intent as string}" }\` for the next instruction.`
+				}
+				return text(terminalRelayText)
 			}
 
 			// ── NOT last hat: advance to next ──

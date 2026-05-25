@@ -1,12 +1,17 @@
 // relay-no-cross-unit-suggest.test.mjs
 //
-// A unit's terminal advance must NOT relay a DIFFERENT unit. Cross-unit
-// wave replenishment is left to `haiku_run_next` (atomic next-wave
-// dispatch) so that when several units' terminal hats complete in
-// parallel, the concurrent relays can't each pick — and the parent
-// double-spawn — the same in-flight sibling. (admin-portal-reimagine #5,
-// 2026-05-20.) The per-unit chain still self-relays on NON-terminal
-// advances; only cross-unit suggestions are suppressed.
+// A unit's terminal advance must NOT relay an IN-FLIGHT sibling. The pool
+// refill (`pickUndispatchedUnitBlocks`) picks COMPLETELY UNSTARTED units
+// only and claims each under the dispatch lock, so two terminal advances
+// completing in parallel can never both pick — and the parent double-spawn
+// — the same running unit. (admin-portal-reimagine #5, 2026-05-20.) The
+// per-unit chain self-relays on NON-terminal advances; on a terminal
+// advance the freed slot is refilled with unstarted work, never with a
+// sibling that's already executing.
+//
+// This fixture has the only unstarted-less shape: one terminal unit plus
+// one in-flight sibling. So the refill is empty and the sibling must never
+// appear in the response.
 
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
@@ -55,7 +60,15 @@ test("terminal advance does not emit a cross-unit relay block (sibling in flight
 	const stage = "security"
 	const stageMd = matter(
 		(await import("node:fs")).readFileSync(
-			join(REPO_ROOT, "plugin", "studios", "software", "stages", stage, "STAGE.md"),
+			join(
+				REPO_ROOT,
+				"plugin",
+				"studios",
+				"software",
+				"stages",
+				stage,
+				"STAGE.md",
+			),
 			"utf8",
 		),
 	).data
@@ -111,26 +124,39 @@ test("terminal advance does not emit a cross-unit relay block (sibling in flight
 			completed_at: at,
 			result: "advance",
 		}))
-		aIters.push({ hat: terminalHat, started_at: at, completed_at: null, result: null })
-		writeFileSync(join(stageDir, "units", "unit-01-a.md"), matter.stringify("# A\n", {
-			title: "unit-01-a",
+		aIters.push({
+			hat: terminalHat,
 			started_at: at,
-			inputs: [],
-			outputs: ["OUT-A.md"],
-			iterations: aIters,
-			reviews: engineReviews,
-			approvals: {},
-		}))
+			completed_at: null,
+			result: null,
+		})
+		writeFileSync(
+			join(stageDir, "units", "unit-01-a.md"),
+			matter.stringify("# A\n", {
+				title: "unit-01-a",
+				started_at: at,
+				inputs: [],
+				outputs: ["OUT-A.md"],
+				iterations: aIters,
+				reviews: engineReviews,
+				approvals: {},
+			}),
+		)
 		// Unit B: in-flight at the FIRST hat (a running sibling).
-		writeFileSync(join(stageDir, "units", "unit-02-b.md"), matter.stringify("# B\n", {
-			title: "unit-02-b",
-			started_at: at,
-			inputs: [],
-			outputs: ["OUT-B.md"],
-			iterations: [{ hat: hats[0], started_at: at, completed_at: null, result: null }],
-			reviews: engineReviews,
-			approvals: {},
-		}))
+		writeFileSync(
+			join(stageDir, "units", "unit-02-b.md"),
+			matter.stringify("# B\n", {
+				title: "unit-02-b",
+				started_at: at,
+				inputs: [],
+				outputs: ["OUT-B.md"],
+				iterations: [
+					{ hat: hats[0], started_at: at, completed_at: null, result: null },
+				],
+				reviews: engineReviews,
+				approvals: {},
+			}),
+		)
 		// Produce A's declared output so the terminal advance can complete.
 		writeFileSync(join(stageDir, "units", "OUT-A.md"), "A output\n")
 		gitq(repo, "add", "-A")
@@ -140,7 +166,8 @@ test("terminal advance does not emit a cross-unit relay block (sibling in flight
 
 		const { handleStateTool } = await import(`${SRC}state-tools.ts`)
 		const resp = await withCwd(repo, () =>
-			handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
+			handleStateTool("haiku_unit_advance_hat", {
+				message: "test advance handoff",
 				intent: slug,
 				stage,
 				unit: "unit-01-a",
@@ -154,14 +181,17 @@ test("terminal advance does not emit a cross-unit relay block (sibling in flight
 			!/unit-02-b/.test(txt),
 			`terminal advance must NOT relay the in-flight sibling unit-02-b; got: ${txt.slice(0, 600)}`,
 		)
-		// On the success path, with no relay block it must route to run_next.
-		// (The terminal merge can fail on output-detection in this minimal
-		// fixture — like the relay-breadcrumb drain test — in which case the
-		// no-cross-unit invariant above is the assertion that matters.)
+		// On the success path: nothing is unstarted (the sibling is in
+		// flight), so there's no refill block, and a sibling is still
+		// running, so the wave isn't done — the engine instructs terminate,
+		// NOT a positive run_next directive. (The terminal merge can fail on
+		// output-detection in this minimal fixture — like the relay-breadcrumb
+		// drain test — in which case the no-cross-unit invariant above is the
+		// assertion that matters.)
 		if (!resp?.isError && !/<subagent\b/.test(txt)) {
 			assert.ok(
-				/haiku_run_next/.test(txt),
-				`with no relay block the terminal advance must route to run_next; got: ${txt.slice(0, 400)}`,
+				!/Wave done — call `haiku_run_next/.test(txt),
+				`in-flight sibling → must NOT issue a positive run_next directive; got: ${txt.slice(0, 400)}`,
 			)
 		}
 	} finally {

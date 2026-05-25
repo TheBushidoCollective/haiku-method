@@ -3903,22 +3903,43 @@ export function mergeUnitWorktree(
 	// `mergeFixChainWorktree`.
 	ensureIntentGitAttributes(slug)
 
-	if (!existsSync(worktreePath)) {
-		return { success: true, message: "no worktree" }
+	const worktreeExists = existsSync(worktreePath)
+	if (!worktreeExists) {
+		// No worktree to commit from — BUT if the unit's branch still carries
+		// unmerged commits (a worktree reaped before its terminal merge
+		// landed, or a cross-machine pickup that recreated the branch from the
+		// remote), short-circuiting to success here marks the unit `done` with
+		// its code NEVER on the stage branch. That's the "complete but never
+		// merged" bug (report 2026-05-24, admin-portal-reimagine/security:
+		// units 003/004/008 reached done with their branches unmerged —
+		// blocker-level security controls shipped as no-ops, caught only by
+		// chance at a later approval role). Recover by merging the durable
+		// branch directly. Only short-circuit when there is genuinely nothing
+		// to merge: no branch at all, or it's already an ancestor of the stage
+		// branch.
+		if (!branchExists(unitBranch) || isBranchMerged(unitBranch, stageBranch)) {
+			return { success: true, message: "no worktree" }
+		}
+		// else: branch exists + unmerged → fall through and merge it below
+		// (the merge operates on the unitBranch ref + stage branch; it does
+		// not need the worktree).
 	}
 
 	try {
-		// Commit any pending state writes in the unit worktree first.
-		tryRun(["git", "-C", worktreePath, "add", "-A"])
-		tryRun([
-			"git",
-			"-C",
-			worktreePath,
-			"commit",
-			"-m",
-			`haiku: complete ${unit}`,
-			"--allow-empty",
-		])
+		// Commit any pending state writes in the unit worktree first — only
+		// when a worktree exists (the recovery path above has none).
+		if (worktreeExists) {
+			tryRun(["git", "-C", worktreePath, "add", "-A"])
+			tryRun([
+				"git",
+				"-C",
+				worktreePath,
+				"commit",
+				"-m",
+				`haiku: complete ${unit}`,
+				"--allow-empty",
+			])
+		}
 
 		// Merge strategy: if the MCP's current checkout is already on the
 		// stage branch, merge directly here (temp-worktree would fail with

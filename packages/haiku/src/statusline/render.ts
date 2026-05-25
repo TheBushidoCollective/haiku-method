@@ -138,7 +138,7 @@ const ITEM_LEADER = "↳"
 // uses a gold/amber that reads as yellow with contrast.)
 const SEG_FG: Record<HatSegment, string> = {
 	done: "\x1b[38;5;71m", // green = hat advanced
-	active: "\x1b[1;38;5;172m", // amber/gold = hat in progress
+	active: "\x1b[1;38;5;33m", // blue = hat in progress
 	rejected: "\x1b[1;38;5;167m", // soft red = hat last rejected
 	pending: "\x1b[38;5;250m", // faint = not reached
 }
@@ -156,22 +156,24 @@ const AGENT_CHIP: Record<
 	pending: { bg: "\x1b[48;5;248m", fg: "\x1b[38;5;240m", mark: "" }, // soft grey = queued
 	failed: { bg: "\x1b[48;5;217m", fg: "\x1b[1;38;5;124m", mark: " ✗" }, // pastel red = failure signal
 }
-// Feedback-severity glyph for the fix-loop bars — a leading dot colored by
-// urgency, read on the near-white chip box (dark FGs, like SEG_FG). `mark` is
-// the NO_COLOR-legible prefix so severity survives when escape codes are
-// stripped. Classified = filled `●`; unclassified (classifier hasn't run) =
-// hollow `○`. Mirrors the SPA's feedback-status palette family (red/orange/
-// gold/grey) so terminal and SPA agree at a glance.
-const SEVERITY_DOT: Record<
+// Feedback-severity tint for the fix-loop bars — the chip BOX itself is
+// lightly colored by urgency (saves the 2 chars a leading dot would cost),
+// graded warm: light red → orange → gold for blocker/high/medium, the plain
+// near-white baseline for low, and a cool lavender for not-yet-classified.
+// The dark bold label (C.chipLabel) stays legible on every tint. `mark` is
+// the NO_COLOR-legible prefix so severity still survives when escape codes
+// are stripped (no bg to carry it then). Mirrors the SPA's feedback-status
+// palette family (red/orange/gold) so terminal and SPA agree at a glance.
+const SEVERITY_CHIP: Record<
 	"blocker" | "high" | "medium" | "low",
-	{ fg: string; mark: string }
+	{ bg: string; mark: string }
 > = {
-	blocker: { fg: "\x1b[1;38;5;160m", mark: "!" }, // red
-	high: { fg: "\x1b[1;38;5;166m", mark: "^" }, // orange
-	medium: { fg: "\x1b[38;5;172m", mark: "~" }, // gold
-	low: { fg: "\x1b[38;5;244m", mark: "." }, // grey
+	blocker: { bg: "\x1b[48;5;210m", mark: "!" }, // red (deeper — 224 read too faint)
+	high: { bg: "\x1b[48;5;216m", mark: "^" }, // light orange
+	medium: { bg: "\x1b[48;5;223m", mark: "~" }, // light gold
+	low: { bg: "\x1b[48;5;254m", mark: "." }, // near-white baseline
 }
-const SEVERITY_UNCLASSIFIED = { fg: "\x1b[38;5;250m", mark: "?" } // faint grey
+const SEVERITY_UNCLASSIFIED = { bg: "\x1b[48;5;189m", mark: "?" } // light lavender
 
 // Combining long stroke overlay — fakes a strikethrough per-character for
 // the no-color path (where ANSI SGR 9 is stripped). Color mode uses real
@@ -333,11 +335,13 @@ export function renderStatusline(
 		segments: HatSegment[]
 		severity?: "blocker" | "high" | "medium" | "low" | null
 	}): string => {
-		// Severity prefix — fix-loop bars only (unit bars pass no `severity`).
-		// `undefined` = a unit bar (no prefix); `null` = an unclassified FB
-		// (hollow `?`/`○`); a value = the classified dot.
+		// Severity tint — fix-loop bars only (unit bars pass no `severity`).
+		// `undefined` = a unit bar (default chip box); `null` = an unclassified
+		// FB (lavender box / `?` mark); a value = the urgency-tinted box. The
+		// box itself carries severity in color mode (no leading dot); the
+		// NO_COLOR path keeps the `mark` prefix since there's no bg to tint.
 		const hasSev = it.severity !== undefined
-		const sev = it.severity ? SEVERITY_DOT[it.severity] : SEVERITY_UNCLASSIFIED
+		const sev = it.severity ? SEVERITY_CHIP[it.severity] : SEVERITY_UNCLASSIFIED
 		if (!color) {
 			const bar = it.segments
 				.map((s) => (s === "pending" ? PIP_PENDING : PIP_DONE))
@@ -348,10 +352,8 @@ export function renderStatusline(
 		const pips = it.segments
 			.map((s) => `${SEG_FG[s]}${s === "pending" ? PIP_PENDING : PIP_DONE}`)
 			.join("")
-		const dot = hasSev
-			? `${sev.fg}${it.severity ? "●" : "○"}${C.chipLabel} `
-			: ""
-		return `${C.chipBg} ${dot}${C.chipLabel}${it.id} ${pips} ${C.reset}`
+		const chipBg = hasSev ? sev.bg : C.chipBg
+		return `${chipBg} ${C.chipLabel}${it.id} ${pips} ${C.reset}`
 	}
 
 	// An agent chip: a solid pastel status box (no bar). The box color IS

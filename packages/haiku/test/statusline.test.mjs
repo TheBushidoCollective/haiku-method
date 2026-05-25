@@ -338,7 +338,7 @@ test("renderStatusline: itemBars color each hat by status (green/amber/red)", as
 	assert.ok(out.includes("\n"), "color mode still emits the second line")
 	assert.ok(/\x1b\[38;5;71m▰/.test(line2), "done hat → green (71)")
 	assert.ok(/\x1b\[1;38;5;167m▰/.test(line2), "rejected hat → red (167)")
-	assert.ok(/\x1b\[1;38;5;172m▰/.test(line2), "active hat → amber (172)")
+	assert.ok(/\x1b\[1;38;5;33m▰/.test(line2), "active hat → blue (33)")
 })
 
 // ── state resolution (disk) ──────────────────────────────────────────
@@ -1301,7 +1301,7 @@ test("hatSegments: derives done/active/rejected/pending from iteration history",
 // ── new (2026-05-25): current wave in the execute aggregate + feedback
 //    severity glyphs on the fix-loop bars. ──
 
-test("renderStatusline: fix-loop bars show severity glyphs (NO_COLOR marks + color dots)", async () => {
+test("renderStatusline: fix-loop bars show severity (NO_COLOR marks + color chip tint)", async () => {
 	const { renderStatusline } = await import(`${SRC}statusline/render.ts`)
 	const state = {
 		intent: "sev",
@@ -1325,11 +1325,19 @@ test("renderStatusline: fix-loop bars show severity glyphs (NO_COLOR marks + col
 	assert.match(plain, /\? FB-03/, "unclassified → '?' mark")
 
 	const colored = renderStatusline(state, { color: true }).split("\n")[1]
-	assert.match(colored, /\x1b\[1;38;5;160m●/, "blocker → red (160) filled dot")
 	assert.match(
 		colored,
-		/\x1b\[38;5;250m○/,
-		"unclassified → faint (250) hollow dot",
+		/\x1b\[48;5;210m \x1b\[1;38;5;238mFB-01/,
+		"blocker → red (210) chip box",
+	)
+	assert.match(
+		colored,
+		/\x1b\[48;5;189m \x1b\[1;38;5;238mFB-03/,
+		"unclassified → lavender (189) chip box",
+	)
+	assert.ok(
+		!/[●○]/.test(colored),
+		"no leading severity dot — the chip box carries severity now",
 	)
 })
 

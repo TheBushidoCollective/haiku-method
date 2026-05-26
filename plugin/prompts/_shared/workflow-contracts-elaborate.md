@@ -38,6 +38,7 @@ These rules apply to **every studio and every stage**. They are framework-enforc
 
 #### MCP tool contracts
 
+- **`haiku_unit_write { intent, stage, unit, body, frontmatter }` is how you CREATE or rewrite a unit spec — NOT generic `Write`/`Edit`.** Unit files (`units/*.md`) are workflow-managed: a PreToolUse guard blocks generic file access to them and redirects you back to this tool, so reaching for `Write` just burns a round-trip. The tool enforces the lifecycle (pending → active → completed), validates frontmatter (naming · DAG · quality gates · model), and seals integrity. The rest of the family: `haiku_unit_read` (body + title), `haiku_unit_get` (one field), `haiku_unit_set` (update a field), `haiku_unit_list`, `haiku_unit_delete` (pending only).
 - `haiku_run_next { intent }` advances the lifecycle. Never write `intent.md` frontmatter or unit workflow fields directly — the engine owns those.
 - `haiku_feedback { origin: "discovery", resolution: "question" }` surfaces a discovery-time question. The elaborate loop's completion signal stays unmet until the FB closes.
 

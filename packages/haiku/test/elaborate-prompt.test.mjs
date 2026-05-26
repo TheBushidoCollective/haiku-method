@@ -113,6 +113,20 @@ test("elaborate fresh: emits stage def + workflow contracts + decide block", () 
 			"workflow contracts block emitted",
 		)
 		assert.match(body, /haiku_run_next/, "agent told to call haiku_run_next")
+		// Unit authoring must name the MCP tool up front so the agent doesn't
+		// reach for generic Write and burn a round-trip on the guard hook.
+		assert.match(
+			body,
+			/haiku_unit_write/,
+			"decompose body must name haiku_unit_write as the unit-authoring tool",
+		)
+		// …and must NOT tell the agent to 'write unit files to <path>', the old
+		// phrasing that invited the generic Write the guard hook blocks.
+		assert.doesNotMatch(
+			body,
+			/write unit files to/i,
+			"decompose body must not invite generic Write to a units/ path",
+		)
 		assert.ok(body.length > 500, `body too short (${body.length} chars)`)
 	} finally {
 		process.chdir(cwd)

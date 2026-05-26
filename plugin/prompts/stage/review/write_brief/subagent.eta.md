@@ -17,7 +17,11 @@ This is the one place where a wide read is the job — gather everything that ex
 
 ## What to write
 
-Write `BRIEF.md` at the stage root — `stages/<%= stage %>/BRIEF.md` — with the Write tool. Shape it for a human skim, in plain prose with light headings:
+Write `BRIEF.md` with the Write tool at the stage root — `.haiku/intents/<%= slug %>/stages/<%= stage %>/BRIEF.md`.
+
+> **Path is repo-relative — the project working tree, NOT the engine metadata dir.** Write under your repo root, into the same `.haiku/intents/<%= slug %>/` tree that already holds `units/` and `feedback/`. Do **NOT** write it into the `~/.haiku/projects/…` directory where this prompt file lives (that's engine bookkeeping; the engine reads `BRIEF.md` only from the repo tree, so a file written to the metadata dir is invisible — the cursor will re-emit `write_brief` and make no progress).
+
+Shape it for a human skim, in plain prose with light headings:
 
 - **What this stage delivers** — one or two sentences a non-engineer understands.
 - **Why it matters** — the value or the problem it solves for the user.

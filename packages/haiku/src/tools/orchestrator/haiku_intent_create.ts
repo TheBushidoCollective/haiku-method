@@ -34,6 +34,7 @@ import {
 } from "../../state-tools.js"
 import { resolveStudio } from "../../studio-reader.js"
 import { emitTelemetry } from "../../telemetry.js"
+import { getPluginVersion } from "../../version.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
 
@@ -141,7 +142,7 @@ function detectWorkflowMetaPollution(s: string): string | null {
 export default defineTool({
 	name: "haiku_intent_create",
 	description:
-		"Create a new intent. Returns the slug + path. Title is required (crisp 3–8 word summary, ≤80 chars, single line). If the user started the intent from a referenced file (a spec, a doc, a screenshot, a path like `~/Downloads/spec.pdf`, or a dragged-in attachment), READ it and synthesize its relevant substance directly into `description` and `context` — NEVER pass the file path in any field. An absolute path leaks the user's machine layout and the external file won't travel with the intent; the intent must stand on its own from its own text (capture what the file says, not where it lives). Studio, mode, and (for quick) stage are selected by the engine on the next haiku_run_next call — the tick blocks on the SPA picker until the user chooses, then continues to real workflow actions. The agent does NOT call select_* tools directly; just call haiku_run_next after creating the intent. To keep the studio picker from showing the whole registry, pass `studio_candidates` — the 2–4 studios from `haiku_studio_list` that best fit what you just described. The picker presents those first and tucks the rest behind a 'Show all' expansion; omit it (or pass an empty list) only when the work is too generic to narrow. Always creates a fresh intent — `/haiku:haiku-start` does not resume; use `/haiku:haiku-pickup` for that.",
+		"Create a new intent. Returns the slug + path. Title is required (crisp 3–8 word summary, ≤80 chars, single line). If the user started the intent from a referenced file (a spec, a doc, a screenshot, a path like `~/Downloads/spec.pdf`, or a dragged-in attachment), READ it and synthesize its relevant substance directly into `description` and `context` — NEVER pass the file path in any field. An absolute path leaks the user's machine layout and the external file won't travel with the intent; the intent must stand on its own from its own text (capture what the file says, not where it lives). Studio, mode, and (for quick) stage are selected by the engine on the next haiku_run_next call — the tick blocks on the SPA picker until the user chooses, then continues to real workflow actions. The agent does NOT call select_* tools directly; just call haiku_run_next after creating the intent. **`studio_candidates` is REQUIRED** — the 2–4 studios from `haiku_studio_list` that best fit what you just described. You have the description in context right now; this is the moment to narrow the picker so the user isn't scrolling the whole registry. The picker presents your shortlist first and tucks the rest behind a 'Show all studios…' expansion, so narrowing is never lossy. If you call without it, the tool tells you to fetch `haiku_studio_list` and retry. Always creates a fresh intent — `/haiku:haiku-start` does not resume; use `/haiku:haiku-pickup` for that.",
 	inputSchema: {
 		type: "object" as const,
 		properties: {
@@ -153,11 +154,11 @@ export default defineTool({
 				type: "array" as const,
 				items: { type: "string" as const },
 				description:
-					"2–4 studio names (canonical name, slug, or alias) that best fit the description — used to pre-narrow the studio picker. Resolved against the registry; unresolvable entries are dropped. Omit when the work is too generic to narrow.",
+					"REQUIRED. The 2–4 studios (canonical name, slug, or alias) that best fit the description — pre-narrows the studio picker. Fetch the options from `haiku_studio_list` (name + description per studio) and pick the closest matches. Resolved against the registry; unresolvable entries are dropped, but at least one must resolve. The picker still shows the rest behind a 'Show all studios…' expansion.",
 			},
 			state_file: { type: "string" },
 		},
-		required: ["title", "description"],
+		required: ["title", "description", "studio_candidates"],
 		additionalProperties: false,
 	},
 	handle(args) {
@@ -234,6 +235,42 @@ export default defineTool({
 						`accomplish, not the workflow shape. Re-ask the user what they want to ` +
 						`BUILD (not how to configure the workflow), then call haiku_intent_create ` +
 						`again with that as the description.`,
+				}),
+			)
+		}
+
+		// Studio pre-selection is REQUIRED. The agent has the description
+		// in context right now — the one moment it can do a semantic pick —
+		// so it MUST hand the picker a 2–4 studio shortlist instead of
+		// dumping the whole registry on the user every time. Validate
+		// BEFORE we fork a branch or write any files, so a missing shortlist
+		// never leaves a half-created intent behind. Resolve + dedupe here
+		// and reuse the result when stamping intent.md below.
+		const candidateInputRaw = args.studio_candidates
+		if (!Array.isArray(candidateInputRaw) || candidateInputRaw.length === 0) {
+			return text(
+				JSON.stringify({
+					error: "studio_candidates_required",
+					message:
+						'haiku_intent_create requires `studio_candidates`: the 2–4 studios that best fit what you\'re building. You have the description in context now — this is the moment to narrow the picker so the user isn\'t scrolling the whole registry. To recover: call `haiku_studio_list` (it returns every studio with its name + description), pick the 2–4 closest matches, then call haiku_intent_create again with `studio_candidates: ["<name>", …]` using the canonical `name` from that list. The picker still shows the rest behind a "Show all studios…" expansion, so narrowing is never lossy.',
+				}),
+			)
+		}
+		const resolvedCandidates: string[] = []
+		for (const raw of candidateInputRaw) {
+			if (typeof raw !== "string") continue
+			const resolved = resolveStudio(raw)
+			if (resolved && !resolvedCandidates.includes(resolved.name)) {
+				resolvedCandidates.push(resolved.name)
+			}
+		}
+		if (resolvedCandidates.length === 0) {
+			return text(
+				JSON.stringify({
+					error: "studio_candidates_unresolved",
+					received: candidateInputRaw,
+					message:
+						"None of the `studio_candidates` you passed resolve to a real studio. Call `haiku_studio_list` to see the valid studios, then retry with the canonical `name`, slug, or a known alias for the 2–4 that best fit.",
 				}),
 			)
 		}
@@ -330,10 +367,18 @@ export default defineTool({
 		// agent never types these values into a frontmatter writer.
 		const context = args.context as string | undefined
 		const descriptionBody = (description || "").trim()
+		// Stamp the current plugin_version so a freshly-created intent is
+		// born at the running schema generation. Without it the FM has no
+		// version, the pre-tick gate reads sourceVersion="0", and the
+		// migrator fires on the very first haiku_run_next — an "immediate
+		// migration on a brand-new intent" that does nothing but churn.
+		// plugin_version is FSM-driven/immutable: creation is exactly where
+		// it's meant to be stamped (see state/schemas/intent.ts).
 		const intentContent = [
 			"---",
 			`title: "${title.replace(/"/g, '\\"')}"`,
 			`studio: ""`,
+			`plugin_version: "${getPluginVersion()}"`,
 			"status: active",
 			`created_at: ${timestamp()}`,
 			"---",
@@ -346,30 +391,15 @@ export default defineTool({
 
 		writeFileSync(join(iDir, "intent.md"), intentContent)
 
-		// Stamp the agent's studio shortlist (presentation hint for the
-		// inline studio picker). Resolve each candidate to its canonical
-		// name and dedupe; silently drop anything that doesn't resolve so a
-		// stray name never blocks creation — the picker falls back to the
-		// full registry when the list ends up empty. `studio` itself stays
-		// "" here; the user still locks it via the picker.
-		const candidateInput = Array.isArray(args.studio_candidates)
-			? (args.studio_candidates as unknown[])
-			: []
-		const resolvedCandidates: string[] = []
-		for (const raw of candidateInput) {
-			if (typeof raw !== "string") continue
-			const resolved = resolveStudio(raw)
-			if (resolved && !resolvedCandidates.includes(resolved.name)) {
-				resolvedCandidates.push(resolved.name)
-			}
-		}
-		if (resolvedCandidates.length > 0) {
-			setFrontmatterField(
-				join(iDir, "intent.md"),
-				"studio_candidates",
-				resolvedCandidates,
-			)
-		}
+		// Stamp the studio shortlist (validated + resolved to canonical
+		// names above). The inline studio picker reads this to present the
+		// shortlist first; `studio` itself stays "" — the user still locks
+		// it via the picker.
+		setFrontmatterField(
+			join(iDir, "intent.md"),
+			"studio_candidates",
+			resolvedCandidates,
+		)
 
 		// Seed `.gitattributes` for engine-owned append-only event
 		// streams. Both `action-log.jsonl` and `write-audit.jsonl` are

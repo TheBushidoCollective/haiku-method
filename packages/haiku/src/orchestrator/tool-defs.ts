@@ -80,7 +80,7 @@ export const orchestratorToolDefs = [
 	{
 		name: "haiku_intent_create",
 		description:
-			'Create a new H·AI·K·U intent. Studio, mode, and (for quick) stage are selected separately via the engine-controlled elicitation chain (haiku_select_studio → haiku_select_mode → optional haiku_select_stage). You must provide BOTH a crisp `title` (3–8 words, ≤80 chars, single line, no trailing punctuation — e.g. "Add archivable intents") AND a richer `description` (2–5 sentences covering scope, motivation, and constraints). The title is NOT derived from the description — write it deliberately as a human-readable summary. The agent never sets `mode` or `stages` — those flow through elicitation tools so the user picks them.',
+			'Create a new H·AI·K·U intent. Studio, mode, and (for quick) stage are selected separately via the engine-controlled elicitation chain (haiku_select_studio → haiku_select_mode → optional haiku_select_stage). You must provide a crisp `title` (3–8 words, ≤80 chars, single line, no trailing punctuation — e.g. "Add archivable intents"), a richer `description` (2–5 sentences covering scope, motivation, and constraints), AND `studio_candidates` — the 2–4 studios (from `haiku_studio_list`) that best fit, which pre-narrow the studio picker so the user is not scrolling the whole registry. The title is NOT derived from the description — write it deliberately as a human-readable summary. The agent never sets `mode` or `stages` — those flow through elicitation tools so the user picks them.',
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -94,6 +94,12 @@ export const orchestratorToolDefs = [
 					description:
 						"Full description of what the intent is about (2–5 sentences covering scope, motivation, and constraints). Stored verbatim in the intent body.",
 				},
+				studio_candidates: {
+					type: "array" as const,
+					items: { type: "string" as const },
+					description:
+						"REQUIRED. The 2–4 studios (canonical name, slug, or alias) that best fit the description — pre-narrows the studio picker. Fetch the options from `haiku_studio_list` (name + description per studio) and pick the closest matches. At least one must resolve; the picker still shows the rest behind a 'Show all studios…' expansion. Omitting it is rejected with instructions to fetch the list and retry.",
+				},
 				slug: {
 					type: "string",
 					description:
@@ -105,7 +111,7 @@ export const orchestratorToolDefs = [
 						"Conversation context summary — highlights from the conversation that led to this intent",
 				},
 			},
-			required: ["title", "description"],
+			required: ["title", "description", "studio_candidates"],
 			additionalProperties: false,
 		},
 	},

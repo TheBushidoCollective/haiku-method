@@ -268,7 +268,11 @@ test("haiku_unit_start requires intent, unit", () => {
 
 test("haiku_unit_reject_hat requires intent, unit, message", () => {
 	const tool = stateToolDefs.find((t) => t.name === "haiku_unit_reject_hat")
-	assert.deepStrictEqual(tool.inputSchema.required, ["intent", "unit", "message"])
+	assert.deepStrictEqual(tool.inputSchema.required, [
+		"intent",
+		"unit",
+		"message",
+	])
 })
 
 test("haiku_unit_set requires intent, stage, unit, field, value", () => {
@@ -301,13 +305,18 @@ test("haiku_run_next has optional external_review_url", () => {
 	assert.ok("external_review_url" in tool.inputSchema.properties)
 })
 
-test("haiku_intent_create requires title and description", () => {
+test("haiku_intent_create requires title, description, and studio_candidates", () => {
 	const tool = orchestratorToolDefs.find(
 		(t) => t.name === "haiku_intent_create",
 	)
-	assert.deepStrictEqual(tool.inputSchema.required, ["title", "description"])
+	assert.deepStrictEqual(tool.inputSchema.required, [
+		"title",
+		"description",
+		"studio_candidates",
+	])
 	assert.ok("title" in tool.inputSchema.properties)
 	assert.ok("description" in tool.inputSchema.properties)
+	assert.ok("studio_candidates" in tool.inputSchema.properties)
 })
 
 test("haiku_intent_create has optional slug and context", () => {

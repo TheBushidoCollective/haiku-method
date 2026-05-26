@@ -9,7 +9,13 @@
 // shortlist instead of the whole registry. This test pins that stamp.
 
 import assert from "node:assert"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { test } from "node:test"
@@ -24,6 +30,7 @@ const intentCreate = (
 ).default
 const { resolveStudio } = await import("../src/studio-reader.ts")
 const { parseFrontmatter } = await import("../src/state-tools.ts")
+const { getPluginVersion } = await import("../src/version.ts")
 
 function getJson(result) {
 	const t = result?.content?.[0]?.text ?? ""
@@ -90,6 +97,30 @@ test("stamps resolved canonical candidates onto intent.md", () => {
 	})
 })
 
+test("fresh intent is stamped with current plugin_version (no immediate migration)", () => {
+	// Without a plugin_version on the freshly-written intent.md, the
+	// pre-tick gate reads sourceVersion="0" and the migrator fires on the
+	// first haiku_run_next — an immediate migration of a brand-new intent.
+	withTmpRepo((tmp) => {
+		intentCreate.handle({
+			title: "Build a billing dashboard",
+			description:
+				"A finance dashboard surfacing revenue and overdue invoices.",
+			slug: "billing-dashboard",
+			studio_candidates: ["software"],
+		})
+		const fm = readFm(tmp, "billing-dashboard")
+		assert.ok(fm.plugin_version, "fresh intent.md must carry plugin_version")
+		const stampedMajor = Number(String(fm.plugin_version).split(".")[0])
+		const currentMajor = Number(getPluginVersion().split(".")[0])
+		assert.strictEqual(
+			stampedMajor,
+			currentMajor,
+			"plugin_version major must match the running plugin so the migration gate skips it",
+		)
+	})
+})
+
 test("drops unresolvable candidates, keeps the valid ones", () => {
 	withTmpRepo((tmp) => {
 		intentCreate.handle({
@@ -119,35 +150,58 @@ test("dedupes candidates that resolve to the same studio", () => {
 	})
 })
 
-test("omitted candidates → no studio_candidates field (picker falls back to all)", () => {
+test("omitted candidates → REQUIRED error, no intent created", () => {
 	withTmpRepo((tmp) => {
-		intentCreate.handle({
+		const res = intentCreate.handle({
 			title: "Build a billing dashboard",
 			description:
 				"A finance dashboard surfacing revenue and overdue invoices from the billing service.",
 			slug: "billing-dashboard",
 		})
-		const fm = readFm(tmp, "billing-dashboard")
+		const j = getJson(res)
+		assert.strictEqual(j.error, "studio_candidates_required")
+		// Recovery guidance must point the agent at haiku_studio_list.
+		assert.match(j.message, /haiku_studio_list/)
+		// No half-created intent left behind — validation runs before any write.
 		assert.ok(
-			!("studio_candidates" in fm),
-			"no candidates passed → field absent, not an empty array",
+			!existsSync(
+				join(tmp, ".haiku", "intents", "billing-dashboard", "intent.md"),
+			),
+			"a rejected create must not leave an intent.md on disk",
 		)
 	})
 })
 
-test("all-unresolvable candidates → field omitted (no empty array)", () => {
+test("empty-array candidates → REQUIRED error", () => {
+	withTmpRepo(() => {
+		const res = intentCreate.handle({
+			title: "Build a billing dashboard",
+			description:
+				"A finance dashboard surfacing revenue and overdue invoices.",
+			slug: "billing-dashboard",
+			studio_candidates: [],
+		})
+		assert.strictEqual(getJson(res).error, "studio_candidates_required")
+	})
+})
+
+test("all-unresolvable candidates → UNRESOLVED error, no intent created", () => {
 	withTmpRepo((tmp) => {
-		intentCreate.handle({
+		const res = intentCreate.handle({
 			title: "Build a billing dashboard",
 			description:
 				"A finance dashboard surfacing revenue and overdue invoices from the billing service.",
 			slug: "billing-dashboard",
 			studio_candidates: ["nope", "also-nope"],
 		})
-		const fm = readFm(tmp, "billing-dashboard")
+		const j = getJson(res)
+		assert.strictEqual(j.error, "studio_candidates_unresolved")
+		assert.match(j.message, /haiku_studio_list/)
 		assert.ok(
-			!("studio_candidates" in fm),
-			"nothing resolved → field absent so the picker shows the full registry",
+			!existsSync(
+				join(tmp, ".haiku", "intents", "billing-dashboard", "intent.md"),
+			),
+			"a rejected create must not leave an intent.md on disk",
 		)
 	})
 })

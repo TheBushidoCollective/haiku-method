@@ -10,6 +10,7 @@ A quick task is a regular intent in `quick` mode (single-stage). The workflow en
 2. **Create the intent** with `haiku_intent_create`:
    - `title`: 3–8 words, ≤80 chars, single line. NOT a truncated description. Good: `"Fix login button padding"`. Bad: `"Fix login button padding on mobile because…"`
    - `description`: 2–5 sentences of context.
+   - **`studio_candidates` (REQUIRED)**: the 2–4 studios that best fit, from `haiku_studio_list`. Fetch the list, pick the closest matches, pass their canonical names. The tool rejects the call without it (and tells you to fetch the list and retry).
    - **Do NOT pass `mode` or `stages`** — engine-managed. The tool will reject them.
 3. **Drive the lifecycle** by calling `haiku_run_next { intent: "<slug>" }`. The workflow engine routes to `select_studio` first; the agent calls `haiku_select_studio`.
 4. **After studio is selected**, the engine routes to `select_mode`. Call `haiku_select_mode { intent: "<slug>", options: ["quick"] }` — passing `options: ["quick"]` locks the mode without showing the picker (this is the only thing that distinguishes `/haiku:haiku-quick` from `/haiku:haiku-start`).

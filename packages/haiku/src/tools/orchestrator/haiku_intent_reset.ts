@@ -218,7 +218,7 @@ export default defineTool({
 					title,
 					description,
 					context: conversationContext,
-					message: `Intent '${slug}' has been reset. Call haiku_intent_create { title: "${title.replace(/"/g, '\\"')}", description: "${description.replace(/"/g, '\\"').replace(/\n/g, "\\n")}", slug: "${slug}"${conversationContext ? ', context: "<preserved context>"' : ""} } to recreate it.`,
+					message: `Intent '${slug}' has been reset. Call haiku_intent_create { title: "${title.replace(/"/g, '\\"')}", description: "${description.replace(/"/g, '\\"').replace(/\n/g, "\\n")}", slug: "${slug}"${conversationContext ? ', context: "<preserved context>"' : ""}, studio_candidates: ["<name>", …] } to recreate it. \`studio_candidates\` is required — the 2–4 studios that best fit, from \`haiku_studio_list\`; if you omit it the recreate call is rejected with instructions to fetch the list and retry.`,
 				},
 				null,
 				2,

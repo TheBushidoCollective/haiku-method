@@ -14,6 +14,7 @@
 // the discovery fan-out, the unit-decomposition mechanics, the
 // verifier subagent prompts. The router just composes.
 
+import { readIntentMode } from "../../../_helpers.js"
 import { definePromptBuilder } from "../../../define.js"
 import type { PromptBuilder, PromptBuilderContext } from "../../../types.js"
 import decomposeBuilder from "../decompose/index.js"
@@ -136,6 +137,7 @@ export default definePromptBuilder((ctx) => {
 	const signals = parent.signals_unmet ?? []
 	const stage = parent.stage
 	const intentSlug = parent.intent ?? ctx.slug
+	const isAutopilot = readIntentMode(ctx.dir) === "autopilot"
 
 	if (signals.length === 0) {
 		// Defensive — cursor never returns elaborate_loop with empty
@@ -169,6 +171,24 @@ export default definePromptBuilder((ctx) => {
 	sections.push(
 		"Read each block, decide which signals you can move forward this tick (often more than one), execute, then call `haiku_run_next` to re-evaluate the loop. The cursor stays in `elaborate_loop` until every signal flips on disk.",
 	)
+
+	// Autopilot no-stop directive — hoisted to the TOP of the loop framing
+	// (not buried in a sub-signal section) so it governs the whole phase.
+	// Without this the agent treats stop-triggers below — a missing upstream
+	// artifact, an ambiguous fork, the closing "surface a user decision"
+	// note — as cues to yield the turn and ask. In autopilot there is no
+	// human in the loop after the pre-intent conversation; every such
+	// decision is resolved autonomously (file a feedback and re-tick; the
+	// engine routes it) and the turn ALWAYS ends by calling haiku_run_next.
+	if (isAutopilot) {
+		sections.push(
+			[
+				"> **⚠ AUTOPILOT — THIS PHASE DOES NOT STOP TO ASK.**",
+				">",
+				'> Make progress on every signal you can this tick, then end your turn by calling `haiku_run_next`. Do **NOT** yield the turn to ask the user anything — not for a missing upstream artifact, not for an ambiguous scope or a fork between approaches, not for "should I continue?". Resolve it autonomously: pick the path the intent\'s goals imply, or file a `haiku_feedback` (`resolution: "stage_revisit"` for a missing upstream, `resolution: "question"` for a genuine fork) and immediately call `haiku_run_next` — the engine routes it on the next tick without a turn handoff. The ONLY human touchpoint in autopilot was the pre-intent conversation; there is no one to answer a question now.',
+			].join("\n"),
+		)
+	}
 
 	// Consolidate every `discovery` signal into ONE discoveryRequiredBuilder
 	// call with `dispatches[]` — so the prompt renders ONE "Discovery"
@@ -215,7 +235,9 @@ export default definePromptBuilder((ctx) => {
 			"",
 			"The signals above are mutually independent unless explicitly noted in a signal block. You can dispatch the discovery subagent AND draft units AND record the elaboration conversation in the same response. The cursor's next tick re-evaluates the loop against the disk and returns whichever signals are still unmet (possibly an empty set, in which case the cursor walks past the loop).",
 			"",
-			'When you need to surface a user decision (e.g. discovery turned up two viable forks), file `origin: "discovery", resolution: "question"` feedback via `haiku_feedback` instead of guessing. The next tick will route the FB through `feedback_question` so the user picks before the loop continues.',
+			isAutopilot
+				? 'A fork in the work (e.g. discovery turned up two viable approaches) is NOT a reason to stop in autopilot. Pick the option the intent\'s goals best support and record the call, or — if it genuinely needs a human later — file `origin: "discovery", resolution: "question"` feedback via `haiku_feedback` and immediately call `haiku_run_next`. Either way the turn ends on `haiku_run_next`; never hand the turn back to ask.'
+				: 'When you need to surface a user decision (e.g. discovery turned up two viable forks), file `origin: "discovery", resolution: "question"` feedback via `haiku_feedback` instead of guessing. The next tick will route the FB through `feedback_question` so the user picks before the loop continues.',
 		].join("\n"),
 	)
 

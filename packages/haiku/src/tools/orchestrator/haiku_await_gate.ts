@@ -176,9 +176,11 @@ export default defineTool({
 		"the user's decision, and returns the post-decision action all in " +
 		"one tool call. Use haiku_await_gate only when the original tick " +
 		"timed out, the MCP host disconnected, or the agent restart lost " +
-		"the in-memory blocking call; reads gate_review_session_<stage> " +
-		"(stage-scope) or gate_review_session_id (intent-scope) from " +
-		"intent.md frontmatter to reattach. Returns the same post-decision action " +
+		"the in-memory blocking call. The live review session is resolved " +
+		"from the in-memory registry keyed by intent slug, NOT a " +
+		"repo-persisted pointer (a page refresh reconnects the same logical " +
+		"session; pass session_id to target a specific one). Returns the " +
+		"same post-decision action " +
 		"shape (advance_stage / advance_phase / changes_requested / " +
 		"external_review_requested / intent_complete / etc.).",
 	inputSchema: jsonSchemaOf(HAIKU_AWAIT_GATE_INPUT_SCHEMA),

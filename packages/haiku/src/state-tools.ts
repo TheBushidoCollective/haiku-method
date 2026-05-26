@@ -3140,7 +3140,12 @@ export function detectSettledDuplicate(
 		sim: number
 	} | null = null
 	for (const it of items) {
-		if (it.status !== "closed" && it.status !== "rejected") continue
+		if (
+			it.status !== "closed" &&
+			it.status !== "rejected" &&
+			it.status !== "non_actionable"
+		)
+			continue
 		// Only compare findings on the same unit (or both intent-scope) —
 		// the same words on a different artifact is a different finding.
 		const itUnit = it.targets?.unit ?? null
@@ -12778,12 +12783,16 @@ export function handleStateTool(
 			const moveStatus = deriveFeedbackStatus(
 				moveFound.data as Record<string, unknown>,
 			)
-			if (moveStatus === "closed" || moveStatus === "rejected") {
+			if (
+				moveStatus === "closed" ||
+				moveStatus === "rejected" ||
+				moveStatus === "non_actionable"
+			) {
 				return reply(
 					{
 						error: "lifecycle_violation",
 						current_status: moveStatus,
-						message: `Cannot move feedback '${feedbackId}' — status is '${moveStatus}'. Per the forward-only lifecycle rule, closed and rejected feedback are terminal.`,
+						message: `Cannot move feedback '${feedbackId}' — status is '${moveStatus}'. Per the forward-only lifecycle rule, closed, rejected, and non-actionable feedback are terminal.`,
 					},
 					{ isError: true },
 				)
@@ -13285,13 +13294,15 @@ export function handleStateTool(
 			const status = (foundFm.status as string) || "pending"
 			if (
 				!isMergeInProgress() &&
-				(status === "closed" || status === "rejected")
+				(status === "closed" ||
+					status === "rejected" ||
+					status === "non_actionable")
 			) {
 				return reply(
 					{
 						error: "lifecycle_violation",
 						current_status: status,
-						message: `Cannot rewrite feedback '${feedbackId}' — status is '${status}'. Per the forward-only lifecycle rule, closed and rejected feedback are terminal and immutable. To raise a related concern, file a NEW feedback via haiku_feedback.`,
+						message: `Cannot rewrite feedback '${feedbackId}' — status is '${status}'. Per the forward-only lifecycle rule, closed, rejected, and non-actionable feedback are terminal and immutable. To raise a related concern, file a NEW feedback via haiku_feedback.`,
 					},
 					{ isError: true },
 				)

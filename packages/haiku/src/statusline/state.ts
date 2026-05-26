@@ -960,22 +960,38 @@ export function resolveStatuslineState(): StatuslineState | null {
 	}
 
 	// Discovery chips — one chip per REQUIRED discovery template for the
-	// active stage while the cursor is in `elaborate_loop`. Status is keyed
-	// off ARTIFACT EXISTENCE on disk (the same ground truth the cursor's
-	// discovery signal uses), NOT membership in `signals_unmet[]`. The unmet
-	// set skips non-tool discovery defs until units exist
-	// (computeElaborateSignals' `unitNames.length === 0 && !def.tool`
-	// guard), so keying "done" off it marked still-running agents as ✓
-	// before they'd produced anything — the statusline lied that the
-	// requirement was satisfied the instant the stage opened (reported
-	// 2026-05-26). A chip is `done` ONLY when its artifact is actually
-	// present; otherwise it's `active` (running / pending). The row shows
-	// only while at least one discovery is still running — once every
-	// artifact lands, discovery is complete and an all-✓ row is just noise.
+	// active stage, shown ONLY while discovery is the active sub-phase of
+	// elaborate. Two gates:
+	//   1. The conversation sub-phase must be DONE. While `conversation` /
+	//      `verify_conversation` is still unmet, the agent is aligning with
+	//      the user, not running discovery — showing the chips then made
+	//      design's discovery look like it was running the instant the
+	//      cursor advanced into the stage (e.g. right after the prior
+	//      stage's record_observations), before any agent was dispatched
+	//      (reported 2026-05-26). Autopilot has no conversation gate, so the
+	//      check is naturally a no-op there. (Reliable via signals_unmet —
+	//      the conversation signals, unlike non-tool discovery ones, are
+	//      never skipped.)
+	//   2. Per-chip status is keyed off ARTIFACT EXISTENCE on disk (NOT
+	//      signals_unmet, whose non-tool discovery entries are skipped while
+	//      units==0 — that had marked still-running agents ✓). Present →
+	//      done; missing → active. The row shows only while ≥1 is still
+	//      active; once every artifact lands, discovery is done and an all-✓
+	//      row is just noise.
+	const rawSignals = action
+		? (action as Record<string, unknown>).signals_unmet
+		: undefined
+	const elabSignals: Array<{ signal?: string }> = Array.isArray(rawSignals)
+		? (rawSignals as Array<{ signal?: string }>)
+		: []
+	const conversationPending = elabSignals.some(
+		(s) => s.signal === "conversation" || s.signal === "verify_conversation",
+	)
 	if (
 		!agentChips &&
 		action &&
 		(action as { kind?: string }).kind === "elaborate_loop" &&
+		!conversationPending &&
 		activeStage &&
 		studio
 	) {

@@ -1271,6 +1271,55 @@ test("resolveStatuslineState: discovery chips are ACTIVE before units exist — 
 	}
 })
 
+test("resolveStatuslineState: NO discovery chips during the conversation sub-phase (just entered the stage)", async () => {
+	if (!HAS_GIT) return
+	// The reported bug: right after the prior stage's record_observations the
+	// cursor advanced into `design`'s elaborate_loop with `conversation` still
+	// unmet (no elaboration.md yet) — and the statusline showed all of design's
+	// discovery chips as active, as if the agents were running, before any had
+	// been dispatched. Discovery chips must wait until the conversation gate is
+	// done.
+	const repoRoot = mkdtempSync(join(tmpdir(), "haiku-sl-disc-conv-"))
+	const orig = process.cwd()
+	try {
+		const slug = "sl-disc-conv"
+		const stage = "design"
+		const intentDir = join(repoRoot, ".haiku", "intents", slug)
+		const stageDir = join(intentDir, "stages", stage)
+		mkdirSync(join(stageDir, "units"), { recursive: true })
+		mkdirSync(join(stageDir, "feedback"), { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("body\n", {
+				title: "disc",
+				studio: "software",
+				// continuous (not autopilot) → the conversation gate applies
+				mode: "continuous",
+				stages: [stage],
+				// Pre-intent substance verify already done (the intent is
+				// underway, mirroring "inception finished → advanced to design")
+				// so the cursor walks INTO design's stage elaborate_loop rather
+				// than the intent-level setup verify.
+				verified_at: "2026-05-26T00:00:00Z",
+			}),
+		)
+		// NO elaboration.md → conversation is still unmet (the agent just
+		// entered the stage and hasn't aligned with the user yet).
+		process.chdir(repoRoot)
+		const { resolveStatuslineState } = await import(`${SRC}statusline/state.ts`)
+		const state = resolveStatuslineState()
+		assert.equal(state.phaseKind, "elaborate")
+		assert.equal(
+			state.agentChips ?? null,
+			null,
+			`no discovery chips while the conversation sub-phase is pending; got ${JSON.stringify(state.agentChips)}`,
+		)
+	} finally {
+		process.chdir(orig)
+		rmSync(repoRoot, { recursive: true, force: true })
+	}
+})
+
 // ── isPastAllStages: intent-completion vs stage-scoped actions ────────
 
 test("isPastAllStages: intent-completion actions are past all stages, stage-scoped are not", async () => {

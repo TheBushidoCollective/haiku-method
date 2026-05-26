@@ -801,20 +801,35 @@ export function resolveStatuslineState(): StatuslineState | null {
 			stage: actStage,
 		})
 		if (track.total > 0) {
-			// Drive the active pip from the SNAPSHOT action (the same source as
-			// the phase label), not the live unit-FM done-flags. Otherwise the
-			// label can say "adversarial approval" (index 5) while the live
-			// stamps only reach index 2 — the pip fill then contradicts the
-			// label. fix-loop keeps the live index (its actualPhase strike rides
-			// on it). -1 (no stage milestone for the action) → fall back to live.
-			const snapIdx =
-				kind === "fixloop" ? -1 : snapshotMilestoneIndex(action, track.steps)
-			phaseTrack = {
-				index: snapIdx >= 0 ? snapIdx : track.index,
-				total: track.total,
-			}
+			let activeIdx: number
 			if (kind === "fixloop") {
-				actualPhase = track.steps[track.index]?.label ?? ""
+				// A fix-loop interrupts the stage at the FURTHEST milestone it
+				// reached — the last non-pending step — NOT the first gap. The
+				// first-pending heuristic wrongly reports an early phase (e.g.
+				// "spec review") for a tangled/recovered stage whose early stamps
+				// were lost, even when it had actually reached quality gates. The
+				// struck overlay should read "we were at <furthest> when findings
+				// sent us to the fix loop."
+				let furthest = -1
+				for (let i = track.steps.length - 1; i >= 0; i--) {
+					if (track.steps[i].status !== "pending") {
+						furthest = i
+						break
+					}
+				}
+				activeIdx = furthest >= 0 ? furthest : track.index
+			} else {
+				// Drive the active pip from the SNAPSHOT action (the same source
+				// as the phase label), not the live unit-FM done-flags. Otherwise
+				// the label can say "adversarial approval" (index 5) while the live
+				// stamps only reach index 2 — the pip fill then contradicts the
+				// label. -1 (action has no stage milestone) → fall back to live.
+				const snapIdx = snapshotMilestoneIndex(action, track.steps)
+				activeIdx = snapIdx >= 0 ? snapIdx : track.index
+			}
+			phaseTrack = { index: activeIdx, total: track.total }
+			if (kind === "fixloop") {
+				actualPhase = track.steps[activeIdx]?.label ?? ""
 			}
 		}
 	} catch {

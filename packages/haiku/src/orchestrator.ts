@@ -293,6 +293,9 @@ let _awaitGateReviewSession:
 				signal?: AbortSignal
 				reviewUrl?: string
 				timeoutMs?: number
+				/** Final intent gate holds for the human — no presence-loss
+				 *  fail-fast. See awaitGateReviewSession. */
+				holdForHuman?: boolean
 			},
 	  ) => Promise<{
 			decision: string

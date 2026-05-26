@@ -352,6 +352,11 @@ export default defineTool({
 				reviewUrl,
 				timeoutMs: 4 * 60 * 60 * 1000,
 				signal,
+				// The intent-completion gate is the always-on final-feedback
+				// checkpoint — it HOLDS for the human (every mode, autopilot
+				// included) rather than failing fast when the SPA is slow to
+				// open. Stage gates fail-fast on never-attached / lost presence.
+				holdForHuman: isIntentScopeGate,
 			})
 
 			const postReviewGuard = ensureOnStageBranch(slug, stage)

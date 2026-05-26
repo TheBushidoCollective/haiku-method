@@ -22,9 +22,14 @@ const _origCwd = process.cwd()
 process.env.CLAUDE_PLUGIN_ROOT = `${_origCwd}/../../plugin`
 
 const { shouldLaunchReviewBrowser } = await import("../src/server/tool-call.ts")
-const { createSession, deleteSession, recordHeartbeat } = await import(
-	"../src/sessions.ts"
-)
+const {
+	createSession,
+	deleteSession,
+	recordHeartbeat,
+	beginPresenceWatch,
+	hasPresenceLost,
+	_runPresenceSweepForTests,
+} = await import("../src/sessions.ts")
 
 let passed = 0
 let failed = 0
@@ -211,6 +216,100 @@ test("intent_slug arg: no live session for intent → launch", () => {
 		true,
 		"intent slug present but no live session: launch as normal",
 	)
+})
+
+// Never-attached presence loss (2026-05-26). The reported bug: at a
+// gate the SPA never opened, so the session never heartbeated. The old
+// sweep only watched sessions that heartbeated at least once, so the
+// never-attached session was NEVER marked presence-lost — it lingered as
+// "live", and `findLiveReviewSessionForIntent` kept returning it, which
+// made `shouldLaunchReviewBrowser` SUPPRESS the launch on every later
+// gate ("the gate won't open a browser"). The never-attached watch marks
+// it presence-lost after 60s so the launch fires.
+test("never-attached session, once swept to presence-lost, stops suppressing the launch (the bug)", () => {
+	// ONE stale never-attached session for the intent. A new gate fires and
+	// asks whether to launch for a brand-new session id (not yet registered)
+	// — the stale session is what (wrongly) suppresses it.
+	const stale = createSession({
+		intent_dir: "/tmp/no-such-dir",
+		intent_slug: "never-attached-intent",
+		target: "test",
+	})
+	try {
+		// An await began watching `stale` 61s ago; it never heartbeated.
+		beginPresenceWatch(stale.session_id, { startedAt: Date.now() - 61_000 })
+		// Pre-sweep: the stale session looks live → the new gate's launch is
+		// suppressed. This is the bug.
+		assert.strictEqual(
+			shouldLaunchReviewBrowser(
+				true,
+				"https://example.test",
+				"new-gate-session",
+				"never-attached-intent",
+			),
+			false,
+			"pre-sweep: a stale never-attached session suppresses the launch (the reported bug)",
+		)
+		_runPresenceSweepForTests()
+		assert.ok(
+			hasPresenceLost(stale.session_id),
+			"never-attached session MUST be marked presence-lost after 60s",
+		)
+		// Post-sweep: presence-lost sessions are skipped by
+		// findLiveReviewSessionForIntent → no live session for the intent → launch.
+		assert.strictEqual(
+			shouldLaunchReviewBrowser(
+				true,
+				"https://example.test",
+				"new-gate-session",
+				"never-attached-intent",
+			),
+			true,
+			"post-sweep: stale session cleared → the gate launches the browser",
+		)
+	} finally {
+		deleteSession(stale.session_id)
+	}
+})
+
+test("exempt (final intent gate) never-attached watch is NOT swept — holds for the human", () => {
+	const s = createSession({
+		intent_dir: "/tmp/no-such-dir",
+		intent_slug: "final-gate-intent",
+		target: "test",
+	})
+	try {
+		beginPresenceWatch(s.session_id, {
+			startedAt: Date.now() - 120_000,
+			exempt: true,
+		})
+		_runPresenceSweepForTests()
+		assert.ok(
+			!hasPresenceLost(s.session_id),
+			"the exempt final intent gate holds for the human — never marked never-attached-lost",
+		)
+	} finally {
+		deleteSession(s.session_id)
+	}
+})
+
+test("a session that heartbeated once is NOT treated as never-attached", () => {
+	const s = createSession({
+		intent_dir: "/tmp/no-such-dir",
+		intent_slug: "attached-intent",
+		target: "test",
+	})
+	try {
+		beginPresenceWatch(s.session_id, { startedAt: Date.now() - 120_000 })
+		recordHeartbeat(s.session_id) // first heartbeat clears the never-attached watch
+		_runPresenceSweepForTests()
+		assert.ok(
+			!hasPresenceLost(s.session_id),
+			"an attached session isn't never-attached; the fresh heartbeat keeps it live",
+		)
+	} finally {
+		deleteSession(s.session_id)
+	}
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)

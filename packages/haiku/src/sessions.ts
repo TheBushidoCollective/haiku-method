@@ -22,9 +22,49 @@ const HEARTBEAT_SWEEP_INTERVAL = 5_000
 const lastHeartbeatAt = new Map<string, number>()
 const presenceLost = new Set<string>()
 
+// ─── Never-attached watch (2026-05-26) ───────────────────────────────
+// The grace logic above only sees sessions that heartbeated AT LEAST
+// ONCE (they're in `lastHeartbeatAt`). A gate whose SPA NEVER opens
+// sends no heartbeat, so it never enters that map — and used to linger
+// forever as "live": `findLiveReviewSessionForIntent` kept returning it,
+// which made `shouldLaunchReviewBrowser` SUPPRESS the browser launch on
+// every later gate ("the gate won't open a browser"), and the gate await
+// blocked the full timeout with no signal. The never-attached watch
+// closes that gap: when an await begins blocking it registers a start
+// time; if no heartbeat arrives within NEVER_ATTACHED_GRACE_MS we mark
+// the session presence-lost (shorter than the 120s attached-then-lost
+// grace — a never-opened SPA won't recover on its own). The final intent
+// user gate registers as EXEMPT so it HOLDS for the human instead of
+// failing fast.
+const NEVER_ATTACHED_GRACE_MS = 60_000
+const presenceWatchStartedAt = new Map<string, number>()
+const presenceWatchExempt = new Set<string>()
+
+/** Begin watching a session for never-attached presence loss. Called when
+ *  a handler starts blocking on the session's gate await. `exempt` (the
+ *  final intent user gate) holds for the human — never marked
+ *  never-attached-lost. Tests may backdate `startedAt`. */
+export function beginPresenceWatch(
+	sessionId: string,
+	opts: { exempt?: boolean; startedAt?: number } = {},
+): void {
+	presenceWatchStartedAt.set(sessionId, opts.startedAt ?? Date.now())
+	if (opts.exempt) presenceWatchExempt.add(sessionId)
+	else presenceWatchExempt.delete(sessionId)
+}
+
+/** Stop watching a session (await ended). */
+export function endPresenceWatch(sessionId: string): void {
+	presenceWatchStartedAt.delete(sessionId)
+	presenceWatchExempt.delete(sessionId)
+}
+
 export function recordHeartbeat(sessionId: string): boolean {
 	if (!sessions.has(sessionId)) return false
 	lastHeartbeatAt.set(sessionId, Date.now())
+	// First heartbeat → the never-attached watch no longer applies; the
+	// attached-then-lost grace (lastHeartbeatAt) takes over from here.
+	presenceWatchStartedAt.delete(sessionId)
 	if (presenceLost.delete(sessionId)) {
 		console.error(`[haiku] Presence restored for session ${sessionId}`)
 	}
@@ -38,10 +78,46 @@ export function hasPresenceLost(sessionId: string): boolean {
 export function clearHeartbeat(sessionId: string): void {
 	lastHeartbeatAt.delete(sessionId)
 	presenceLost.delete(sessionId)
+	presenceWatchStartedAt.delete(sessionId)
+	presenceWatchExempt.delete(sessionId)
+}
+
+/** A session is "still blocking" — a handler is parked on it waiting for
+ *  a decision — while its blocking type is pending. View sessions are
+ *  non-blocking by design (fire-and-forget a URL at Playwright), so they
+ *  never count: the watchdog must not spam presence-lost for sessions
+ *  nobody is waiting on. */
+type AnySession =
+	| ReviewSession
+	| QuestionSession
+	| DesignDirectionSession
+	| PickerSession
+	| ViewSession
+function sessionStillBlocking(session: AnySession): boolean {
+	if (session.session_type === "view") return false
+	if (
+		(session.session_type === "review" ||
+			session.session_type === "question" ||
+			session.session_type === "design_direction" ||
+			session.session_type === "picker") &&
+		session.status !== "pending"
+	) {
+		return false
+	}
+	return true
+}
+
+function markPresenceLost(id: string, reason: string): void {
+	if (presenceLost.has(id)) return
+	presenceLost.add(id)
+	console.error(`[haiku] Presence lost for session ${id} — ${reason}`)
+	sessionEvents.emit(`session:${id}`)
 }
 
 function sweepPresence(): void {
 	const now = Date.now()
+	// Pass 1 — attached-then-lost: a session that heartbeated at least once
+	// and then went dark for HEARTBEAT_GRACE_MS (120s).
 	for (const [id, ts] of lastHeartbeatAt) {
 		if (now - ts <= HEARTBEAT_GRACE_MS) continue
 		const session = sessions.get(id)
@@ -50,36 +126,38 @@ function sweepPresence(): void {
 			presenceLost.delete(id)
 			continue
 		}
-		// Only interesting while a handler is still blocking on the session.
-		// View sessions are non-blocking by design (the agent fires-and-
-		// forgets a URL at Playwright, then closes the session explicitly
-		// or lets the TTL evict) — always skip them so the watchdog doesn't
-		// spam presence-lost noise for sessions nobody is waiting on.
-		if (
-			(session.session_type === "review" && session.status !== "pending") ||
-			(session.session_type === "question" && session.status !== "pending") ||
-			(session.session_type === "design_direction" &&
-				session.status !== "pending") ||
-			(session.session_type === "picker" && session.status !== "pending") ||
-			session.session_type === "view"
-		) {
+		if (!sessionStillBlocking(session)) continue
+		markPresenceLost(id, `no heartbeat in ${Math.round((now - ts) / 1000)}s`)
+	}
+	// Pass 2 — never-attached: an await opened but the SPA never sent a
+	// single heartbeat within NEVER_ATTACHED_GRACE_MS (60s). Sessions in
+	// `lastHeartbeatAt` already attached (Pass 1 owns them); the exempt set
+	// (final intent gate) holds for the human and is never marked.
+	for (const [id, startedAt] of presenceWatchStartedAt) {
+		if (lastHeartbeatAt.has(id)) continue
+		if (presenceWatchExempt.has(id)) continue
+		if (now - startedAt <= NEVER_ATTACHED_GRACE_MS) continue
+		const session = sessions.get(id)
+		if (!session) {
+			presenceWatchStartedAt.delete(id)
 			continue
 		}
-		if (!presenceLost.has(id)) {
-			presenceLost.add(id)
-			console.error(
-				`[haiku] Presence lost for session ${id} — no heartbeat in ${Math.round(
-					(now - ts) / 1000,
-				)}s`,
-			)
-			sessionEvents.emit(`session:${id}`)
-		}
+		if (!sessionStillBlocking(session)) continue
+		markPresenceLost(
+			id,
+			`SPA never opened (no heartbeat in the first ${Math.round((now - startedAt) / 1000)}s)`,
+		)
 	}
 }
 
 // Watchdog sweeps every HEARTBEAT_SWEEP_INTERVAL. unref() so the timer
 // never prevents the MCP process from exiting cleanly.
 setInterval(sweepPresence, HEARTBEAT_SWEEP_INTERVAL).unref()
+
+/** Test seam: run one presence sweep synchronously. */
+export function _runPresenceSweepForTests(): void {
+	sweepPresence()
+}
 
 /**
  * Notify that a session's status has been updated.

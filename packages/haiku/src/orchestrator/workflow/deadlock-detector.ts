@@ -438,14 +438,28 @@ export function buildLoopHaltAction(
 		verdict.kind === "repeat"
 			? `The engine emitted the SAME action signature ${verdict.count} consecutive times for intent '${slug}' with no on-disk progress between ticks. Signature: ${verdict.signature}.`
 			: `The engine cycled through ${verdict.distinct} alternating action signatures across ${verdict.window} consecutive ticks for intent '${slug}'. The classic A↔B churn wedge.`
-	const message =
-		`**Loop halted.** ${detail}\n\n` +
-		`The cursor was about to return the same action again. Repeating it would not produce progress — something downstream of the cursor (a fix-hat that doesn't change disk, a verifier that won't sign, a witness that won't refresh) is wedged. The engine is refusing to let the agent burn more ticks.\n\n` +
-		`**What to do:**\n` +
-		`1. Surface this halt to the user. Don't auto-recover.\n` +
-		`2. Identify what the cursor was waiting for (read the signature above).\n` +
-		`3. Either fix the underlying state (commit the missing artifact, sign the verifier, run \`/haiku:haiku-repair\`) or file a feedback explaining why the loop happened.\n` +
-		`4. Once the underlying state has changed, the next \`haiku_run_next\` tick will surface a different action and the loop guard will reset.`
+	// An `elaborate_loop` halt is almost never a downstream wedge — it means
+	// the AGENT re-ticked without drafting unit specs / dispatching discovery,
+	// so the unmet signal never cleared. The escape is to DO THE ELABORATE
+	// WORK, not to surface a "wedge" to the user (which on autopilot is also a
+	// false pause). Point the agent straight at the real recovery.
+	const isElaborate =
+		verdict.kind === "repeat" &&
+		verdict.signature.includes('"action":"elaborate_loop"')
+	const message = isElaborate
+		? `**Loop halted — the elaborate loop isn't advancing.** ${detail}\n\n` +
+			`This is NOT a downstream wedge: the elaborate loop's unmet signal clears only when you change disk state, and re-ticking changed nothing. You re-ran \`haiku_run_next\` without doing the elaborate work.\n\n` +
+			`**What to do — do the work, don't re-tick:**\n` +
+			`1. **Draft the stage's unit specs now** with \`haiku_unit_write\` (and dispatch any required discovery subagents). If the stage's scope is unclear, read its \`STAGE.md\` + \`phases/ELABORATION.md\` and draft from the intent's goals.\n` +
+			`2. THEN call \`haiku_run_next\` — with units on disk the \`decompose\` signal flips and the loop advances.\n` +
+			`3. In autopilot: do this autonomously. Do NOT surface the halt to the user — drafting the units IS the recovery, and there is no one to answer.`
+		: `**Loop halted.** ${detail}\n\n` +
+			`The cursor was about to return the same action again. Repeating it would not produce progress — something downstream of the cursor (a fix-hat that doesn't change disk, a verifier that won't sign, a witness that won't refresh) is wedged. The engine is refusing to let the agent burn more ticks.\n\n` +
+			`**What to do:**\n` +
+			`1. Surface this halt to the user. Don't auto-recover.\n` +
+			`2. Identify what the cursor was waiting for (read the signature above).\n` +
+			`3. Either fix the underlying state (commit the missing artifact, sign the verifier, run \`/haiku:haiku-repair\`) or file a feedback explaining why the loop happened.\n` +
+			`4. Once the underlying state has changed, the next \`haiku_run_next\` tick will surface a different action and the loop guard will reset.`
 	return {
 		action: "loop_halted",
 		intent: slug,

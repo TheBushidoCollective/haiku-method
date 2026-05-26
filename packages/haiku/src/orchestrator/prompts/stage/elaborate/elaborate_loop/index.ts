@@ -186,6 +186,8 @@ export default definePromptBuilder((ctx) => {
 				"> **⚠ AUTOPILOT — THIS PHASE DOES NOT STOP TO ASK.**",
 				">",
 				'> Make progress on every signal you can this tick, then end your turn by calling `haiku_run_next`. Do **NOT** yield the turn to ask the user anything — not for a missing upstream artifact, not for an ambiguous scope or a fork between approaches, not for "should I continue?". Resolve it autonomously: pick the path the intent\'s goals imply, or file a `haiku_feedback` (`resolution: "stage_revisit"` for a missing upstream, `resolution: "question"` for a genuine fork) and immediately call `haiku_run_next` — the engine routes it on the next tick without a turn handoff. The ONLY human touchpoint in autopilot was the pre-intent conversation; there is no one to answer a question now.',
+				">",
+				"> **DO THE WORK before you re-tick.** This phase is your work, not a transition to tick past: dispatch the discovery subagents and DRAFT the unit specs (`haiku_unit_write`) THIS turn. A signal clears only when you change disk state — calling `haiku_run_next` WITHOUT first drafting/dispatching returns the SAME elaborate-loop, and after a few empty ticks the engine HALTS the workflow as a no-progress loop. The escape is always to do the work, never to re-tick harder.",
 			].join("\n"),
 		)
 	}

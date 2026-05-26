@@ -571,10 +571,11 @@ async function walkArtifactsDir(dir: string): Promise<string[]> {
 
 /**
  * Build an OutputArtifact entry from a file by classifying its extension.
- * `name` is the display name (typically the path-from-some-root with the
- * extension stripped). `relativePath` is intent-dir-relative for HTTP
- * serving by `/stage-artifacts/:sessionId/*`. Returns null when the file
- * can't be read.
+ * `name` is the display name — the path-from-some-root WITH the extension
+ * intact (so `foo.html` and `foo.md` stay distinct and the ext-carrying
+ * unit-frontmatter links resolve). `relativePath` is intent-dir-relative
+ * for HTTP serving by `/stage-artifacts/:sessionId/*`. Returns null when
+ * the file can't be read.
  */
 async function buildArtifactEntry(
 	fullPath: string,
@@ -744,7 +745,10 @@ async function parseUnitOutputs(
 					continue
 				}
 				const safeRel = relative(intentDirAbs, absPath)
-				const nameWithDir = safeRel.replace(/\.[^.]+$/, "")
+				// Keep the full filename (extension included) — same reason as
+				// the artifacts walk: ext-less names collide same-stem files and
+				// break the ext-carrying unit-frontmatter links (2026-05-26).
+				const nameWithDir = safeRel
 				const entry = await buildArtifactEntry(
 					absPath,
 					stageName,
@@ -904,7 +908,16 @@ export async function parseStageFiles(
 				// "wireframes/knowledge-upload" in the review screen instead of
 				// colliding with another `knowledge-upload` at a different depth.
 				const relFromArtifacts = relative(artifactsDir, fullPath)
-				const nameWithDir = relFromArtifacts.replace(/\.[^.]+$/, "")
+				// Keep the FULL filename (extension included) as the artifact
+				// name. Stripping it (the old behavior) collided same-stem files
+				// of different types — `foo.html` and a supporting `foo.md` both
+				// became "foo" — and broke the unit-frontmatter `outputs:` links,
+				// which carry the extension (`pathToReviewRoute`) and so couldn't
+				// match the ext-less name → "not found" (reported 2026-05-26). The
+				// extension stays intact end to end: display, route `$name`, and
+				// the `name`-keyed detail lookup. HTTP serving uses `relativePath`
+				// and declared-by uses `intentRelativePath` — both already full.
+				const nameWithDir = relFromArtifacts
 				// Intent-dir-relative path so the `/stage-artifacts/:sessionId/*`
 				// route resolves correctly against `session.intent_dir` without
 				// the call site having to add a `stages/` prefix downstream.
@@ -941,7 +954,9 @@ export async function parseStageFiles(
 		files.sort((a, b) => a.relFromStage.localeCompare(b.relFromStage))
 		for (const { absPath, relFromStage } of files) {
 			if (seen.has(absPath)) continue
-			const nameWithDir = relFromStage.replace(/\.[^.]+$/, "")
+			// Keep the full filename (extension included) — see the artifacts
+			// walk above for why stripping it breaks links + collides types.
+			const nameWithDir = relFromStage
 			// HTTP path is intent-dir-relative so the existing
 			// `/stage-artifacts/:sessionId/*` route resolves correctly.
 			const httpPath = `stages/${stageName}/${relFromStage}`

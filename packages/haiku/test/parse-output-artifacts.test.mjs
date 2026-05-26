@@ -67,15 +67,15 @@ await test("recurses into subdirectories (regression: wireframes/*.html surface)
 	const artifacts = await parseOutputArtifacts(intentDir)
 	const names = artifacts.map((a) => a.name).sort()
 	assert.ok(
-		names.includes("wireframes/knowledge-upload"),
+		names.includes("wireframes/knowledge-upload.html"),
 		`Expected nested wireframe to surface; got ${JSON.stringify(names)}`,
 	)
 	assert.ok(
-		names.includes("wireframes/drift-indicator"),
+		names.includes("wireframes/drift-indicator.html"),
 		"Second wireframe should surface too",
 	)
 	assert.ok(
-		names.includes("exports/v1/icon"),
+		names.includes("exports/v1/icon.svg"),
 		"Deeply nested image should surface",
 	)
 })
@@ -84,7 +84,7 @@ await test("preserves directory hierarchy in artifact name", async () => {
 	const intentDir = setupIntent()
 	const artifacts = await parseOutputArtifacts(intentDir)
 	const wireframe = artifacts.find(
-		(a) => a.name === "wireframes/knowledge-upload",
+		(a) => a.name === "wireframes/knowledge-upload.html",
 	)
 	assert.ok(wireframe, "wireframe should be findable by hierarchical name")
 	assert.strictEqual(wireframe.type, "html")
@@ -94,7 +94,7 @@ await test("preserves directory hierarchy in artifact name", async () => {
 await test("text-shaped unknown extensions surface as type:markdown with content (so the renderer's markdown path picks them up)", async () => {
 	const intentDir = setupIntent()
 	const artifacts = await parseOutputArtifacts(intentDir)
-	const tokens = artifacts.find((a) => a.name === "tokens")
+	const tokens = artifacts.find((a) => a.name === "tokens.json")
 	assert.ok(tokens, "tokens.json should surface")
 	// Contract change 2026-05-12: text-shaped outputs (.json, .yaml,
 	// .feature, source code, etc.) are inlined as type:"markdown" so
@@ -118,7 +118,7 @@ await test("relativePath for nested files preserves the hierarchy", async () => 
 	const intentDir = setupIntent()
 	const artifacts = await parseOutputArtifacts(intentDir)
 	const wireframe = artifacts.find(
-		(a) => a.name === "wireframes/knowledge-upload",
+		(a) => a.name === "wireframes/knowledge-upload.html",
 	)
 	assert.strictEqual(
 		wireframe.relativePath,
@@ -129,7 +129,7 @@ await test("relativePath for nested files preserves the hierarchy", async () => 
 await test("top-level files still surface", async () => {
 	const intentDir = setupIntent()
 	const artifacts = await parseOutputArtifacts(intentDir)
-	const arch = artifacts.find((a) => a.name === "ARCHITECTURE")
+	const arch = artifacts.find((a) => a.name === "ARCHITECTURE.md")
 	assert.ok(arch, "top-level ARCHITECTURE.md should surface")
 	assert.strictEqual(arch.type, "markdown")
 })
@@ -175,11 +175,11 @@ await test("unit outputs surface even when stages/<stage>/artifacts/ does not ex
 	const artifacts = await parseOutputArtifacts(intentDir)
 	const names = artifacts.map((a) => a.name).sort()
 	assert.ok(
-		names.includes("product/ACCEPTANCE-CRITERIA"),
+		names.includes("product/ACCEPTANCE-CRITERIA.md"),
 		`Expected unit-declared markdown output to surface; got ${JSON.stringify(names)}`,
 	)
 	assert.ok(
-		names.includes("features/drift-detection"),
+		names.includes("features/drift-detection.feature"),
 		`Expected unit-declared feature file to surface; got ${JSON.stringify(names)}`,
 	)
 })
@@ -187,7 +187,7 @@ await test("unit outputs surface even when stages/<stage>/artifacts/ does not ex
 await test("unit outputs are attributed to their unit's stage", async () => {
 	const intentDir = setupIntentWithUnitOutputs()
 	const artifacts = await parseOutputArtifacts(intentDir)
-	const ac = artifacts.find((a) => a.name === "product/ACCEPTANCE-CRITERIA")
+	const ac = artifacts.find((a) => a.name === "product/ACCEPTANCE-CRITERIA.md")
 	assert.ok(ac, "AC should surface")
 	assert.strictEqual(
 		ac.stage,
@@ -202,8 +202,10 @@ await test("unit outputs accept both intent-relative and workspace-relative path
 	// `product/ACCEPTANCE-CRITERIA.md` was declared intent-relative
 	// `.haiku/intents/<slug>/features/drift-detection.feature` was workspace-rel
 	// Both should resolve and surface.
-	const ac = artifacts.find((a) => a.name === "product/ACCEPTANCE-CRITERIA")
-	const feat = artifacts.find((a) => a.name === "features/drift-detection")
+	const ac = artifacts.find((a) => a.name === "product/ACCEPTANCE-CRITERIA.md")
+	const feat = artifacts.find(
+		(a) => a.name === "features/drift-detection.feature",
+	)
 	assert.ok(ac, "intent-relative path resolved")
 	assert.ok(feat, "workspace-relative path resolved (prefix stripped)")
 	assert.strictEqual(
@@ -216,7 +218,7 @@ await test("unit outputs accept both intent-relative and workspace-relative path
 await test("unit-declared markdown is rendered with stripped frontmatter", async () => {
 	const intentDir = setupIntentWithUnitOutputs()
 	const artifacts = await parseOutputArtifacts(intentDir)
-	const ac = artifacts.find((a) => a.name === "product/ACCEPTANCE-CRITERIA")
+	const ac = artifacts.find((a) => a.name === "product/ACCEPTANCE-CRITERIA.md")
 	assert.strictEqual(ac.type, "markdown")
 	assert.ok(ac.content?.includes("AC body"), "markdown body inlined")
 	assert.ok(!ac.content?.includes("title: Acceptance"), "frontmatter stripped")
@@ -225,7 +227,9 @@ await test("unit-declared markdown is rendered with stripped frontmatter", async
 await test("unit-declared .feature file surfaces as type:markdown so it renders in the review pane", async () => {
 	const intentDir = setupIntentWithUnitOutputs()
 	const artifacts = await parseOutputArtifacts(intentDir)
-	const feat = artifacts.find((a) => a.name === "features/drift-detection")
+	const feat = artifacts.find(
+		(a) => a.name === "features/drift-detection.feature",
+	)
 	// .feature files are Gherkin (text-shaped). Pre-2026-05-12 they
 	// surfaced as type:"file" → reviewers got a download link instead
 	// of the readable spec. Now treated as markdown so the renderer
@@ -253,7 +257,7 @@ await test("file present in artifacts/ AND unit outputs is emitted once", async 
 		`---\ntitle: Unit\noutputs:\n  - stages/design/artifacts/DUPLICATE.md\n---\n# unit`,
 	)
 	const artifacts = await parseOutputArtifacts(intentDir)
-	const duplicates = artifacts.filter((a) => a.name.endsWith("DUPLICATE"))
+	const duplicates = artifacts.filter((a) => a.name.endsWith("DUPLICATE.md"))
 	assert.strictEqual(
 		duplicates.length,
 		1,
@@ -261,7 +265,7 @@ await test("file present in artifacts/ AND unit outputs is emitted once", async 
 	)
 	// artifacts/ entry wins — its name is artifacts-dir-relative (no
 	// `stages/design/artifacts/` prefix in the display name).
-	assert.strictEqual(duplicates[0].name, "DUPLICATE")
+	assert.strictEqual(duplicates[0].name, "DUPLICATE.md")
 })
 
 await test("unit with no outputs frontmatter is silently skipped", async () => {
@@ -321,11 +325,11 @@ await test("catch-all: stages/<stage>/outputs/ files surface even when no unit d
 	const artifacts = await parseOutputArtifacts(intentDir)
 	const names = artifacts.map((a) => a.name).sort()
 	assert.ok(
-		names.includes("outputs/supplementary"),
+		names.includes("outputs/supplementary.md"),
 		`expected outputs/supplementary; got ${JSON.stringify(names)}`,
 	)
 	assert.ok(
-		names.includes("outputs/tokens"),
+		names.includes("outputs/tokens.json"),
 		`expected outputs/tokens; got ${JSON.stringify(names)}`,
 	)
 })
@@ -340,8 +344,8 @@ await test("catch-all: ad-hoc top-level files inside the stage dir surface", asy
 	)
 	writeFileSync(join(stageDir, "notes.txt"), "loose notes")
 	const artifacts = await parseOutputArtifacts(intentDir)
-	const readme = artifacts.find((a) => a.name === "README")
-	const notes = artifacts.find((a) => a.name === "notes")
+	const readme = artifacts.find((a) => a.name === "README.md")
+	const notes = artifacts.find((a) => a.name === "notes.txt")
 	assert.ok(
 		readme,
 		`expected README to surface; got ${JSON.stringify(artifacts.map((a) => a.name))}`,
@@ -379,7 +383,7 @@ await test("catch-all: workflow-internal entries are excluded (STAGE.md, state.j
 	const names = artifacts.map((a) => a.name).sort()
 	assert.deepStrictEqual(
 		names,
-		["REAL"],
+		["REAL.md"],
 		`workflow-internal entries should be hidden; got ${JSON.stringify(names)}`,
 	)
 })
@@ -406,7 +410,7 @@ await test("catch-all: stages/<stage>/knowledge/ and stages/<stage>/discovery/ a
 	const names = artifacts.map((a) => a.name).sort()
 	assert.deepStrictEqual(
 		names,
-		["DELIVERABLE"],
+		["DELIVERABLE.md"],
 		`stage-level knowledge/discovery should not bleed into Outputs; got ${JSON.stringify(names)}`,
 	)
 })
@@ -441,7 +445,7 @@ await test("catch-all: drift-engine sidecars are excluded (baseline-content/, ba
 	const names = artifacts.map((a) => a.name).sort()
 	assert.deepStrictEqual(
 		names,
-		["REAL"],
+		["REAL.md"],
 		`drift-engine sidecars should be hidden; got ${JSON.stringify(names)}`,
 	)
 })
@@ -452,7 +456,7 @@ await test("catch-all: nested files under non-internal subdirs surface with full
 	mkdirSync(deep, { recursive: true })
 	writeFileSync(join(deep, "icon.svg"), "<svg/>")
 	const artifacts = await parseOutputArtifacts(intentDir)
-	const icon = artifacts.find((a) => a.name === "outputs/v2/exports/icon")
+	const icon = artifacts.find((a) => a.name === "outputs/v2/exports/icon.svg")
 	assert.ok(icon, "deeply nested catch-all file should surface")
 	assert.strictEqual(icon.type, "image")
 	assert.strictEqual(
@@ -470,7 +474,7 @@ await test("catch-all: artifacts/ files keep their artifact-style name + path (n
 		"---\ntitle: Only\n---\n# from artifacts",
 	)
 	const artifacts = await parseOutputArtifacts(intentDir)
-	const matches = artifacts.filter((a) => a.name === "ONLY-IN-ARTIFACTS")
+	const matches = artifacts.filter((a) => a.name === "ONLY-IN-ARTIFACTS.md")
 	assert.strictEqual(
 		matches.length,
 		1,
@@ -492,13 +496,13 @@ await test("catch-all: unit-declared output wins over catch-all entry for the sa
 		"---\ntitle: Unit\noutputs:\n  - stages/design/outputs/DECLARED.md\n---\n# body",
 	)
 	const artifacts = await parseOutputArtifacts(intentDir)
-	const matches = artifacts.filter((a) => a.name.endsWith("DECLARED"))
+	const matches = artifacts.filter((a) => a.name.endsWith("DECLARED.md"))
 	assert.strictEqual(matches.length, 1, "single dedupe entry")
 	// Unit-declared name is intent-dir-relative
 	// (`stages/design/outputs/DECLARED`); catch-all would have been
 	// stage-dir-relative (`outputs/DECLARED`). Confirm the unit-declared
 	// version won.
-	assert.strictEqual(matches[0].name, "stages/design/outputs/DECLARED")
+	assert.strictEqual(matches[0].name, "stages/design/outputs/DECLARED.md")
 })
 
 // ── Path-containment security guard on unit-declared `outputs:` ──
@@ -533,7 +537,7 @@ await test("security: unit outputs declaring traversal paths are silently droppe
 		`traversal path should be dropped; got ${JSON.stringify(names)}`,
 	)
 	assert.ok(
-		names.includes("product/OK"),
+		names.includes("product/OK.md"),
 		`legitimate sibling output should still surface; got ${JSON.stringify(names)}`,
 	)
 })
@@ -557,7 +561,10 @@ await test("security: unit outputs with absolute path declarations are silently 
 		!names.some((n) => n.includes("passwd")),
 		`absolute path should be dropped; got ${JSON.stringify(names)}`,
 	)
-	assert.ok(names.includes("product/OK"), "legitimate sibling output preserved")
+	assert.ok(
+		names.includes("product/OK.md"),
+		"legitimate sibling output preserved",
+	)
 })
 
 // ── Strict unit-filename filter ──
@@ -598,11 +605,11 @@ await test("unit-filename filter: scratch files in units/ are ignored", async ()
 	const artifacts = await parseOutputArtifacts(intentDir)
 	const names = artifacts.map((a) => a.name).sort()
 	assert.ok(
-		names.includes("product/OK"),
+		names.includes("product/OK.md"),
 		`real unit's output should surface; got ${JSON.stringify(names)}`,
 	)
 	assert.ok(
-		!names.includes("product/DRAFT-OUT"),
+		!names.includes("product/DRAFT-OUT.md"),
 		`scratch-file outputs should NOT surface (strict filter dropped non-unit files); got ${JSON.stringify(names)}`,
 	)
 })

@@ -82,7 +82,9 @@ import { defineTool } from "../define.js"
 import { withAnnouncement } from "./_announce.js"
 import {
 	buildAwaitTimeoutResponse,
+	isAwaitPresenceLostError,
 	isAwaitWaitTimeoutError,
+	resolveGateReviewUrl,
 } from "./_await_gate_timeout.js"
 import { text } from "./_text.js"
 import { withInstructions as renderInstructions } from "./_with_instructions.js"
@@ -352,11 +354,6 @@ export default defineTool({
 				reviewUrl,
 				timeoutMs: 4 * 60 * 60 * 1000,
 				signal,
-				// The intent-completion gate is the always-on final-feedback
-				// checkpoint — it HOLDS for the human (every mode, autopilot
-				// included) rather than failing fast when the SPA is slow to
-				// open. Stage gates fail-fast on never-attached / lost presence.
-				holdForHuman: isIntentScopeGate,
 			})
 
 			const postReviewGuard = ensureOnStageBranch(slug, stage)
@@ -784,27 +781,33 @@ export default defineTool({
 				return buildAwaitTimeoutResponse(slug)
 			}
 
-			// Presence-loss is a distinct user-action error: the SPA tab
-			// disconnected mid-await (no heartbeat for ≥120s). The throw
-			// message from `awaitGateReviewSession` already names the
-			// recovery path ("re-open the URL and call haiku_await_gate
-			// when ready") — wrapping it in the generic "Review UI
-			// failed to start" / "investigate the SPA server (port
-			// conflict? blocked browser launch?)" boilerplate below
-			// would direct the agent at a problem that doesn't exist
-			// (the UI started fine; the user closed the tab). Surface
-			// the message verbatim. Reported on PR #352 review.
-			if (errorMsg.includes("lost presence")) {
+			// Presence loss = no client is connected to the gate: either the
+			// SPA never opened, or the user closed the tab mid-review. This is
+			// NOT a failure and we do NOT abandon the gate. The contract
+			// (2026-05-26): hand the review URL back so the agent surfaces it
+			// to the user to open / re-open, AND keep HOLDING — the agent
+			// re-calls `haiku_await_gate`, which re-enters the wait. Resolve
+			// the URL from the arg or the persisted `gate_review_url[_<stage>]`
+			// pointer so it's available even when the agent didn't pass it.
+			if (isAwaitPresenceLostError(errorMsg)) {
 				syncSessionMetadata(slug, stFile)
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `GATE DISCONNECTED: ${errorMsg}`,
-						},
-					],
-					isError: true,
-				}
+				const gateUrl = resolveGateReviewUrl(reviewUrl, intentMeta, stage)
+				return text(
+					withInstructions({
+						action: "gate_awaiting_client",
+						intent: slug,
+						stage,
+						review_url: gateUrl || null,
+						message: withAnnouncement(
+							gateUrl
+								? `The review isn't connected — the SPA never opened, or the tab was closed. Review URL: ${gateUrl}`
+								: "The review isn't connected (the SPA never opened, or the tab was closed) and no review URL is recorded.",
+							gateUrl
+								? `Show the user this URL to open or re-open the review: ${gateUrl} — then call \`haiku_await_gate { intent: "${slug}" }\` again to keep holding for their decision. Do NOT abandon the gate or advance without it.`
+								: `Call \`haiku_run_next { intent: "${slug}" }\` to re-open the gate, then surface the URL it returns to the user.`,
+						),
+					}),
+				)
 			}
 
 			const agentFixable =

@@ -283,21 +283,22 @@ test("an ATTACHED session for the intent DOES suppress a duplicate launch", () =
 	}
 })
 
-test("exempt (final intent gate) never-attached watch is NOT swept — holds for the human", () => {
+test("EVERY gate's never-attached watch is swept (uniform — no exemption) so the URL is surfaced", () => {
+	// There is no longer a "hold silently" exemption: every gate, including
+	// the final intent gate, is marked presence-lost when no client connects
+	// — that's what triggers the await to return the URL for the user to
+	// (re)open while it keeps holding (haiku_await_gate `lost presence`).
 	const s = createSession({
 		intent_dir: "/tmp/no-such-dir",
 		intent_slug: "final-gate-intent",
 		target: "test",
 	})
 	try {
-		beginPresenceWatch(s.session_id, {
-			startedAt: Date.now() - 120_000,
-			exempt: true,
-		})
+		beginPresenceWatch(s.session_id, { startedAt: Date.now() - 120_000 })
 		_runPresenceSweepForTests()
 		assert.ok(
-			!hasPresenceLost(s.session_id),
-			"the exempt final intent gate holds for the human — never marked never-attached-lost",
+			hasPresenceLost(s.session_id),
+			"a never-attached gate MUST be marked presence-lost so the URL is surfaced",
 		)
 	} finally {
 		deleteSession(s.session_id)

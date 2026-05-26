@@ -1562,10 +1562,6 @@ export async function awaitGateReviewSession(
 		signal?: AbortSignal
 		reviewUrl?: string
 		timeoutMs?: number
-		/** The final intent user gate HOLDS for the human — it must never
-		 *  fail-fast on presence loss (never-attached OR attached-then-lost).
-		 *  It opens and waits for the user's final sign-off, every mode. */
-		holdForHuman?: boolean
 	} = {},
 ): Promise<GateReviewDecision> {
 	const {
@@ -1573,7 +1569,6 @@ export async function awaitGateReviewSession(
 		signal,
 		reviewUrl,
 		timeoutMs = 30 * 60 * 1000,
-		holdForHuman = false,
 	} = opts
 	const existing = getSession(sessionId)
 	if (!existing || existing.session_type !== "review") {
@@ -1643,11 +1638,10 @@ export async function awaitGateReviewSession(
 
 	// Start the never-attached watch: if the SPA never sends a heartbeat
 	// within the 60s window, the sweep marks this session presence-lost so
-	// (a) the await below fails-fast with a recovery path and (b) the stale
-	// session stops suppressing the next gate's browser launch
-	// (`findLiveReviewSessionForIntent`). The final intent gate registers
-	// EXEMPT — it holds for the human instead of failing fast.
-	beginPresenceWatch(sessionId, { exempt: holdForHuman })
+	// the await below returns the review URL for the user to (re)open while
+	// it keeps holding (see the `lost presence` branch in haiku_await_gate),
+	// and the stale session stops suppressing the next browser launch.
+	beginPresenceWatch(sessionId)
 
 	try {
 		while (true) {
@@ -1685,11 +1679,14 @@ export async function awaitGateReviewSession(
 			// the inline gate path fails the tool when the browser
 			// disconnects mid-await; the URL+await fallback is the
 			// recovery channel.
-			// The final intent gate HOLDS for the human — never fail-fast on
-			// presence loss; it waits for the user's last sign-off.
-			if (!holdForHuman && hasPresenceLost(sessionId)) {
+			// No client connected (SPA never opened, or the tab was closed).
+			// Surface this so the caller can hand the URL back to the user
+			// and KEEP HOLDING — `haiku_await_gate`'s `lost presence` branch
+			// turns this into a "open/reopen + re-await" instruction, never an
+			// abandon. Uniform for every gate, including the final intent gate.
+			if (hasPresenceLost(sessionId)) {
 				throw new Error(
-					`Review session ${sessionId} lost presence — the SPA never opened or the tab disconnected (no heartbeat). The user likely never reached or closed the browser. Re-open the URL and call haiku_await_gate when ready.`,
+					`Review session ${sessionId} lost presence — the SPA never opened or the tab disconnected (no heartbeat). Re-open the URL and call haiku_await_gate when ready.`,
 				)
 			}
 		}

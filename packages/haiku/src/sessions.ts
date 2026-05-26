@@ -38,25 +38,22 @@ const presenceLost = new Set<string>()
 // failing fast.
 const NEVER_ATTACHED_GRACE_MS = 60_000
 const presenceWatchStartedAt = new Map<string, number>()
-const presenceWatchExempt = new Set<string>()
 
 /** Begin watching a session for never-attached presence loss. Called when
- *  a handler starts blocking on the session's gate await. `exempt` (the
- *  final intent user gate) holds for the human — never marked
- *  never-attached-lost. Tests may backdate `startedAt`. */
+ *  a handler starts blocking on the session's gate await. After
+ *  NEVER_ATTACHED_GRACE_MS with no heartbeat the sweep marks it
+ *  presence-lost, so the await returns the URL for the user to (re)open
+ *  while it keeps holding. Tests may backdate `startedAt`. */
 export function beginPresenceWatch(
 	sessionId: string,
-	opts: { exempt?: boolean; startedAt?: number } = {},
+	opts: { startedAt?: number } = {},
 ): void {
 	presenceWatchStartedAt.set(sessionId, opts.startedAt ?? Date.now())
-	if (opts.exempt) presenceWatchExempt.add(sessionId)
-	else presenceWatchExempt.delete(sessionId)
 }
 
 /** Stop watching a session (await ended). */
 export function endPresenceWatch(sessionId: string): void {
 	presenceWatchStartedAt.delete(sessionId)
-	presenceWatchExempt.delete(sessionId)
 }
 
 export function recordHeartbeat(sessionId: string): boolean {
@@ -79,7 +76,6 @@ export function clearHeartbeat(sessionId: string): void {
 	lastHeartbeatAt.delete(sessionId)
 	presenceLost.delete(sessionId)
 	presenceWatchStartedAt.delete(sessionId)
-	presenceWatchExempt.delete(sessionId)
 }
 
 /** A session is "still blocking" — a handler is parked on it waiting for
@@ -131,11 +127,9 @@ function sweepPresence(): void {
 	}
 	// Pass 2 — never-attached: an await opened but the SPA never sent a
 	// single heartbeat within NEVER_ATTACHED_GRACE_MS (60s). Sessions in
-	// `lastHeartbeatAt` already attached (Pass 1 owns them); the exempt set
-	// (final intent gate) holds for the human and is never marked.
+	// `lastHeartbeatAt` already attached (Pass 1 owns them).
 	for (const [id, startedAt] of presenceWatchStartedAt) {
 		if (lastHeartbeatAt.has(id)) continue
-		if (presenceWatchExempt.has(id)) continue
 		if (now - startedAt <= NEVER_ATTACHED_GRACE_MS) continue
 		const session = sessions.get(id)
 		if (!session) {

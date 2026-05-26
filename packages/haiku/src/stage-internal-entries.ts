@@ -49,10 +49,12 @@
  *   branch of `haiku_decision_record`.
  * - `upstream-reconciliation.json` — v4 marker for
  *   `haiku_reconciliation_acknowledge`.
- * - `gate-session.json` — v4 per-stage gate-review session pointers
- *   (`gate_review_session_id` / `gate_review_url` / `gate_review_context`,
- *   read by `haiku_await_gate`, written by the user-gate path in
- *   `server/tool-call.ts`).
+ * - `gate-session.json` — LEGACY. A pre-v9 per-stage gate-review
+ *   session-pointer sidecar. Nothing writes it (the v8→v9 migrator
+ *   deletes it); gate sessions are now resolved from the in-memory
+ *   registry keyed by intent slug, with NO repo-persisted pointer.
+ *   Kept in this set so a downgrade-created stray is still treated as
+ *   engine-owned and swept rather than surfaced as user output.
  * - `elaboration.md` — v4 per-stage elaborate-gate artifact. Read by
  *   `derived-stage-state` to gate the `elaborate` phase. NOT
  *   internal — it's user-visible content (the captured conversation),

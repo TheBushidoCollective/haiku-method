@@ -86,6 +86,22 @@ export const WsSelectMessageSchema = z
 	)
 export type WsSelectMessage = z.infer<typeof WsSelectMessageSchema>
 
+/** Liveness heartbeat the SPA sends on the long-lived WS every 30s.
+ *  Carries no session payload — the connection IS the presence signal.
+ *  The server records it against the socket's session and replies with
+ *  `heartbeat_ack` so the client knows the engine saw it. The optional
+ *  `t` echoes the client's send time back in the ack for round-trip
+ *  measurement; it's advisory and the server treats it opaquely. */
+export const WsHeartbeatMessageSchema = z
+	.object({
+		type: z.literal("heartbeat"),
+		t: z.number().optional(),
+	})
+	.describe(
+		"Client liveness heartbeat (any session_type). Sent every 30s over the long-lived WS; the server records presence and replies heartbeat_ack.",
+	)
+export type WsHeartbeatMessage = z.infer<typeof WsHeartbeatMessageSchema>
+
 /** Shared frame-size refinement. Computed on the parsed value; since every WS
  *  schema uses only primitive zod shapes (no transforms, no defaults), the
  *  parsed representation round-trips to the same JSON size as the raw input,
@@ -106,6 +122,7 @@ export const WsClientMessageSchema = z
 		WsDecideMessageSchema,
 		WsAnswerMessageSchema,
 		WsSelectMessageSchema,
+		WsHeartbeatMessageSchema,
 	])
 	.superRefine(refineFrameSize)
 	.describe("Any client -> server WebSocket envelope")
@@ -132,6 +149,20 @@ export const WsErrorMessageSchema = z
 	})
 	.describe("Server error frame")
 export type WsErrorMessage = z.infer<typeof WsErrorMessageSchema>
+
+/** Server acknowledgement of a client `heartbeat`. The presence-watch
+ *  layer recorded the beat before this is sent, so receipt is the
+ *  client's proof the engine still sees it as connected. `t` echoes the
+ *  client's send timestamp when one was supplied. */
+export const WsHeartbeatAckMessageSchema = z
+	.object({
+		type: z.literal("heartbeat_ack"),
+		t: z.number().optional(),
+	})
+	.describe(
+		"Server heartbeat acknowledgement — presence was recorded; the connection is still seen as live.",
+	)
+export type WsHeartbeatAckMessage = z.infer<typeof WsHeartbeatAckMessageSchema>
 
 export const WsSessionUpdateMessageSchema = z
 	.object({
@@ -215,6 +246,7 @@ export const WsServerMessageSchema = z
 	.discriminatedUnion("type", [
 		WsAckMessageSchema,
 		WsErrorMessageSchema,
+		WsHeartbeatAckMessageSchema,
 		WsSessionUpdateMessageSchema,
 		WsIntentEventMessageSchema,
 	])

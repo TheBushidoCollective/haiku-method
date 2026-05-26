@@ -1456,3 +1456,30 @@ test("resolveStatuslineState: execute aggregate shows the current wave for a mul
 		rmSync(repoRoot, { recursive: true, force: true })
 	}
 })
+
+// ── recovering phase (2026-05-25): engine self-maintenance — merge /
+//    conflict-resolution / repair — reads as active cyan work, never the
+//    gated red/magenta of a real block. Grounded in the wifiwithoutwalls
+//    report: a parallel-fix-chain-merge recovery showed an opaque label. ──
+test("renderStatusline: 'recovering' phase renders cyan + flowing (not gated)", async () => {
+	const { renderStatusline } = await import(`${SRC}statusline/render.ts`)
+	const line = renderStatusline(
+		{
+			intent: "demo",
+			studio: "software",
+			stages: [{ name: "operations", status: "active" }],
+			activeStage: "operations",
+			phaseLabel: "resolving conflicts",
+			phaseKind: "recovering",
+			gated: false,
+			aggregate: "",
+			phaseTrack: null,
+			itemBars: null,
+		},
+		{ color: true },
+	).split("\n")[0]
+	assert.match(line, /\x1b\[38;5;44m/, "recovering → cyan (44) hue")
+	assert.match(line, /resolving conflicts/, "label is shown verbatim")
+	assert.ok(!line.includes("⊘"), "recovering is NOT gated — flows (❯), not ⊘")
+	assert.ok(line.includes("❯"), "recovering shows the flowing mark")
+})

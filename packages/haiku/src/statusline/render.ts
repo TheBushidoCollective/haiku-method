@@ -30,6 +30,11 @@ export type StatuslinePhaseKind =
 	| "complete"
 	| "sealed"
 	| "blocked"
+	// Engine self-maintenance the agent isn't driving: merging a fix-chain,
+	// resolving conflicts, reconciling upstream, repairing clobbered state.
+	// Distinct hue + NOT gated — it reads as "the engine is working on
+	// itself," not "stuck / broken" (which `blocked` would imply).
+	| "recovering"
 	// Intent-level setup / pre-stage phases (no stage active yet):
 	// select studio / mode / stage, pre-intent substance verify.
 	| "setup"
@@ -254,6 +259,7 @@ const C = {
 	complete: "\x1b[38;5;71m", // green
 	sealed: "\x1b[38;5;71m", // green
 	blocked: "\x1b[38;5;203m", // red
+	recovering: "\x1b[38;5;44m", // cyan — engine self-maintenance (merge/repair)
 	setup: "\x1b[38;5;245m", // grey (intent-level setup phases)
 	// second-line item "chip" (a bg box per unit/feedback). Set the bg
 	// once per chip and switch FG (not bg) per pip, resetting only at the

@@ -180,6 +180,20 @@ function describeAction(action: CursorAction | null): {
 	gated: boolean
 } {
 	if (!action) return { kind: "execute", label: "working", gated: false }
+	// Engine self-maintenance actions the agent isn't driving. These are
+	// OrchestratorAction kinds the tick dispatches into the snapshot — NOT
+	// members of the CursorAction union, so they're matched by string before
+	// the typed switch (which would otherwise drop them to "working"). They
+	// render as "recovering" (cyan, not gated) so the user sees the engine is
+	// merging / repairing — not stuck on an opaque "spec error" or "working".
+	switch (action.kind as string) {
+		case "integrate_fix_chains":
+			return { kind: "recovering", label: "resolving conflicts", gated: false }
+		case "safe_intent_repair":
+			return { kind: "recovering", label: "recovering", gated: false }
+		case "upstream_reconciliation_required":
+			return { kind: "recovering", label: "merging upstream", gated: false }
+	}
 	switch (action.kind) {
 		case "elaborate_loop":
 			return { kind: "elaborate", label: "elaborate", gated: false }

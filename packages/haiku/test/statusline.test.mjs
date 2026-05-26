@@ -703,7 +703,7 @@ test("install with no prior statusLine, uninstall removes it cleanly", async () 
 
 // ── itemBars (second-line pool) state resolution ─────────────────────
 
-test("resolveStatuslineState: execute phase populates itemBars for in-flight units", async () => {
+test("resolveStatuslineState: execute phase shows the WHOLE current wave (done + in-flight + queued)", async () => {
 	if (!HAS_GIT) return
 	const repoRoot = mkdtempSync(join(tmpdir(), "haiku-sl-bars-"))
 	const orig = process.cwd()
@@ -760,7 +760,7 @@ test("resolveStatuslineState: execute phase populates itemBars for in-flight uni
 			),
 		).data.hats
 		if (!Array.isArray(hats) || hats.length < 2) return
-		// done (all hats advanced) → excluded
+		// done (all hats advanced) → shown as an all-done bar (whole wave)
 		writeFileSync(
 			join(stageDir, "units", "unit-01-done.md"),
 			matter.stringify("d\n", {
@@ -804,7 +804,7 @@ test("resolveStatuslineState: execute phase populates itemBars for in-flight uni
 				approvals: {},
 			}),
 		)
-		// not started → excluded
+		// not started → shown as an empty (all-pending) bar (queued wave member)
 		writeFileSync(
 			join(stageDir, "units", "unit-04-c.md"),
 			matter.stringify("c\n", {
@@ -829,15 +829,21 @@ test("resolveStatuslineState: execute phase populates itemBars for in-flight uni
 			Array.isArray(state.itemBars),
 			"itemBars must be populated in execute",
 		)
-		// Only the two in-flight units, in numeric order. done + pending excluded.
+		// The WHOLE current wave (all four units have no deps → wave 0), in
+		// numeric order: completed (all done), in-flight (active hat), and the
+		// not-yet-started member (empty progress). Nothing is excluded.
 		const pend = (n) => Array(n).fill("pending")
 		assert.deepEqual(
 			state.itemBars,
 			[
+				// all hats advanced → all done
+				{ id: "U-01", segments: Array(hats.length).fill("done") },
 				// just started → first hat active
 				{ id: "U-02", segments: ["active", ...pend(hats.length - 1)] },
 				// hats[0] advanced → hats[1] active
 				{ id: "U-03", segments: ["done", "active", ...pend(hats.length - 2)] },
+				// not started → empty progress (queued wave member)
+				{ id: "U-04", segments: pend(hats.length) },
 			],
 			`got: ${JSON.stringify(state.itemBars)}`,
 		)

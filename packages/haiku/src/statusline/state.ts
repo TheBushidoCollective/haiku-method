@@ -401,33 +401,53 @@ export function hatSegments(
 	return segs
 }
 
-/** One progress bar per IN-FLIGHT unit on a stage (started, not yet
- *  through its last hat). `index` is the current hat's position in the
- *  stage's hat sequence; `total` the sequence length. Completed and
- *  not-yet-started units are excluded — the second line shows the LIVE
- *  pool, not the whole roster. */
+/** One progress bar per unit in the CURRENT WAVE — the concurrent batch the
+ *  cursor is running (units at the active dependency level). Every wave
+ *  member is shown with its real status: completed (all done), in-flight
+ *  (active hat), or not-yet-started (empty progress) — so the second line is
+ *  the whole wave, not just the units that happen to be mid-flight. Wave
+ *  membership reuses the cursor's own wave computation, so it matches the
+ *  real pool and the `wave N/M` aggregate. */
 function unitBars(studio: string, stage: string, iDir: string): ItemBar[] {
 	const unitsDir = join(iDir, "stages", stage, "units")
 	if (!existsSync(unitsDir)) return []
 	const hats = resolveStageHats(studio, stage)
 	if (hats.length === 0) return []
-	const lastHat = hats[hats.length - 1]
+	let waveUnits: Set<string>
+	try {
+		const wUnits = listUnits(iDir, stage)
+		const { unitWave, totalWaves } = computeUnitWaves(wUnits)
+		const cur = currentWaveNumber(wUnits, unitWave, totalWaves)
+		waveUnits = new Set(
+			wUnits
+				.filter((u) => (unitWave.get(u.name) ?? 0) === cur)
+				.map((u) => u.name),
+		)
+	} catch {
+		return [] // best-effort — never let a wave-calc error blank the line
+	}
+	if (waveUnits.size === 0) return []
 	const out: ItemBar[] = []
 	for (const f of readdirSync(unitsDir)
 		.filter((n) => n.endsWith(".md"))
 		.sort()) {
+		if (!waveUnits.has(f.replace(/\.md$/, ""))) continue
 		const fm = readFm(join(unitsDir, f))
 		if (!fm) continue
-		const started =
-			typeof fm.started_at === "string" && (fm.started_at as string).length > 0
-		if (!started) continue
 		const iters = Array.isArray(fm.iterations)
 			? (fm.iterations as Array<Record<string, unknown>>)
 			: []
-		const last = iters[iters.length - 1]
-		const complete = !!last && last.result === "advance" && last.hat === lastHat
-		if (complete) continue
-		out.push({ id: `U-${fileNumber(f)}`, segments: hatSegments(iters, hats) })
+		// Started = started_at stamped OR any iteration recorded. An unstarted
+		// wave member shows empty progress (hatSegments `started=false`); an
+		// in-flight one shows its active hat; a completed one shows all done.
+		const started =
+			(typeof fm.started_at === "string" &&
+				(fm.started_at as string).length > 0) ||
+			iters.length > 0
+		out.push({
+			id: `U-${fileNumber(f)}`,
+			segments: hatSegments(iters, hats, started),
+		})
 	}
 	return out
 }
@@ -724,8 +744,11 @@ export function resolveStatuslineState(): StatuslineState | null {
 	// overflow. Null for every other phase (and an idle pool) → no line 2.
 	let itemBars: ItemBar[] | null = null
 	if (kind === "execute" && activeStage) {
+		// Show the WHOLE current wave — no concurrency slice. unitBars already
+		// bounds to the active dependency level (the cursor's wave), so the
+		// line is the wave itself, not an arbitrary MAX_CONCURRENT cap.
 		const bars = unitBars(studio, activeStage, iDir)
-		if (bars.length > 0) itemBars = bars.slice(0, MAX_CONCURRENT_SUBAGENTS)
+		if (bars.length > 0) itemBars = bars
 	} else if (kind === "fixloop") {
 		const bars: ItemBar[] = []
 		if (activeStage) {

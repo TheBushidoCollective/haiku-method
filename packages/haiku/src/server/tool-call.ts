@@ -306,6 +306,31 @@ export function bindSessionCancellation(
 	)
 }
 
+/**
+ * `haiku_*` tools that have a DEDICATED inline handler in this file
+ * located BELOW the `handleStateTool` catch-all (see below). The
+ * catch-all routes every `haiku_*` name to the state-tool router; any
+ * inline handler that sits after it is unreachable unless its name is
+ * excluded here, and the state-tool router has no case for these, so
+ * the call falls through to its "Unknown tool: <name>" default.
+ *
+ * This set IS that exclusion. Adding a new inline `haiku_*` handler
+ * below the catch-all? Add its name here in the same change, or it
+ * ships dead. The `tool-call-inline-dispatch` test pins the contract:
+ * every name here is genuinely unknown to `handleStateTool` (so the
+ * exclusion is load-bearing, not stale) and routes to its inline
+ * handler instead of the "Unknown tool" fallback. (Root cause of the
+ * 2026-05-26 `haiku_view` bug: `haiku_view` + `haiku_view_close` had
+ * inline handlers but were absent from this set, so both returned
+ * "Unknown tool: <name>".)
+ */
+export const INLINE_HANDLED_HAIKU_TOOLS: ReadonlySet<string> = new Set([
+	"haiku_view",
+	"haiku_view_close",
+	"haiku_await_visual_answer",
+	"haiku_await_design_direction",
+])
+
 export async function handleToolCall(
 	request: {
 		params: { name: string; arguments?: Record<string, unknown> }
@@ -627,12 +652,13 @@ export async function handleToolCall(
 		}
 	}
 
-	// Catch-all for haiku_* names → handleStateTool. Tools with dedicated inline handlers BELOW (haiku_await_visual_answer, haiku_await_design_direction) MUST be excluded here — without an exclusion, every call gets silently swallowed by the state-tool router, which returns "Unknown tool" because it doesn't know about them. That was the original visual-answer bug.
-	if (
-		name.startsWith("haiku_") &&
-		name !== "haiku_await_visual_answer" &&
-		name !== "haiku_await_design_direction"
-	) {
+	// Catch-all for haiku_* names → handleStateTool. Tools with a
+	// dedicated inline handler BELOW this point MUST be listed in
+	// `INLINE_HANDLED_HAIKU_TOOLS` — otherwise the call is swallowed by
+	// the state-tool router, which has no case for them and returns
+	// "Unknown tool". (Handlers ABOVE this point already returned and
+	// never reach here, so they don't need listing.)
+	if (name.startsWith("haiku_") && !INLINE_HANDLED_HAIKU_TOOLS.has(name)) {
 		return handleStateTool(name, (args ?? {}) as Record<string, unknown>)
 	}
 

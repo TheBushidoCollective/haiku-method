@@ -28,8 +28,16 @@ test("runtime-verification shared block is registered and carries the doctrine",
 	)
 	const body = sharedBlockContent("runtime-verification")
 	// Core posture
-	assert.match(body, /runtime observation/i, "names verification as runtime observation")
-	assert.match(body, /do not run the test suite|don't run tests/i, "bans tests-as-verification")
+	assert.match(
+		body,
+		/runtime observation/i,
+		"names verification as runtime observation",
+	)
+	assert.match(
+		body,
+		/do not run the test suite|don't run tests/i,
+		"bans tests-as-verification",
+	)
 	// Routes through OUR machinery, and explicitly steers AWAY from CC's.
 	assert.match(body, /haiku_view/, "routes web/GUI through haiku_view")
 	assert.match(body, /haiku-playwright/, "names the bundled playwright MCP")
@@ -46,6 +54,73 @@ test("runtime-verification shared block is registered and carries the doctrine",
 	assert.match(body, /\.haiku\/boot\.md/, "references the project boot recipe")
 	for (const v of ["PASS", "FAIL", "BLOCKED", "SKIP"]) {
 		assert.ok(body.includes(v), `verdict set includes ${v}`)
+	}
+	// Sign-off is earned by observation, never by intention (2026-05-26):
+	// a BLOCKED/can't-run state must HOLD, never decay into a pass, and a
+	// recipe / closed finding / green CI is not a substitute for the run.
+	assert.match(
+		body,
+		/Sign-off is earned by observation/i,
+		"doctrine spells out that sign-off requires actually running the thing",
+	)
+	assert.match(
+		body,
+		/MUST NOT[\s\S]*sign off/i,
+		"BLOCKED must withhold sign-off, not pass",
+	)
+	assert.match(
+		body,
+		/recipe[\s\S]*is not the run|not itself the verification|clears the obstacle/i,
+		"a boot recipe / fix is explicitly NOT the verification",
+	)
+	// Internal infra must be real; external SaaS may be mocked (2026-05-26):
+	// a journey "verified" against a mocked Postgres/Redis verified nothing.
+	assert.match(
+		body,
+		/Internal infrastructure must be real/i,
+		"doctrine states internal infra runs real, external SaaS may be mocked",
+	)
+	for (const real of ["Postgres", "Redis"]) {
+		assert.ok(
+			body.includes(real),
+			`names a real-required internal service: ${real}`,
+		)
+	}
+	for (const ext of ["Stripe", "Twilio"]) {
+		assert.ok(body.includes(ext), `names a mockable external SaaS: ${ext}`)
+	}
+})
+
+test("service-dependencies block forbids mocking internal infra, allows mocking external SaaS", async () => {
+	// The boot.md / quality-gate helper doctrine. Same internal-vs-external
+	// line as the verifier doctrine: real Postgres/Redis, mockable Stripe/Twilio.
+	const { sharedBlockContent } = await import(
+		`${SRC}orchestrator/prompts/_shared/index.ts`
+	)
+	const body = sharedBlockContent("service-dependencies")
+	assert.match(
+		body,
+		/Internal infrastructure runs for real/i,
+		"service-dependencies doctrine carries the internal-vs-external rule",
+	)
+	assert.match(
+		body,
+		/MUST run for real/i,
+		"internal infra MUST run for real (no mock/stub/in-memory)",
+	)
+	assert.match(
+		body,
+		/mock|stub|sandbox/i,
+		"external SaaS may be mocked/stubbed/sandboxed",
+	)
+	for (const real of ["Postgres", "Redis"]) {
+		assert.ok(
+			body.includes(real),
+			`names a real-required internal service: ${real}`,
+		)
+	}
+	for (const ext of ["Stripe", "Twilio"]) {
+		assert.ok(body.includes(ext), `names a mockable external SaaS: ${ext}`)
 	}
 })
 
@@ -70,7 +145,10 @@ async function approvalSubagentBody(role, stage = "development") {
 		action: { kind: "dispatch_approval", stage, role, units: ["unit-01-foo"] },
 	})
 	const m = out.match(/prompt_file="([^"]+)"/)
-	assert.ok(m, `dispatch_approval must emit a file-backed subagent block for ${role}`)
+	assert.ok(
+		m,
+		`dispatch_approval must emit a file-backed subagent block for ${role}`,
+	)
 	return readFileSync(m[1], "utf8")
 }
 
@@ -103,9 +181,16 @@ test("intent_review injects the doctrine for the runtime-verifier studio role", 
 	const m = out.match(/prompt_file="([^"]+)"/)
 	assert.ok(m, "intent_review must emit a file-backed subagent block")
 	const body = readFileSync(m[1], "utf8")
-	assert.ok(body.includes(DOCTRINE_TITLE), "intent-completion runtime-verifier must reference the doctrine")
+	assert.ok(
+		body.includes(DOCTRINE_TITLE),
+		"intent-completion runtime-verifier must reference the doctrine",
+	)
 	// Evidence-only write carve-out replaces the strict no-write scope.
-	assert.match(body, /Write scope \(evidence only\)/, "runtime-verifier gets the proof/ write carve-out")
+	assert.match(
+		body,
+		/Write scope \(evidence only\)/,
+		"runtime-verifier gets the proof/ write carve-out",
+	)
 })
 
 test("cleanup", () => {

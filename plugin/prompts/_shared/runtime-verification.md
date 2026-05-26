@@ -35,6 +35,8 @@ Before cold-starting, check for `.haiku/boot.md` at the project root. When prese
 
 When no recipe exists and you had to fight to get the app up — install a package, set an env var, patch a config, write a driver step — say so in your finding and recommend capturing it as `.haiku/boot.md` so the next agent (on any harness) doesn't refight it.
 
+**Internal infrastructure must be real; external SaaS may be mocked.** The app's own database, cache, queue, search, object store — Postgres, Redis, Mongo, Elasticsearch, Kafka, MinIO, anything you stand up as part of the stack — MUST be live when you drive the app. A journey "verified" against a mocked or in-memory database verified nothing about persistence, migrations, or queries, so a build that can only run against a faked internal dependency is **not observable** — file it (BLOCKED/finding), don't PASS. Third-party SaaS the app calls across the network and doesn't run itself — Stripe, Twilio, SendGrid, vendor LLM/auth APIs — MAY be mocked or pointed at the vendor's sandbox, and usually should be: driving them live costs money and fires real side effects (a real charge, a real SMS). The line is ownership, not familiarity: a process we stand up ourselves is real; a vendor API we call out to may be stubbed. If a boot recipe mocks an internal datastore to get green, that's a finding — recommend it boot the real service instead.
+
 ## Drive it, then push on it
 
 Drive the smallest path that makes the changed code execute (changed a flag? run with it. changed a handler? hit that route. changed an error path? trigger the error). Confirming the happy path is step one, not the job — the contract is what the author intended; your value is what they didn't. Probe **around** the change at the same surface: a new flag with an empty/duplicated/conflicting value, a route with the wrong method or a malformed body, an interactive surface interrupted mid-op, state exercised twice or with stale data underneath. Pick the probes the change points at; a probe that finds nothing is still evidence the edge holds.
@@ -47,11 +49,22 @@ Screenshots, response bodies, pane dumps, computed-style reads. Save them under 
 
 ## The verdict
 
-Resolve to exactly one, and let it drive your sign-off vs. feedback decision:
+Resolve to exactly one, and let it drive your sign-off vs. feedback decision. **You sign off on PASS or SKIP only. FAIL and BLOCKED both withhold sign-off and file feedback — there is no third "good enough" state.**
 
 - **PASS** — you ran the app and the change did what its contract said at its surface. Sign off. (Not: tests pass, builds clean, code looks right.)
 - **FAIL** — you ran it and it doesn't, or it breaks something adjacent, or the contract and the running app disagree materially. File feedback with the captured evidence and the exact step that diverged.
-- **BLOCKED** — you couldn't reach a state where the change is observable (boot broke, a dep is missing, the handle wouldn't come up). Not a verdict on the change. File feedback saying exactly where it stopped, and recommend a `.haiku/boot.md` recipe if the blocker was getting the app up.
+- **BLOCKED** — you couldn't reach a state where the change is observable (boot broke, a dep is missing, the handle wouldn't come up). Not a verdict on the change — and **not a pass**. You have observed nothing, so you **MUST NOT** sign off and **MUST NOT** let the work continue on your stamp. File feedback saying exactly where it stopped, recommend a `.haiku/boot.md` recipe if the blocker was getting the app up, and HOLD.
 - **SKIP** — no runtime surface exists (docs-only, types-only, config-only). Nothing went wrong; there's just nothing to run. One line why, then sign off — don't run tests to fill the space.
 
 No partial pass: "3 of 4 scenarios passed" is FAIL until the fourth passes or is explained away. **When in doubt, FAIL** — a false PASS ships broken work; a false FAIL costs one more look.
+
+## Sign-off is earned by observation, never by intention
+
+Your sign-off means one specific thing: **"I drove the live thing and saw the promised behavior happen."** Nothing weaker counts as that, and you **MUST NOT** convert any of these into a pass:
+
+- a `.haiku/boot.md` recipe, a diagnosis, or "it should boot/work now" — that describes how the run *would* go; it is not the run
+- a green test suite, a clean typecheck, a successful build, or a merged PR — CI is not observation (see the top of this doctrine)
+- a closed feedback finding — a fixer closing your BLOCKED/FAIL finding does **not** mean the app now runs; it means the *next* attempt is unblocked
+- your own earlier reasoning, your memory, or the code "looking right"
+
+**A BLOCKED or FAIL finding you filed is resolved only when the app actually runs and you observe the behavior hold — i.e. when a fresh runtime observation reaches PASS.** Landing a boot recipe or a code fix clears the obstacle so the *retry* can do the real observation; it is not itself the verification, and it does not entitle anyone to seal. If you are re-dispatched after your finding was "fixed," **run it again from scratch** — boot, drive, capture — and only then PASS. If repeated attempts still cannot run the app, escalate to the human and keep holding; never let a can't-verify decay into a silent pass. The intent does not seal until this observation genuinely happened.

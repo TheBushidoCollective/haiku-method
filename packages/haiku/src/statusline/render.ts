@@ -146,7 +146,11 @@ const ITEM_LEADER = "↳"
 type PipPalette = Record<HatSegment, string>
 const SEG_FG: PipPalette = {
 	done: "\x1b[38;5;71m", // green = hat advanced
-	active: "\x1b[1;38;5;166m", // amber = hat in progress (reads on near-white)
+	// pure yellow (#ffff00, truecolor) = hat in progress. MUST stay clearly
+	// distinct from `rejected` (red) — red means a FAILED hat. The old amber
+	// 166 (#d75f00) was a near-twin of rejected 167 (#d75f5f), so an
+	// in-progress hat read as failed. Yellow is the unambiguous "working" hue.
+	active: "\x1b[1;38;2;255;255;0m",
 	rejected: "\x1b[1;38;5;167m", // soft red = hat last rejected
 	pending: "\x1b[38;5;244m", // grey = not reached (darker than the box, so the outline shows)
 }

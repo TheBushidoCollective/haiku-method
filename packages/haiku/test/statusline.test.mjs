@@ -339,8 +339,13 @@ test("renderStatusline: itemBars color each hat by status (green/amber/red)", as
 	assert.ok(/\x1b\[38;5;71m▰/.test(line2), "done hat → green (71)")
 	assert.ok(/\x1b\[1;38;5;167m▰/.test(line2), "rejected hat → red (167)")
 	assert.ok(
-		/\x1b\[1;38;5;166m▰/.test(line2),
-		"active hat (default palette) → amber (166)",
+		/\x1b\[1;38;2;255;255;0m▰/.test(line2),
+		"active hat (default palette) → pure yellow, NOT the red-twin amber 166",
+	)
+	// Guard the regression directly: active must not collide with rejected red.
+	assert.ok(
+		!/\x1b\[1;38;5;166m▰/.test(line2),
+		"active must not be amber 166 (near-twin of rejected red 167)",
 	)
 })
 

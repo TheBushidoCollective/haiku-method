@@ -725,6 +725,11 @@ export function resolveStatuslineState(): StatuslineState | null {
 			studio,
 			intentDir: iDir,
 			intentMode: mode,
+			// Pin to the SNAPSHOT's stage (the one the label describes), not a
+			// live re-derive — otherwise the pips come from a different
+			// stage/scope than the label and their indices don't line up
+			// (execute appearing after spec approval, etc.).
+			stage: actStage,
 		})
 		if (track.total > 0) {
 			phaseTrack = { index: track.index, total: track.total }
@@ -795,6 +800,9 @@ export function resolveStatuslineState(): StatuslineState | null {
 			studio,
 			intentDir: iDir,
 			intentMode: mode,
+			// Same stage as the label + pip track (the snapshot's stage), so the
+			// chips can't describe a different stage than the phase word.
+			stage: actStage,
 		})
 		const firstPending = roleSteps.findIndex((s) => s.status !== "done")
 		const activeStep =

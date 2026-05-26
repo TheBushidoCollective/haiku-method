@@ -195,9 +195,18 @@ export function deriveProgressTrack(opts: {
 	studio: string
 	intentDir: string
 	intentMode: string
+	/** Pin the track to a specific stage instead of the live current one.
+	 *  The status line passes the SNAPSHOT's stage so the pip track matches
+	 *  the displayed phase label — without this, the pips derive from a live
+	 *  `findCurrentStage` that can be a different stage/scope than the label,
+	 *  so their indices don't correspond (reported 2026-05-26: spec approval
+	 *  / adversarial review appearing before execute). `""` = intent scope;
+	 *  omitted = resolve the live current stage (the original behavior). */
+	stage?: string
 }): ProgressTrack {
-	const { slug, studio, intentDir, intentMode } = opts
-	const activeStage = findCurrentStage(slug, studio, intentDir)
+	const { slug, studio, intentDir, intentMode, stage } = opts
+	const activeStage =
+		stage !== undefined ? stage : findCurrentStage(slug, studio, intentDir)
 	const steps = activeStage
 		? stageSteps({
 				slug,
@@ -227,9 +236,14 @@ export function deriveProgressRoleSteps(opts: {
 	studio: string
 	intentDir: string
 	intentMode: string
+	/** Pin to a specific stage (the status line passes the snapshot's stage
+	 *  so the chips match the label + pip track). `""` = intent scope;
+	 *  omitted = resolve the live current stage. See `deriveProgressTrack`. */
+	stage?: string
 }): ProgressStep[] {
-	const { slug, studio, intentDir, intentMode } = opts
-	const activeStage = findCurrentStage(slug, studio, intentDir)
+	const { slug, studio, intentDir, intentMode, stage } = opts
+	const activeStage =
+		stage !== undefined ? stage : findCurrentStage(slug, studio, intentDir)
 	if (!activeStage) return intentSteps({ intentDir, mode: intentMode })
 	return stageSteps({
 		slug,

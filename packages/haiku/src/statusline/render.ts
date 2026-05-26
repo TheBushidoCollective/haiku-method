@@ -150,13 +150,17 @@ const ITEM_LEADER = "↳"
 // blue and the cool boxes keep amber. pending is dark enough that the empty
 // `▱` outline shows on every box.
 type PipPalette = Record<HatSegment, string>
+// In-progress hats are ALWAYS this yellow — one color for "working", on every
+// box tint (default unit chip AND the warm severity boxes). Earlier the warm
+// severity boxes flipped active to blue for contrast, so the SAME state read
+// yellow on a unit pip and blue on a feedback pip — confusing (reported
+// 2026-05-26: "I see both blue and yellow for in-progress hats"). Pure yellow
+// (#ffff00, truecolor) stays clearly distinct from `rejected` (red); bold +
+// the filled `▰` glyph keep it legible even on the lighter warm tints.
+const PIP_ACTIVE = "\x1b[1;38;2;255;255;0m"
 const SEG_FG: PipPalette = {
 	done: "\x1b[38;5;71m", // green = hat advanced
-	// pure yellow (#ffff00, truecolor) = hat in progress. MUST stay clearly
-	// distinct from `rejected` (red) — red means a FAILED hat. The old amber
-	// 166 (#d75f00) was a near-twin of rejected 167 (#d75f5f), so an
-	// in-progress hat read as failed. Yellow is the unambiguous "working" hue.
-	active: "\x1b[1;38;2;255;255;0m",
+	active: PIP_ACTIVE,
 	rejected: "\x1b[1;38;5;167m", // soft red = hat last rejected
 	pending: "\x1b[38;5;244m", // grey = not reached (darker than the box, so the outline shows)
 }
@@ -189,14 +193,15 @@ const SEVERITY_CHIP: Record<
 	"blocker" | "high" | "medium" | "low",
 	{ bg: string; mark: string; pips: PipPalette }
 > = {
-	// Warm boxes: dark-green done, BLUE active (a warm pip would vanish on a
-	// warm tint), very-dark-red rejected, dark-grey pending.
+	// Warm boxes: dark-green done, YELLOW active (uniform "working" hue — see
+	// PIP_ACTIVE; bold + the filled glyph keep it legible on the warm tint),
+	// very-dark-red rejected, dark-grey pending.
 	blocker: {
 		bg: "\x1b[48;5;210m", // red (deeper — 224 read too faint)
 		mark: "!",
 		pips: {
 			done: "\x1b[1;38;5;22m",
-			active: "\x1b[1;38;5;27m",
+			active: PIP_ACTIVE,
 			rejected: "\x1b[1;38;5;52m",
 			pending: SEV_PEND,
 		},
@@ -206,7 +211,7 @@ const SEVERITY_CHIP: Record<
 		mark: "^",
 		pips: {
 			done: "\x1b[1;38;5;22m",
-			active: "\x1b[1;38;5;27m",
+			active: PIP_ACTIVE,
 			rejected: "\x1b[1;38;5;88m",
 			pending: SEV_PEND,
 		},
@@ -216,7 +221,7 @@ const SEVERITY_CHIP: Record<
 		mark: "~",
 		pips: {
 			done: "\x1b[1;38;5;22m",
-			active: "\x1b[1;38;5;27m",
+			active: PIP_ACTIVE,
 			rejected: "\x1b[1;38;5;88m",
 			pending: SEV_PEND,
 		},
@@ -224,14 +229,14 @@ const SEVERITY_CHIP: Record<
 	// near-white baseline — same box + pips as the default unit chip.
 	low: { bg: "\x1b[48;5;254m", mark: ".", pips: SEG_FG },
 }
-// Cool lavender box: dark-green done, amber active (warm pip pops on the
-// cool tint), dark-red rejected, dark-grey pending.
+// Cool lavender box: dark-green done, YELLOW active (uniform "working" hue —
+// pops on the cool tint), dark-red rejected, dark-grey pending.
 const SEVERITY_UNCLASSIFIED = {
 	bg: "\x1b[48;5;189m",
 	mark: "?",
 	pips: {
 		done: "\x1b[1;38;5;28m",
-		active: "\x1b[1;38;5;130m",
+		active: PIP_ACTIVE,
 		rejected: "\x1b[1;38;5;124m",
 		pending: SEV_PEND,
 	} as PipPalette,

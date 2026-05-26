@@ -1434,12 +1434,18 @@ test("renderStatusline: fix-loop bars show severity (NO_COLOR marks + color chip
 		!/[●○]/.test(colored),
 		"no leading severity dot — the chip box carries severity now",
 	)
-	// Pips are chip-dependent: the blocker box's active pip is blue (27), not
-	// the default amber — a warm active pip would wash out on the warm tint.
+	// In-progress hats are ALWAYS yellow (#ffff00) — one "working" hue on every
+	// box tint, including the warm severity boxes. (2026-05-26: the blocker box
+	// used to flip the active pip to blue, so the same state read yellow on a
+	// unit pip and blue on a feedback pip.)
 	assert.match(
 		colored,
-		/\x1b\[1;38;5;27m▰/,
-		"blocker box → blue (27) active pip (chip-dependent)",
+		/\x1b\[1;38;2;255;255;0m▰/,
+		"blocker box → yellow active pip (uniform across all boxes)",
+	)
+	assert.ok(
+		!colored.includes("\x1b[1;38;5;27m"),
+		"no blue active pip — in-progress is uniformly yellow",
 	)
 })
 

@@ -1197,6 +1197,80 @@ test("resolveStatuslineState: discovery agents surface as chips during elaborate
 	}
 })
 
+test("resolveStatuslineState: discovery chips are ACTIVE before units exist — running agents must NOT show done (2026-05-26 bug)", async () => {
+	if (!HAS_GIT) return
+	// The reported bug: entering the design stage kicked off the discovery
+	// agents, but their chips showed ✓ immediately. The discovery SIGNALS
+	// for non-tool defs are skipped while units==0 (computeElaborateSignals),
+	// and the chip status had been keyed off signals_unmet — so a running
+	// agent that wasn't yet flagged showed "done". Status is now keyed off
+	// ARTIFACT EXISTENCE: no artifact on disk → active, regardless of units.
+	const repoRoot = mkdtempSync(join(tmpdir(), "haiku-sl-disc-nounits-"))
+	const orig = process.cwd()
+	try {
+		const slug = "sl-disc-nounits"
+		const stage = "design"
+		const AT = "2026-05-26T00:00:00Z"
+		const intentDir = join(repoRoot, ".haiku", "intents", slug)
+		const stageDir = join(intentDir, "stages", stage)
+		mkdirSync(join(stageDir, "units"), { recursive: true })
+		mkdirSync(join(stageDir, "feedback"), { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("body\n", {
+				title: "disc",
+				studio: "software",
+				mode: "autopilot",
+				stages: [stage],
+			}),
+		)
+		// Conversation captured, discovery dispatched, but NO units yet and
+		// NO discovery artifacts on disk — the exact state when the agents
+		// have just started.
+		writeFileSync(
+			join(stageDir, "elaboration.md"),
+			matter.stringify("e\n", { verified_at: AT }),
+		)
+		process.chdir(repoRoot)
+		const { resolveStatuslineState } = await import(`${SRC}statusline/state.ts`)
+		let state = resolveStatuslineState()
+		assert.equal(state.phaseKind, "elaborate")
+		assert.ok(
+			Array.isArray(state.agentChips) && state.agentChips.length > 0,
+			`discovery chips must show while agents run; got ${JSON.stringify(state.agentChips)}`,
+		)
+		assert.ok(
+			state.agentChips.every((c) => c.status === "active"),
+			`every running discovery agent (no artifact yet) must be ACTIVE, not done; got ${JSON.stringify(state.agentChips)}`,
+		)
+
+		// Land ONE artifact (design-system-anchor) → that chip flips to done,
+		// the rest stay active. Existence is the single source of truth.
+		mkdirSync(join(intentDir, "knowledge"), { recursive: true })
+		writeFileSync(
+			join(intentDir, "knowledge", "DESIGN-SYSTEM-ANCHOR.md"),
+			"# anchor\n",
+		)
+		state = resolveStatuslineState()
+		const byId = Object.fromEntries(
+			(state.agentChips ?? []).map((c) => [c.id, c.status]),
+		)
+		assert.equal(
+			byId["design-system-anchor"],
+			"done",
+			`the landed artifact's chip must be done; got ${JSON.stringify(byId)}`,
+		)
+		assert.equal(
+			byId["design-brief"],
+			"active",
+			`a still-missing artifact's chip must stay active; got ${JSON.stringify(byId)}`,
+		)
+	} finally {
+		process.chdir(orig)
+		rmSync(repoRoot, { recursive: true, force: true })
+	}
+})
+
 // ── isPastAllStages: intent-completion vs stage-scoped actions ────────
 
 test("isPastAllStages: intent-completion actions are past all stages, stage-scoped are not", async () => {

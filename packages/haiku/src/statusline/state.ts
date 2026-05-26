@@ -959,12 +959,19 @@ export function resolveStatuslineState(): StatuslineState | null {
 		if (chips.length > 0) agentChips = chips
 	}
 
-	// Discovery chips — when the cursor is in `elaborate_loop` with at least
-	// one pending discovery signal, show one chip per discovery template
-	// configured for the stage. Same "parallel fan-out" idea as adversarial
-	// review: discovery agents run in parallel (multiple Task calls in one
-	// response), so the row shows them all — present-on-disk agents are
-	// `done`, missing agents (in `signals_unmet[]`) are `active`.
+	// Discovery chips — one chip per REQUIRED discovery template for the
+	// active stage while the cursor is in `elaborate_loop`. Status is keyed
+	// off ARTIFACT EXISTENCE on disk (the same ground truth the cursor's
+	// discovery signal uses), NOT membership in `signals_unmet[]`. The unmet
+	// set skips non-tool discovery defs until units exist
+	// (computeElaborateSignals' `unitNames.length === 0 && !def.tool`
+	// guard), so keying "done" off it marked still-running agents as ✓
+	// before they'd produced anything — the statusline lied that the
+	// requirement was satisfied the instant the stage opened (reported
+	// 2026-05-26). A chip is `done` ONLY when its artifact is actually
+	// present; otherwise it's `active` (running / pending). The row shows
+	// only while at least one discovery is still running — once every
+	// artifact lands, discovery is complete and an all-✓ row is just noise.
 	if (
 		!agentChips &&
 		action &&
@@ -972,37 +979,27 @@ export function resolveStatuslineState(): StatuslineState | null {
 		activeStage &&
 		studio
 	) {
-		const sigs = (
-			action as { signals_unmet?: Array<{ signal?: string; agent?: string }> }
-		).signals_unmet
-		if (Array.isArray(sigs)) {
-			const missing = new Set(
-				sigs
-					.filter(
-						(s) =>
-							s.signal === "discovery" &&
-							typeof s.agent === "string" &&
-							s.agent,
-					)
-					.map((s) => s.agent as string),
+		try {
+			const defs = readStageArtifactDefs(studio, activeStage).filter(
+				(d) => d.kind === "discovery" && d.required,
 			)
-			if (missing.size > 0) {
-				try {
-					// Only REQUIRED discoveries become signals (and chips). A
-					// non-required def is never in signals_unmet, so it isn't
-					// running — surfacing it as "done" would be a lie.
-					const defs = readStageArtifactDefs(studio, activeStage).filter(
-						(d) => d.kind === "discovery" && d.required,
-					)
-					const chips: AgentChip[] = defs.map((def) => ({
-						id: def.name,
-						status: missing.has(def.name) ? "active" : "done",
-					}))
-					if (chips.length > 0) agentChips = chips
-				} catch {
-					/* studio/stage unreadable — skip discovery chips */
+			const chips: AgentChip[] = defs.map((def) => {
+				const resolved = (def.location ?? "").replace(/\{intent-slug\}/g, slug)
+				let exists = false
+				if (resolved) {
+					const absPath = join(process.cwd(), resolved)
+					exists = resolved.endsWith("/")
+						? existsSync(absPath) &&
+							readdirSync(absPath).filter((e) => e !== ".gitkeep").length > 0
+						: existsSync(absPath)
 				}
+				return { id: def.name, status: exists ? "done" : "active" }
+			})
+			if (chips.length > 0 && chips.some((c) => c.status === "active")) {
+				agentChips = chips
 			}
+		} catch {
+			/* studio/stage unreadable — skip discovery chips */
 		}
 	}
 

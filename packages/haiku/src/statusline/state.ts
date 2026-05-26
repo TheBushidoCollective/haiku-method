@@ -491,6 +491,75 @@ function feedbackBars(dir: string, fixHats: string[]): ItemBar[] {
 	return out
 }
 
+/** Roles that run one-at-a-time (no parallel fan-out): the spec gate, the
+ *  mechanical quality-gate runner, the human gate. They get no chip row —
+ *  it would just restate the phase label. */
+const SINGLE_ACTOR_ROLES = new Set(["spec", "quality_gates", "user"])
+const rawRoleOf = (key: string): string =>
+	key.includes(":") ? key.slice(key.indexOf(":") + 1) : key
+
+/** True when the dispatched action is a PARALLEL fan-out — more than one
+ *  agent runs at once, so its per-agent chip row carries information. A
+ *  multi-dispatch batch (`dispatches.length > 1`) or a single non-single-
+ *  actor role both qualify. */
+export function actionIsFanOut(action: CursorAction | null): boolean {
+	if (!action) return false
+	const dispatches = (action as { dispatches?: unknown[] }).dispatches
+	if (Array.isArray(dispatches) && dispatches.length > 1) return true
+	const role = (action as { role?: string }).role
+	return (
+		typeof role === "string" && role.length > 0 && !SINGLE_ACTOR_ROLES.has(role)
+	)
+}
+
+/** Locate the milestone index the DISPATCHED action sits at, within the
+ *  given (grouped) milestone steps. The phase label is read from this same
+ *  snapshot action, so deriving the pip done/active boundary from it — rather
+ *  than from a live re-derive of the unit frontmatter — keeps the pips, the
+ *  label, and the chips on ONE clock. Returns -1 for actions with no stage
+ *  milestone (the caller falls back to the live track index). */
+export function snapshotMilestoneIndex(
+	action: CursorAction | null,
+	steps: ReadonlyArray<{ key: string }>,
+): number {
+	if (!action) return -1
+	const k = action.kind as string
+	const role = (action as { role?: string }).role
+	const gateKind = (action as { gate_kind?: string }).gate_kind
+	const adversarial = actionIsFanOut(action)
+	const find = (pred: (key: string) => boolean) =>
+		steps.findIndex((s) => pred(s.key))
+	switch (k) {
+		case "elaborate_loop":
+			return find((key) => key === "elaborate")
+		case "dispatch_review":
+			return adversarial
+				? find((key) => key.startsWith("review:adversarial"))
+				: find((key) => key === `review:${role ?? "spec"}`)
+		case "start_unit_hat":
+		case "start_units":
+		case "execute":
+		case "continue_unit":
+		case "continue_units":
+			return find((key) => key === "execute")
+		case "dispatch_approval":
+			return adversarial
+				? find((key) => key.startsWith("approve:adversarial"))
+				: find((key) => key === `approve:${role ?? "spec"}`)
+		case "dispatch_quality_gates":
+			return find((key) => key === "approve:quality_gates")
+		case "user_gate":
+			return gateKind === "approval"
+				? find((key) => key === "approve:user")
+				: find((key) => key === "review:user")
+		case "write_brief":
+			// The brief is written just before the review user gate.
+			return find((key) => key === "review:user")
+		default:
+			return -1
+	}
+}
+
 /** Resolve the current project's status-line state, or null when there
  *  is nothing haiku-shaped to show (caller falls back to the OG line). */
 export function resolveStatuslineState(): StatuslineState | null {
@@ -732,7 +801,18 @@ export function resolveStatuslineState(): StatuslineState | null {
 			stage: actStage,
 		})
 		if (track.total > 0) {
-			phaseTrack = { index: track.index, total: track.total }
+			// Drive the active pip from the SNAPSHOT action (the same source as
+			// the phase label), not the live unit-FM done-flags. Otherwise the
+			// label can say "adversarial approval" (index 5) while the live
+			// stamps only reach index 2 — the pip fill then contradicts the
+			// label. fix-loop keeps the live index (its actualPhase strike rides
+			// on it). -1 (no stage milestone for the action) → fall back to live.
+			const snapIdx =
+				kind === "fixloop" ? -1 : snapshotMilestoneIndex(action, track.steps)
+			phaseTrack = {
+				index: snapIdx >= 0 ? snapIdx : track.index,
+				total: track.total,
+			}
 			if (kind === "fixloop") {
 				actualPhase = track.steps[track.index]?.label ?? ""
 			}
@@ -790,72 +870,49 @@ export function resolveStatuslineState(): StatuslineState | null {
 	// which we're still waiting on (stamped → green, awaited → light, queued
 	// → grey). No `failed`/red: the engine has no per-role failure stamp — a
 	// failed review files feedback and flips to the fix-loop (the FB bars).
-	const SINGLE_ACTOR_ROLES = new Set(["spec", "quality_gates", "user"])
-	const rawRoleOf = (key: string) =>
-		key.includes(":") ? key.slice(key.indexOf(":") + 1) : key
 	let agentChips: AgentChip[] | null = null
-	if (track && (kind === "review" || kind === "approve" || kind === "gate")) {
+	// Chips belong to the PARALLEL fan-out phases — adversarial review/approval
+	// (stage scope) and the intent-completion review (intent scope). Drive the
+	// row off the SNAPSHOT action (the same source as the phase label), not a
+	// live first-pending step: otherwise the chips key off a position the label
+	// has already advanced past, so e.g. "adversarial approval" rendered an
+	// empty row. `actionIsFanOut` is false for the spec / quality-gate / user
+	// gates (single-actor), so those phases get no row.
+	if (
+		track &&
+		(kind === "review" || kind === "approve") &&
+		actionIsFanOut(action)
+	) {
 		const roleSteps = deriveProgressRoleSteps({
 			slug,
 			studio,
 			intentDir: iDir,
 			intentMode: mode,
-			// Same stage as the label + pip track (the snapshot's stage), so the
-			// chips can't describe a different stage than the phase word.
+			// Same stage as the label + pip track (the snapshot's stage).
 			stage: actStage,
 		})
-		const firstPending = roleSteps.findIndex((s) => s.status !== "done")
-		const activeStep =
-			firstPending === -1
-				? roleSteps[roleSteps.length - 1]
-				: roleSteps[firstPending]
-		const activeKey = activeStep?.key ?? ""
-		// Only surface chips when the ACTIVE step is an adversarial reviewer.
-		// When spec / quality_gates / the user gate is active, the phase is
-		// single-actor and the chip row is suppressed entirely.
-		const activeIsAdversarial =
-			activeStep != null && !SINGLE_ACTOR_ROLES.has(rawRoleOf(activeKey))
-		let inBucket: ((k: string) => boolean) | null = null
-		if (
-			activeKey.startsWith("review:") ||
-			activeKey.startsWith("intent-review:")
-		) {
-			inBucket = (k) =>
-				k.startsWith("review:") || k.startsWith("intent-review:")
-		} else if (
-			activeKey.startsWith("approve:") ||
-			activeKey === "intent-quality-gates"
-		) {
-			inBucket = (k) => k.startsWith("approve:") || k === "intent-quality-gates"
-		}
-		if (inBucket && activeIsAdversarial) {
-			// List ONLY the adversarial roles in the active bucket — the
-			// parallel fan-out. Single-actor roles (spec done earlier in the
-			// bucket, the trailing user gate) are filtered out so the row is
-			// purely the agents running in parallel.
-			const chips = roleSteps
-				.filter(
-					(s) => inBucket(s.key) && !SINGLE_ACTOR_ROLES.has(rawRoleOf(s.key)),
-				)
-				.map((s) => ({
-					// These reviewers are spawned in ONE parent response —
-					// they all run at once, so the serial active/pending split
-					// finalizeSteps produces (first-not-done active, rest
-					// queued) is wrong here: there's no queue behind a parallel
-					// fan-out. Collapse every not-done role to `active`
-					// (in-flight); keep `done` for the stamped ones. The row
-					// reads "signed (green ✓) vs still-running (light ▸)" with
-					// no agent falsely singled out as the current one. The
-					// compact pip bar still uses the serial finalizeSteps
-					// status; only this chip row, which mirrors true
-					// concurrency, overrides it.
-					id: chipRole(s.key),
-					status: (s.status === "done" ? "done" : "active") as
-						| "done"
-						| "active",
-				}))
-			if (chips.length > 0) agentChips = chips
-		}
+		// Intent-completion review fans out under `intent-review:`; a stage's
+		// review/approval walks fan out under `review:` / `approve:`.
+		const bucketPrefix = pastAllStages
+			? "intent-review:"
+			: kind === "review"
+				? "review:"
+				: "approve:"
+		const chips = roleSteps
+			.filter(
+				(s) =>
+					s.key.startsWith(bucketPrefix) &&
+					!SINGLE_ACTOR_ROLES.has(rawRoleOf(s.key)),
+			)
+			.map((s) => ({
+				// Parallel fan-out: every not-done role is in-flight (active),
+				// not queued behind the others (the serial active/pending split
+				// finalizeSteps produces is wrong for a one-response spawn).
+				// Stamped → done (green ✓); otherwise active (light ▸).
+				id: chipRole(s.key),
+				status: (s.status === "done" ? "done" : "active") as "done" | "active",
+			}))
+		if (chips.length > 0) agentChips = chips
 	}
 
 	// Discovery chips — when the cursor is in `elaborate_loop` with at least

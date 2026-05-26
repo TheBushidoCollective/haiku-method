@@ -1494,3 +1494,66 @@ test("renderStatusline: 'recovering' phase renders cyan + flowing (not gated)", 
 	assert.ok(!line.includes("⊘"), "recovering is NOT gated — flows (❯), not ⊘")
 	assert.ok(line.includes("❯"), "recovering shows the flowing mark")
 })
+
+// ── snapshot-driven position (2026-05-26): the pip done/active boundary AND
+//    the chip row derive from the DISPATCHED snapshot action (same source as
+//    the phase label), not a live unit-FM re-derive. Otherwise the label can
+//    say "adversarial approval" (index 5) while the pips show only 2 done and
+//    the chips key off a single-actor position → empty row. ──
+test("snapshotMilestoneIndex: action maps to the matching milestone (label↔pip coherence)", async () => {
+	const { snapshotMilestoneIndex, actionIsFanOut } = await import(
+		`${SRC}statusline/state.ts`
+	)
+	// The grouped operations milestone track (autopilot shape).
+	const steps = [
+		{ key: "elaborate" },
+		{ key: "review:spec" },
+		{ key: "review:adversarial:0" },
+		{ key: "execute" },
+		{ key: "approve:spec" },
+		{ key: "approve:adversarial:0" },
+		{ key: "approve:quality_gates" },
+		{ key: "observations" },
+	]
+	const idx = (action) => snapshotMilestoneIndex(action, steps)
+	assert.equal(idx({ kind: "elaborate_loop" }), 0, "elaborate_loop → elaborate")
+	assert.equal(
+		idx({ kind: "dispatch_review", role: "spec", dispatches: [{}] }),
+		1,
+		"single spec review → review:spec",
+	)
+	assert.equal(
+		idx({ kind: "dispatch_review", dispatches: [{}, {}, {}] }),
+		2,
+		"multi-dispatch review → review:adversarial (NOT before execute)",
+	)
+	assert.equal(idx({ kind: "start_unit_hat" }), 3, "execute pip")
+	assert.equal(
+		idx({ kind: "dispatch_approval", role: "spec", dispatches: [{}] }),
+		4,
+		"single spec approval → approve:spec (AFTER execute)",
+	)
+	assert.equal(
+		idx({ kind: "dispatch_approval", dispatches: [{}, {}, {}] }),
+		5,
+		"adversarial approval → approve:adversarial (after execute + spec approval)",
+	)
+	assert.equal(idx({ kind: "dispatch_quality_gates" }), 6, "quality gates pip")
+	// Fan-out detection: multi-dispatch or a non-single-actor role.
+	assert.ok(
+		actionIsFanOut({ kind: "dispatch_approval", dispatches: [{}, {}] }),
+		"multi-dispatch is a fan-out (chips shown)",
+	)
+	assert.ok(
+		!actionIsFanOut({
+			kind: "dispatch_approval",
+			role: "spec",
+			dispatches: [{}],
+		}),
+		"single spec approval is single-actor (no chips)",
+	)
+	assert.ok(
+		!actionIsFanOut({ kind: "dispatch_quality_gates" }),
+		"quality gates is single-actor (no chips)",
+	)
+})

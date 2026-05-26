@@ -1850,42 +1850,16 @@ export default defineTool({
 					nextPhase,
 				})
 
-				// v4: gate session pointers land on intent.md regardless of
-				// scope (stage state.json is gone). Stage-scope gates use
-				// keyed fields so multiple stages can have concurrent
-				// sessions without colliding (a discrete-mode intent could
-				// have an external MR open on stage A while stage B's user
-				// gate is also open on the local review server).
-				//
-				// M6 will move these to a session-server side store; for now
-				// stamping intent.md as a transient pointer keeps await_gate
-				// recovery working.
-				try {
-					const intentMdPath = join(intentDir(slug), "intent.md")
-					const sessionKey = stage
-						? `gate_review_session_${stage}`
-						: "gate_review_session_id"
-					const urlKey = stage ? `gate_review_url_${stage}` : "gate_review_url"
-					setFrontmatterField(intentMdPath, sessionKey, prepared.session_id)
-					setFrontmatterField(intentMdPath, urlKey, prepared.review_url)
-					setFrontmatterField(intentMdPath, "gate_review_context", gateContext)
-					if (nextStage !== undefined && nextStage !== null) {
-						setFrontmatterField(
-							intentMdPath,
-							"gate_review_next_stage",
-							nextStage,
-						)
-					}
-					if (nextPhase !== undefined && nextPhase !== null) {
-						setFrontmatterField(
-							intentMdPath,
-							"gate_review_next_phase",
-							nextPhase,
-						)
-					}
-				} catch {
-					/* non-fatal — agent can still pass session_id explicitly */
-				}
+				// No repo-persisted session pointer (2026-05-26 — "the MCP
+				// is long-lived; the connection is to the MCP, not the
+				// tool"). The session id and review url stay in-memory on
+				// the registry (keyed by intent slug); the routing
+				// (gate_context / next_stage / next_phase) is computed here
+				// and handed to the inline await as args below. Nothing
+				// about this gate is written to intent.md, so a refresh or
+				// host restart can't reattach a STALE session id — the
+				// next run_next re-derives the gate from the cursor and the
+				// live registry reattaches the current tab.
 
 				syncSessionMetadata(slug, args.state_file as string | undefined)
 
@@ -1995,6 +1969,12 @@ export default defineTool({
 						session_id: prepared.session_id,
 						review_url: prepared.review_url,
 						auto_open: false,
+						// Hand the routing inline so await_gate needs no
+						// repo-persisted pointer to know what this gate does
+						// on approval.
+						gate_context: gateContext,
+						next_stage: nextStage,
+						next_phase: nextPhase,
 						...(stFile ? { state_file: stFile } : {}),
 					},
 					signal,

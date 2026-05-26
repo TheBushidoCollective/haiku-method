@@ -59,6 +59,7 @@ const resetFixLoopBolts = (_slug: string, _stage: string): void => {
 
 import { reportError } from "../../sentry.js"
 import { logSessionEvent } from "../../session-metadata.js"
+import { findLiveReviewSessionForIntent } from "../../sessions.js"
 import {
 	HAIKU_AWAIT_GATE_INPUT_SCHEMA,
 	type HaikuAwaitGateInput,
@@ -243,6 +244,19 @@ export default defineTool({
 			intentPhase === "awaiting_completion_review" ||
 			intentPhase === "intent_completion"
 
+		// Session resolution: the session id is NOT persisted to the repo
+		// (2026-05-26 — "the MCP is long-lived; the connection is to the
+		// MCP, not the tool"). Resolution order:
+		//   1. explicit `session_id` arg — haiku_run_next passes this on the
+		//      inline path, and an agent can pass it to re-await a specific
+		//      session after a connection blip.
+		//   2. the live in-memory registry, keyed by intent slug — the
+		//      authoritative source while the MCP process is up. A page
+		//      refresh reconnects the SAME logical session; this finds it.
+		//   3. a legacy `gate_review_session_*` FM pointer — only present on
+		//      intents that opened a gate before this change. New gates
+		//      never write it.
+		const liveSession = findLiveReviewSessionForIntent(slug)
 		const stageScopedSidKey = activeStage
 			? `gate_review_session_${activeStage}`
 			: ""
@@ -251,38 +265,50 @@ export default defineTool({
 			: ""
 		const intentPersistedSid =
 			(intentMeta.gate_review_session_id as string | undefined) || ""
-		const persistedSid = isIntentScopeGate
+		const legacyPersistedSid = isIntentScopeGate
 			? intentPersistedSid || stagePersistedSid
 			: stagePersistedSid
 
-		if (!persistedSid && !validated.session_id && !activeStage) {
-			return text(
-				`No active stage on intent '${slug}' and no pending intent-scope gate — nothing to await. Call haiku_run_next first.`,
-			)
-		}
-		const sessionId = validated.session_id || persistedSid
+		const sessionId =
+			validated.session_id || liveSession?.session_id || legacyPersistedSid
 		if (!sessionId) {
+			if (!activeStage && !isIntentScopeGate) {
+				return text(
+					`No active stage on intent '${slug}' and no pending intent-scope gate — nothing to await. Call haiku_run_next first.`,
+				)
+			}
 			const where = activeStage ? `stage '${activeStage}'` : `intent scope`
 			return text(
-				`No pending gate-review session for intent '${slug}' (${where}). Call haiku_run_next to (re)open the gate.`,
+				`No live gate-review session for intent '${slug}' (${where}). Call haiku_run_next to (re)open the gate — it re-derives the gate from the cursor and reattaches the live session.`,
 			)
 		}
 
 		const stage = activeStage
-		// next_stage / next_phase / context live on intent.md frontmatter
-		// for both scopes — haiku_run_next's gate-review handler writes
-		// them un-keyed (single review session at a time, intent-scoped
-		// fields). Pre-2026-05-12 this read from a non-existent
-		// `stages/<stage>/gate-session.json` for stage scope; the read
-		// always returned undefined and the gate then defaulted next_*
-		// to null. The defaulting masked the bug; now we read the same
-		// place haiku_run_next writes.
+		// Post-decision routing (gate_context → which side effects fire,
+		// next_stage/next_phase → where to advance). Resolution order:
+		//   1. explicit args — haiku_run_next passes these on the inline
+		//      path, so the normal flow needs no repo-persisted pointer.
+		//   2. legacy `gate_review_*` FM pointers — present only on gates
+		//      opened before this change.
+		//   3. defaults (stage_gate / null) — the no-args separate-await
+		//      path on a new gate. When the real gate isn't a plain
+		//      stage_gate, the agent should re-enter via haiku_run_next
+		//      (which re-derives the routing); the default never seals or
+		//      advances a phase it shouldn't, it just stamps a stage gate.
 		const nextStage =
-			(intentMeta.gate_review_next_stage as string | null | undefined) ?? null
+			validated.next_stage !== undefined
+				? validated.next_stage
+				: ((intentMeta.gate_review_next_stage as string | null | undefined) ??
+					null)
 		const nextPhase =
-			(intentMeta.gate_review_next_phase as string | null | undefined) ?? null
+			validated.next_phase !== undefined
+				? validated.next_phase
+				: ((intentMeta.gate_review_next_phase as string | null | undefined) ??
+					null)
 		const gateContext =
-			(intentMeta.gate_review_context as string | undefined) || "stage_gate"
+			validated.gate_context ||
+			(intentMeta.gate_review_context as string | undefined) ||
+			"stage_gate"
 		const intentDirPath = `.haiku/intents/${slug}`
 
 		const _awaitGateReviewSession = getAwaitGateReviewSession()

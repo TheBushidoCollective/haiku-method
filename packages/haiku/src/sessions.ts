@@ -406,6 +406,11 @@ export interface PickerOption {
 	id: string
 	label: string
 	description?: string
+	/** When true the SPA tucks this option behind a "Show all…"
+	 *  expansion instead of rendering it in the default shortlist. Used
+	 *  by the studio picker to present the agent's 2–4 candidates up
+	 *  front while keeping the full registry one click away. */
+	secondary?: boolean
 }
 
 export interface PickerSelection {

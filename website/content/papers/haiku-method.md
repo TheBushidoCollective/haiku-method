@@ -81,6 +81,8 @@ The structural separation of roles is deliberate. The role that builds an artifa
 
 Quality gates enforce standards at each cycle. Completion criteria are checked mechanically where possible (tests, linters, type systems) and through structured review where mechanical checking is insufficient. A unit cannot advance until its criteria are satisfied. This enforcement is performed by the framework harness, not by the agent — the agent cannot override, weaken, or skip a quality gate.
 
+A mechanical gate is only meaningful against a live environment: a test suite that needs a database, a migration that needs the schema, a check that talks to a queue. When the environment is unavailable, the gate verified nothing — and the framework treats "could not run" as distinct from both "passed" and "failed." It does not advance on it (a gate that did not run is not a gate that passed), and it does not route it into the code-repair loop (there is no defect to fix). Instead the agent makes a best-effort attempt to bring the declared dependency up using the tools the environment provides, and escalates to a human when it cannot. The dependency a stage's gates need is declared once, alongside how to start it, so the attempt is reproducible rather than improvised.
+
 When execution stalls, a structured repair sequence applies: retry the operation (for transient failures), decompose the problem into smaller subtasks, try an alternative approach, or escalate to a human. This sequence is fixed — agents cannot skip levels or invent novel recovery strategies.
 
 ### Operation

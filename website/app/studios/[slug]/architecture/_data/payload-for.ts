@@ -145,6 +145,7 @@ export function payloadFor(
 			},
 			validations: [
 				"`intent.md` exists with valid frontmatter (created by `haiku_intent_create`)",
+				"`intent.studio_candidates` (the agent's create-time 2–4 best-fit shortlist) pre-narrows the studio picker — the shortlist renders first, the rest sit behind a 'Show all studios…' expansion; absent/empty → full registry",
 				"`intent.studio` is the trigger for `select_studio` (unset → emit)",
 				"`intent.mode` is the trigger for `select_mode` (unset → emit; engine-only field, agents cannot write directly)",
 				"For `mode: quick` only: `intent.stages[]` empty → `select_stage`",
@@ -390,6 +391,11 @@ export function payloadFor(
 					hook: "dispatch_quality_gates prompt builder",
 					target: "agent prompt",
 					what: "instructs the agent to run `runQualityGates()` (configured tests / lint / typecheck per studio settings); on success the engine signs `approvals.quality_gates` on every listed unit, on failure the agent fixes in place and re-runs.",
+				},
+				{
+					hook: "gate-environment classifier",
+					target: "engine",
+					what: "a gate failure whose output matches a dependency-down signature (connection refused, Docker daemon off) OR whose declared `requires_tool` (`.haiku/boot.md` service) isn't live is classified ENVIRONMENT-unavailable: the engine stamps `quality_gates_env_blocked` (NOT the approval — the stage can't advance) and files NO blocker FB (no fix-loop churn). The response is a `quality_gate_environment_blocked` action telling the agent to best-effort boot the declared services or escalate to the user and hold. Never a false green.",
 				},
 			],
 			action: "dispatch_quality_gates",

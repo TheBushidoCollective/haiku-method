@@ -1,14 +1,19 @@
 #!/usr/bin/env npx tsx
-// Test suite for the select_studio prompt builder. The bug we're
-// guarding against: with the pre-stage selection chain (#310), the
-// engine drives `select_studio` elicitation on the same tick that
-// derives state — the agent has no chance to pre-narrow the studio
-// list, so it calls `haiku_select_studio { intent }` with no options
-// and the user sees every studio in the registry. The narrowing UX
-// (subset + "Show all studios..." escape) only kicks in if the agent
-// passes an `options` subset, so the prompt now has to instruct the
-// agent to pick 2-4 studios from the action's `available_studios`
-// payload before calling the tool.
+// Test suite for the select_studio prompt builder.
+//
+// Contract (post-2026-05-25): studio selection is engine-driven — the
+// `select_studio` tick is intercepted by haiku_run_next, which runs the
+// SPA picker inline, so in the normal path the agent never sees this
+// prompt at all. This prompt is the fallback surface for direct/foreign
+// callers. Pre-narrowing now happens at CREATE time: the agent stamps
+// `studio_candidates` on intent.md via haiku_intent_create, and
+// haiku_select_studio reads that to present a shortlist first with the
+// rest behind a "Show all studios…" expansion in the SPA picker.
+//
+// So the prompt must NOT tell the agent to call haiku_select_studio with
+// an `options` subset (that contract is dead). It should point the agent
+// at the engine-driven flow (call haiku_run_next) and explain that the
+// shortlist comes from create-time candidates.
 
 import assert from "node:assert"
 
@@ -67,43 +72,57 @@ const studios = [
 	},
 ]
 
+const ctxWith = (extra = {}) => ({
+	...baseCtx,
+	action: {
+		action: "select_studio",
+		intent: "demo-intent",
+		available_studios: studios,
+		...extra,
+	},
+})
+
 console.log("\n=== select_studio prompt builder ===")
 
-test("prompt instructs the agent to pre-narrow with options", () => {
-	const body = selectStudioPrompt({
-		...baseCtx,
-		action: {
-			action: "select_studio",
-			intent: "demo-intent",
-			available_studios: studios,
-		},
-	})
+test("prompt routes the agent to the engine-driven picker (haiku_run_next)", () => {
+	const body = selectStudioPrompt(ctxWith())
 	assert.ok(body, "builder must return a body")
-	// Core directive: pick 2-4 and pass as options.
 	assert.ok(
-		/2[–-]4|2 to 4|two to four/i.test(body),
-		"prompt must tell the agent to pick 2-4 studios",
-	)
-	assert.ok(
-		body.includes("options: ["),
-		"prompt must show the call shape with options: [...]",
-	)
-	assert.ok(body.includes("haiku_select_studio"), "prompt must name the tool")
-	assert.ok(
-		body.includes('"demo-intent"'),
-		"prompt must include the slug as a literal arg",
+		body.includes("haiku_run_next"),
+		"prompt must point the agent at haiku_run_next (engine-driven picker)",
 	)
 })
 
-test("prompt renders the available studios with descriptions", () => {
-	const body = selectStudioPrompt({
-		...baseCtx,
-		action: {
-			action: "select_studio",
-			intent: "demo-intent",
-			available_studios: studios,
-		},
-	})
+test("prompt explains the shortlist comes from create-time studio_candidates", () => {
+	const body = selectStudioPrompt(ctxWith())
+	assert.ok(
+		/studio_candidates/.test(body),
+		"prompt must name studio_candidates as the pre-narrow mechanism",
+	)
+	assert.ok(
+		/creation\s+time|create\s+time|haiku_intent_create/i.test(body),
+		"prompt must tie candidates to intent creation, not to this step",
+	)
+})
+
+test("prompt does NOT teach the dead 'call haiku_select_studio with options' contract", () => {
+	const body = selectStudioPrompt(ctxWith())
+	assert.ok(
+		!/haiku_select_studio\s*\{[^}]*options/i.test(body),
+		"prompt must not instruct the agent to call haiku_select_studio with an options subset (dead contract)",
+	)
+})
+
+test("prompt mentions the 'Show all studios...' expansion (so narrowing isn't lossy)", () => {
+	const body = selectStudioPrompt(ctxWith())
+	assert.ok(
+		/show\s+all\s+studios/i.test(body),
+		"prompt must reference the 'Show all studios…' expansion so narrowing isn't lossy",
+	)
+})
+
+test("prompt renders the available studios with descriptions when present", () => {
+	const body = selectStudioPrompt(ctxWith())
 	for (const s of studios) {
 		assert.ok(
 			body.includes(s.name),
@@ -116,76 +135,23 @@ test("prompt renders the available studios with descriptions", () => {
 	}
 })
 
-test("prompt mentions the 'Show all studios...' escape (so narrowing isn't lossy)", () => {
-	const body = selectStudioPrompt({
-		...baseCtx,
-		action: {
-			action: "select_studio",
-			intent: "demo-intent",
-			available_studios: studios,
-		},
-	})
-	assert.ok(
-		/show\s+all\s+studios/i.test(body),
-		"prompt must reference the 'Show all studios...' escape so the agent knows narrowing isn't lossy",
-	)
-})
-
-test("prompt provides a fallback path when narrowing isn't possible", () => {
-	const body = selectStudioPrompt({
-		...baseCtx,
-		action: {
-			action: "select_studio",
-			intent: "demo-intent",
-			available_studios: studios,
-		},
-	})
-	assert.ok(
-		/no\s+`?options`?|without\s+options|cannot\s+narrow/i.test(body),
-		"prompt must allow the agent to call without options when narrowing fails",
-	)
-})
-
 test("prompt does NOT direct the agent to Read intent.md (blocked by workflow-fields hook)", () => {
-	// The guard-workflow-fields PreToolUse hook blocks generic
-	// Read/Write/Edit on intent.md and emits "BLOCKED: Cannot read
-	// intent.md via generic Read…". If the prompt instructs the
-	// agent to Read intent.md, the agent hits the block, gets
-	// redirected, and wastes a round-trip. The fix is to tell the
-	// agent the description is already in context (it just authored
-	// the intent moments ago in the same turn that triggered this
-	// elicitation).
-	const body = selectStudioPrompt({
-		...baseCtx,
-		action: {
-			action: "select_studio",
-			intent: "demo-intent",
-			available_studios: studios,
-		},
-	})
+	const body = selectStudioPrompt(ctxWith())
 	assert.ok(
 		!/Read\s+(the\s+)?(intent\s+description\s+)?in\s+`?\.haiku\/intents/i.test(
 			body,
 		),
 		"prompt must not tell the agent to Read .haiku/intents/<slug>/intent.md (workflow-fields hook blocks it)",
 	)
-	// Positive: the prompt should anchor the agent on its in-context recall.
-	assert.ok(
-		/recall|in\s+(your\s+)?context|already\s+have/i.test(body),
-		"prompt must anchor the agent on the in-context description",
-	)
 })
 
 test("prompt handles missing available_studios gracefully", () => {
-	// Defensive: if the handler ever returns the action without
-	// available_studios (registry-missing edge case), the prompt
-	// shouldn't crash or render `undefined`/`[object Object]`.
+	// Defensive: the action's available_studios is currently unpopulated
+	// in the live engine, so the listing falls through to the empty
+	// fallback. The prompt must not crash or render undefined/[object Object].
 	const body = selectStudioPrompt({
 		...baseCtx,
-		action: {
-			action: "select_studio",
-			intent: "demo-intent",
-		},
+		action: { action: "select_studio", intent: "demo-intent" },
 	})
 	assert.ok(
 		body,

@@ -256,6 +256,18 @@ export interface BootProcessSpec {
 	 *  discovery) so a recipe can configure the app without clobbering the
 	 *  port the supervisor allocated. */
 	env?: Record<string, string>
+	/** Service dependency, not the app itself: a database, queue, cache the
+	 *  app (and its quality gates) need running. A `service` process is what
+	 *  the agent best-effort boots before a gate that depends on it; it's
+	 *  never the Playwright `primary`. Typically `no_port` + a `ready_url`
+	 *  health probe. */
+	service?: boolean
+	/** The ambient tool this process needs to come up — e.g.
+	 *  `requires_tool: docker` for a `docker compose up` service. The engine
+	 *  probes liveness (`capabilities.isToolAvailable`); when the tool is
+	 *  absent the agent CANNOT boot the service and must escalate to the user
+	 *  rather than advance a gate that verified nothing. */
+	requires_tool?: string
 }
 
 export interface SpawnedBootProcess {
@@ -372,6 +384,9 @@ export function readBootRecipe(projectRoot: string): BootRecipe | null {
 					: undefined,
 				no_port: p.no_port === true,
 				env: asEnv(p.env),
+				service: p.service === true,
+				requires_tool:
+					typeof p.requires_tool === "string" ? p.requires_tool : undefined,
 			}
 		})
 		const portBound = specs.filter((s) => !s.no_port)
@@ -419,6 +434,20 @@ export function readBootRecipe(projectRoot: string): BootRecipe | null {
 	// File exists but declares nothing runnable (notes-only) — treat as
 	// absent so the caller falls through to auto-detection.
 	return null
+}
+
+/** The service-dependency processes a recipe declares (databases, queues,
+ *  caches the app + its quality gates need). These are what the agent
+ *  best-effort boots before a service-needing gate; never the Playwright
+ *  primary. Returns [] when the recipe is absent or app-only. Throws the
+ *  same `recipeError` as `readBootRecipe` on a structurally-broken recipe. */
+export function readServiceProcesses(projectRoot: string): BootProcessSpec[] {
+	const recipe = readBootRecipe(projectRoot)
+	if (!recipe) return []
+	return recipe.processes.filter(
+		(p) =>
+			p.service || (p.requires_tool !== undefined && p.name !== recipe.primary),
+	)
 }
 
 function topoSort(specs: BootProcessSpec[]): BootProcessSpec[] {

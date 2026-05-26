@@ -106,6 +106,17 @@ export const INTENT_FRONTMATTER_SCHEMA = Type.Object(
 		mode: Type.Optional(Type.String({ enum: [...INTENT_MODES] })),
 		skip_stages: Type.Optional(Type.Array(Type.String())),
 		studio: Type.Optional(Type.String()),
+		// Agent-authored studio shortlist (creation-time hint). The agent
+		// has the description in context when it calls haiku_intent_create,
+		// so it picks the 2–4 best-fit studios and stamps them here. The
+		// inline studio picker (haiku_select_studio, driven by the
+		// select_studio tick) reads this and presents the shortlist FIRST,
+		// with the remaining studios behind a "Show all" expansion — so the
+		// user isn't scrolling the whole registry on every intent. Purely a
+		// presentation hint: not FSM-driven, not immutable, and the locked
+		// `studio` field is what the workflow actually keys on. Empty/absent
+		// → the picker falls back to the full registry.
+		studio_candidates: Type.Optional(Type.Array(Type.String())),
 		// Parent-link (creation-time only). Stores a slug reference.
 		// If the referenced intent is renamed (unsupported but possible
 		// out-of-band), the link breaks gracefully — `follows` is

@@ -61,6 +61,7 @@ const elaborateBlock = memoTemplate("workflow-contracts-elaborate.md")
 const executeBlock = memoTemplate("workflow-contracts-execute.md")
 const fixLoopBlock = memoTemplate("workflow-contracts-fix-loop.md")
 const runtimeVerificationBlock = memoTemplate("runtime-verification.md")
+const serviceDependenciesBlock = memoTemplate("service-dependencies.md")
 
 // Review block has one substitution (MAX_STAGE_ITERATIONS) — render
 // lazily on first access. Eta is heavy for a single substitution but
@@ -86,6 +87,7 @@ type SharedBlockId =
 	| "workflow-contracts-announcement"
 	| "subagent-error-recovery"
 	| "runtime-verification"
+	| "service-dependencies"
 
 interface SharedBlockEntry {
 	/** Getter rather than eager string — the review block reads
@@ -138,6 +140,12 @@ const REGISTRY: Record<SharedBlockId, SharedBlockEntry> = {
 		title: "Runtime-verification doctrine",
 		summary:
 			"that verification is runtime observation (NOT running tests/typecheck); how to find the change's surface and route to a handle (web/GUI → `haiku_view` boot + `haiku-playwright`; CLI → run the command; server → the socket; library → the public export); the `.haiku/boot.md` project boot recipe; how to drive the smallest path, probe around the change, capture evidence under `proof/`; and the PASS/FAIL/BLOCKED/SKIP verdict that drives sign-off vs. feedback.",
+	},
+	"service-dependencies": {
+		content: () => serviceDependenciesBlock(),
+		title: "Service-dependency doctrine",
+		summary:
+			"when a quality gate needs a live dependency (DB, queue, cache): best-effort boot the project's declared services (`.haiku/boot.md` `service:` processes / compose / make) when the tool is live, else escalate to the user — NEVER advance or mark a gate passed on an unreachable environment, because a gate that didn't run verified nothing.",
 	},
 }
 

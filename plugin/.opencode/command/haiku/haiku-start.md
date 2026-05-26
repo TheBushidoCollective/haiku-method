@@ -12,7 +12,23 @@ description: Start a new H·AI·K·U intent — describe what you want to accomp
 
 2. **Quick context scan** — Glance at the project structure (2-3 tool calls max) to understand the tech stack and project purpose. This informs studio selection later.
 
-3. **Write the title and description, then create the intent** — You must produce BOTH:
+3. **Right-size it — the escape hatch (do this BEFORE creating an intent).** A full multi-stage intent is the right container for a *feature*. It is overkill for a bug fix, a typo, a config tweak, a copy change, or a small localized refactor — work where the whole lifecycle (design → build → review across stages) costs more than the change itself. Assess what the user actually described and pick the lightest container that fits:
+
+   - **Zap-class** — one localized change: a bug fix, a typo, a config/copy tweak, a small refactor; touches one or a few files; the cost of a mistake is "edit and re-run." → the right home is **zap**, which writes no intent and no scaffolding.
+   - **Quick-class** — a small but real task that wants one stage's hat loop (plan→do→verify) and a lightweight record, but genuinely does not span multiple stages. → the right home is **quick mode** (a single-stage intent).
+   - **Feature-class** — spans multiple concerns or stages, needs real decomposition / design / cross-stage review, or the user explicitly asked for the full lifecycle. → the full intent below.
+
+   **If it's clearly feature-class, skip straight to step 4 — don't interrupt a real feature with a downgrade prompt.** Otherwise, surface the lighter path with `AskUserQuestion`, recommended option FIRST (so accepting is one tap), and let the user keep the heavier path if they want the tracking:
+
+   - Question: *"This looks like a `<bug fix / small task>` — how do you want to run it?"*
+   - Options, recommended first: **Zap (no intent overhead)** *(when it's zap-class)* / **Quick mode (single stage)** *(when it's quick-class)* / **Full intent (multi-stage lifecycle)**. Offer zap only when it's genuinely zap-class, quick when it's quick-class; always include full as the override.
+
+   **Route on the answer:**
+   - **Zap** → do NOT create an intent. Hand off to the zap flow: call `haiku_zap { task: "<the task, in one or two sentences>" }` and follow its returned `message` verbatim (see `/haiku:haiku-zap`). Stop here — the rest of this skill doesn't apply.
+   - **Quick** → create the intent (step 4), then drive `haiku_run_next` and lock the mode to quick the way `/haiku:haiku-quick` does (`haiku_select_mode { options: ["quick"] }` after studio selection). The user chose quick here, so locking it honors their choice — you are not dictating the mode.
+   - **Full** (or feature-class) → continue to step 4 unchanged; the user picks the mode via the normal elicitation.
+
+4. **Write the title and description, then create the intent** — You must produce BOTH:
    - **`title`**: A crisp 3–8 word summary, ≤80 chars, single line, no trailing period. Write it deliberately as a human-readable name for the intent. **Do NOT** pass a truncated description or the first sentence of a paragraph.
      - Good: `"Add archivable intents"`, `"Migrate auth to OAuth2"`, `"Fix mobile nav overflow"`
      - Bad: `"Add archivable intents to H·AI·K·U. Users need a way to soft-hide completed,…"`
@@ -20,12 +36,13 @@ description: Start a new H·AI·K·U intent — describe what you want to accomp
    - **`description`**: The prelaborated narrative (2–5 sentences) covering scope, motivation, and constraints. This is the richer context, not a title.
    - **`slug`**: Kebab-case identifier (max 40 chars). Usually derived from the title.
    - **`context`**: Summary of key decisions and constraints from the conversation.
+   - **`studio_candidates`**: The 2–4 studios that best fit what you just described — this is how you pre-narrow the studio picker so the user isn't scrolling the whole registry on every intent. Call `haiku_studio_list` to see the studios with their descriptions, then pick the closest matches (canonical name, slug, or alias all resolve). You have the description in context right now — this is the one moment you can do a semantically-aware pick, so do it. The picker shows your shortlist first and keeps the rest behind a "Show all studios…" expansion, so narrowing is never lossy. Omit it (or pass `[]`) **only** when the work is genuinely too generic to narrow.
 
    The title and description are distinct fields — the tool does NOT derive one from the other. Writing a lazy title (e.g. the first chunk of the description) will be rejected.
 
-   **Do NOT pass `mode` or `stages`.** Those fields are engine-managed and chosen by the user via elicitation. The tool's input schema does not accept them; trying to pass them will fail validation.
+   **Do NOT pass `mode`, `stages`, or `studio`.** Those fields are engine-managed and chosen by the user via the picker. `studio_candidates` is a *hint* that pre-narrows that picker — it does not lock the studio, and the user still makes the final pick. The tool's input schema does not accept `mode`/`stages`/`studio`; trying to pass them will fail validation.
 
-4. **Follow the tool's instructions** — The tool will direct you to call `haiku_run_next`, which then drives the elicitation chain in order:
+5. **Follow the tool's instructions** — The tool will direct you to call `haiku_run_next`, which then drives the elicitation chain in order:
    1. `haiku_select_studio` — user picks the studio.
    2. `haiku_select_mode` — user picks the mode (continuous, discrete, autopilot, quick).
    3. `haiku_select_stage` — fires only when mode == `quick`, user picks the single stage to run.
@@ -33,6 +50,7 @@ description: Start a new H·AI·K·U intent — describe what you want to accomp
 
 ## Notes
 
-- **Never dictate mode or stages.** If the user mentions "discrete" or "single stage" or "just inception" in their description, that's *context for the user when they make the elicit choice* — pass it along into the description if it's load-bearing, but do not pre-set the field. The agent MUST let the user pick via elicitation.
+- **Never dictate mode or stages.** If the user mentions "discrete" or "single stage" or "just inception" in their description, that's *context for the user when they make the elicit choice* — pass it along into the description if it's load-bearing, but do not pre-set the field. The agent MUST let the user pick via elicitation. (The step-3 escape hatch is not an exception: the user *chooses* the lighter path there, so locking quick afterward honors their pick rather than dictating it.)
 - Do NOT ask the user to pick a studio — the workflow engine handles studio selection via elicitation.
-- If the user already provided a detailed description, skip prelaboration and go straight to step 3.
+- If the user already provided a detailed description, skip prelaboration — but still right-size (step 3) before creating the intent.
+- The right-sizing escape hatch is a *recommendation the user confirms*, not a silent reroute: surface it, default to the recommended path, and always leave the full lifecycle available. When in doubt about scope, lean toward offering the lighter option — the user can always decline.

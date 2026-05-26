@@ -24,7 +24,9 @@ Pass each `<subagent>` block verbatim to the Task tool. Map block attributes to 
 Each subagent runs **one hat only**. When a subagent returns, do what its final message tells you — spawn the relayed `<subagent>` block if the body carries one, call `haiku_run_next` if the body says so, or just acknowledge. The engine threads the chain through advance_hat's return; you don't decide when to fire the next item.
 <% if (terminal) { %>
 
-**Terminal hat note**: `<%= hat %>` is the LAST hat in the stage's sequence. Each subagent's `advance_hat` call triggers the unit-branch → stage-branch merge under `withStageLock`. On merge success the unit is complete; on conflict the response carries `merge_conflict` with the conflicting paths for resolution.
+**Terminal hat note**: `<%= hat %>` is the LAST hat in the stage's sequence. Each subagent's `advance_hat` call triggers the unit-branch → stage-branch merge under `withStageLock`. On merge success the unit is complete; on conflict the response carries `merge_conflict` with the conflicting paths for resolution. The terminal advance also runs the unit's `quality_gates`; if any gate needs a live dependency, the doctrine below governs what to do.
+
+<%~ serviceDependenciesBlock %>
 <% } %>
 
 <%~ executeContractsBlock %>

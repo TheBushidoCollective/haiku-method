@@ -527,9 +527,10 @@ export const PickerOptionSchema = z
 		id: z.string(),
 		label: z.string(),
 		description: z.string().optional(),
+		secondary: z.boolean().optional(),
 	})
 	.describe(
-		"One option in a picker session — id is the canonical value the wire echoes back, label/description are display-only",
+		"One option in a picker session — id is the canonical value the wire echoes back, label/description are display-only. `secondary` options are hidden behind a 'Show all…' expansion (studio picker shortlist).",
 	)
 export type PickerOption = z.infer<typeof PickerOptionSchema>
 

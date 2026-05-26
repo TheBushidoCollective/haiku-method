@@ -28,6 +28,7 @@ import {
 import { Ajv } from "ajv"
 import matter from "gray-matter"
 import { features, resolvePluginRoot } from "./config.js"
+import { classifyGateRun } from "./gate-environment.js"
 import { buildFbHatDispatchBlock } from "./orchestrator/fb-dispatch-builder.js"
 import { resolveRejectTarget } from "./orchestrator/hat-loop-routing.js"
 import {
@@ -43,6 +44,7 @@ import {
 	nextHatForUnit,
 } from "./orchestrator/workflow/cursor.js"
 import { sanitizeFeedbackBody } from "./state/sanitize-feedback.js"
+import { readServiceProcesses } from "./view-boot.js"
 
 // V-04 (Symlink TOCTOU): `haiku_human_write` (registered via this module's
 // MCP tool table) performs atomic file writes inside intent dirs through the
@@ -1945,6 +1947,14 @@ export function runInlineQualityGates(
 		exit_code: number
 		output: string
 	}>
+	/** True when the failure is an unreachable runtime dependency, not code
+	 *  (DB down, Docker daemon not running, a declared tool absent). Such a
+	 *  run verified nothing — the caller must NOT advance on it and must NOT
+	 *  file a code-fix blocker; it routes to the best-effort-boot →
+	 *  escalate-to-user path instead. */
+	environment?: boolean
+	env_reason?: string
+	requires_tool?: string
 } | null {
 	// Read quality_gates from intent and unit frontmatter
 	const root = findHaikuRoot()
@@ -2018,10 +2028,49 @@ export function runInlineQualityGates(
 
 	if (failures.length === 0) return null
 
+	// Environment classification: if a failure is an unreachable dependency
+	// (DB down, Docker daemon off, a declared tool absent), this gate run
+	// verified nothing. Don't present it as a fixable code failure — surface
+	// the env verdict so the caller routes to best-effort-boot / escalate
+	// instead of advancing or filing a code-fix blocker.
+	const requiredTools = serviceToolsForIntent(intentSlug)
+	const envClass = classifyGateRun(failures, { requiredTools })
+	if (envClass.environment) {
+		return {
+			error: "quality_gate_environment_unavailable",
+			message:
+				`Quality gate(s) could not run against a live environment: ${envClass.reason}. ` +
+				`This is NOT a code defect and re-running won't fix it. Bring the required service(s) up (best-effort: a declared \`.haiku/boot.md\` service via the available tool), then re-run the gate. If you can't bring it up, escalate to the user — do NOT advance, since a gate that didn't run verified nothing.\n${failures.map((f) => `- ${f.name}: '${f.command}' exited ${f.exit_code}${f.output ? `: ${f.output}` : ""}`).join("\n")}`,
+			failures,
+			environment: true,
+			env_reason: envClass.reason ?? undefined,
+			requires_tool: envClass.requiresTool,
+		}
+	}
+
 	return {
 		error: "quality_gate_failed",
 		message: `Cannot advance hat: ${failures.length} quality gate(s) failed. Fix the issues and try again.\n${failures.map((f) => `- ${f.name}: '${f.command}' exited ${f.exit_code}${f.output ? `: ${f.output}` : ""}`).join("\n")}`,
 		failures,
+	}
+}
+
+/** The union of `requires_tool` across the project's declared boot-recipe
+ *  service processes — the tools a gate might need live. Best-effort: a
+ *  broken/absent recipe yields []. Used to classify env-unavailable gate
+ *  failures (a declared tool that isn't live → environment, not code). */
+function serviceToolsForIntent(_intentSlug: string): string[] {
+	try {
+		const services = readServiceProcesses(primaryRepoRoot())
+		return [
+			...new Set(
+				services
+					.map((s) => s.requires_tool)
+					.filter((t): t is string => typeof t === "string" && t.length > 0),
+			),
+		]
+	} catch {
+		return []
 	}
 }
 

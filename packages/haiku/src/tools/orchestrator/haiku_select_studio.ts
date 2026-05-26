@@ -8,11 +8,18 @@
 //      choice. Picker is the ONLY interactive path (2026-05-07);
 //      MCP elicitation has been removed entirely.
 //
+// In path 2 the picker is pre-narrowed: a shortlist (explicit
+// `options`, else the `studio_candidates` the agent stamped on
+// intent.md at create time) renders first, and every other studio is
+// flagged `secondary` so the SPA tucks it behind a "Show all"
+// expansion. The full registry always rides along — narrowing is
+// never lossy. No shortlist → all studios render as primaries.
+//
 // On selection, writes studio to intent.md and re-enforces the
 // branch guard. Studio is locked once written — every other tool
 // that mutates intent state refuses to change it.
 
-import { existsSync, readdirSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { ensureOnStageBranch } from "../../git-worktree.js"
 import { resolveStudioStages } from "../../orchestrator.js"
@@ -29,6 +36,7 @@ import {
 import {
 	findHaikuRoot,
 	gitCommitState,
+	parseFrontmatter,
 	readJson,
 	setFrontmatterField,
 } from "../../state-tools.js"
@@ -37,6 +45,7 @@ import { emitTelemetry } from "../../telemetry.js"
 import { defineTool } from "../define.js"
 import { withAnnouncement } from "./_announce.js"
 import { text } from "./_text.js"
+import { buildStudioPickerOptions } from "./studio-picker-options.js"
 
 export default defineTool({
 	name: "haiku_select_studio",
@@ -115,24 +124,40 @@ export default defineTool({
 			}
 			selectedStudio = resolved.dir
 		} else {
-			// Path 2: open SPA picker. Map any pre-filtered options to
-			// canonical names; if none provided (or the filter narrows
-			// to zero valid studios), present every studio.
+			// Path 2: open SPA picker. Build the shortlist the user sees
+			// first. Two sources, in priority order:
+			//   1. Explicit `options` passed by the caller (e.g. a direct
+			//      `/haiku:haiku-change-mode`-style invocation).
+			//   2. `studio_candidates` stamped on intent.md at create time
+			//      — the agent's semantic 2–4 pick from the description.
+			// The picker ALWAYS carries every studio so "Show all" never
+			// needs a re-elicitation round trip; shortlist studios render
+			// up front, the rest are flagged `secondary` and tucked behind
+			// the SPA's expansion. An empty shortlist (no options, no
+			// candidates, or none resolve) → every studio renders as a
+			// primary, exactly like before.
 			const mappedOptions = options
 				.map((o) => resolveStudio(o))
 				.filter((s): s is NonNullable<typeof s> => s !== null)
 				.map((s) => s.name)
-			const presentNames =
-				mappedOptions.length === 0
-					? allStudios.map((s) => s.name)
-					: mappedOptions
-			const pickerOptions = allStudios
-				.filter((s) => presentNames.includes(s.name))
-				.map((s) => ({
-					id: s.dir,
-					label: s.name,
-					description: s.description ?? "",
-				}))
+			let shortlistNames = mappedOptions
+			if (shortlistNames.length === 0) {
+				let fmCandidates: unknown = []
+				try {
+					const { data } = parseFrontmatter(readFileSync(intentFile, "utf8"))
+					fmCandidates = data.studio_candidates
+				} catch {
+					/* missing/unreadable FM → no shortlist, fall through to all */
+				}
+				if (Array.isArray(fmCandidates)) {
+					shortlistNames = fmCandidates
+						.filter((c): c is string => typeof c === "string")
+						.map((c) => resolveStudio(c))
+						.filter((s): s is NonNullable<typeof s> => s !== null)
+						.map((s) => s.name)
+				}
+			}
+			const pickerOptions = buildStudioPickerOptions(allStudios, shortlistNames)
 
 			const result = await runPicker({
 				intentSlug: slug,

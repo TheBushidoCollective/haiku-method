@@ -69,6 +69,13 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		// always emitted so the subagent sees the contract every time
 		// regardless of wave size.
 		executeContractsBlock: sharedBlockRef("workflow-contracts-execute"),
+		// Service-dependency doctrine — only on the terminal hat, where the
+		// unit's quality_gates run inline. If a gate needs a live dependency
+		// (DB/queue/cache), best-effort boot the declared services or escalate
+		// to the user; never advance on an unreachable env.
+		serviceDependenciesBlock: terminal
+			? sharedBlockRef("service-dependencies")
+			: "",
 		batchDirective:
 			units.length > 0 ? batchDispatchDirective(units.length, "subagents") : "",
 	})

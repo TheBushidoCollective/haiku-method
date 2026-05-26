@@ -40,14 +40,93 @@ import {
 } from "node:fs"
 import { join, resolve } from "node:path"
 import matter from "gray-matter"
+import { availableTools, isToolAvailable } from "../../capabilities.js"
+import { classifyGateRun } from "../../gate-environment.js"
 import { buildApprovalRecord } from "../../orchestrator/workflow/sign-slot.js"
 import {
 	intentDir,
+	primaryRepoRoot,
 	runInlineQualityGates,
 	writeFeedbackFile,
 } from "../../state-tools.js"
+import { type BootProcessSpec, readServiceProcesses } from "../../view-boot.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
+
+/** How many best-effort local boot attempts the agent gets before the
+ *  engine forces escalation to the user. The agent boots services once; if
+ *  the gate still can't reach its dependency, re-prompting another boot just
+ *  loops — escalate instead. */
+const ENV_BOOT_ATTEMPTS = 1
+
+interface EnvBlocked {
+	unit: string
+	reason: string
+	requires_tool?: string
+	attempts: number
+	failures: GateFailure["failures"]
+}
+
+/** Stamp an environment-blocked marker on the unit. Deliberately does NOT
+ *  touch `approvals.quality_gates` — an unreachable dependency means the
+ *  gate verified nothing, so the approval must stay unstamped and the stage
+ *  cannot advance. Increments an attempt counter so the engine can flip from
+ *  "best-effort boot" to "escalate to the user" after one cycle. Returns the
+ *  new attempt count. */
+function stampUnitGateEnvBlock(
+	unitPath: string,
+	reason: string,
+	requiresTool: string | undefined,
+): number {
+	try {
+		const parsed = matter(readFileSync(unitPath, "utf8"))
+		const data = parsed.data as Record<string, unknown>
+		const prior =
+			(data.quality_gates_env_blocked as { attempts?: number } | undefined) ??
+			undefined
+		const attempts =
+			(typeof prior?.attempts === "number" ? prior.attempts : 0) + 1
+		data.quality_gates_env_blocked = {
+			at: new Date().toISOString(),
+			reason,
+			requires_tool: requiresTool ?? null,
+			attempts,
+		}
+		writeFileSync(unitPath, matter.stringify(parsed.content, data))
+		return attempts
+	} catch {
+		return 1
+	}
+}
+
+/** Build the boot guidance the env-blocked response hands the agent: the
+ *  declared service processes, which required tools are live vs absent, and
+ *  whether a best-effort boot is even possible. */
+function bootGuidance(): {
+	services: Array<{
+		name: string
+		command: string
+		requires_tool?: string
+		tool_live: boolean
+	}>
+	bootable: boolean
+} {
+	let services: BootProcessSpec[] = []
+	try {
+		services = readServiceProcesses(primaryRepoRoot())
+	} catch {
+		services = []
+	}
+	const rows = services.map((s) => ({
+		name: s.name,
+		command: s.command.join(" "),
+		requires_tool: s.requires_tool,
+		tool_live: s.requires_tool ? isToolAvailable(s.requires_tool) : true,
+	}))
+	// Bootable when there's at least one declared service whose tool is live.
+	const bootable = rows.some((r) => r.tool_live)
+	return { services: rows, bootable }
+}
 
 type GateFailure = {
 	unit: string
@@ -230,6 +309,7 @@ function runStageScope(intent: string, stage: string, units: string[]) {
 	const passed: string[] = []
 	const failures: GateFailure[] = []
 	const deferred: Array<{ unit: string; gates: string[]; reason: string }> = []
+	const envBlocked: EnvBlocked[] = []
 
 	for (const unit of units) {
 		const unitPath = join(
@@ -258,6 +338,26 @@ function runStageScope(intent: string, stage: string, units: string[]) {
 			// runQualityGates returns null on all-pass.
 			stampUnitApproval(unitPath, "quality_gates")
 			passed.push(unit)
+		} else if (result.environment) {
+			// ENVIRONMENT-BLOCKED: the gate couldn't reach a live dependency
+			// (DB down, Docker daemon off, declared tool absent). It verified
+			// nothing, so: do NOT stamp the approval (the stage must not
+			// advance on a false green) and do NOT file a `blocker` code-fix
+			// FB (the fix loop has nothing to fix — that's the churn bug). The
+			// response below tells the agent to best-effort boot the declared
+			// services and re-dispatch, or escalate to the user and hold.
+			const attempts = stampUnitGateEnvBlock(
+				unitPath,
+				result.env_reason ?? "a runtime dependency was unreachable",
+				result.requires_tool,
+			)
+			envBlocked.push({
+				unit,
+				reason: result.env_reason ?? "a runtime dependency was unreachable",
+				requires_tool: result.requires_tool,
+				attempts,
+				failures: result.failures,
+			})
 		} else {
 			// BUG-1: attempts are counted PER GATE COMMAND, not per unit. A
 			// gate that first turns red on a late dispatch must get its full
@@ -331,6 +431,51 @@ function runStageScope(intent: string, stage: string, units: string[]) {
 				}
 			}
 		}
+	}
+
+	// Environment-blocked units take priority in the response: the stage
+	// cannot advance while any gate verified nothing, so surface the
+	// best-effort-boot / escalate-to-user instruction before anything else.
+	if (envBlocked.length > 0) {
+		const guidance = bootGuidance()
+		const exhausted = envBlocked.every((e) => e.attempts > ENV_BOOT_ATTEMPTS)
+		const mode =
+			guidance.bootable && !exhausted ? "best_effort_boot" : "escalate_to_user"
+		const serviceList =
+			guidance.services.length > 0
+				? guidance.services
+						.map(
+							(s) =>
+								`  - ${s.name}: \`${s.command}\`${s.requires_tool ? ` (needs ${s.requires_tool}: ${s.tool_live ? "LIVE" : "NOT AVAILABLE"})` : ""}`,
+						)
+						.join("\n")
+				: "  (no services declared in .haiku/boot.md)"
+		const liveTools = availableTools()
+		const message =
+			mode === "best_effort_boot"
+				? `Quality gates can't reach a live environment on: ${envBlocked.map((e) => e.unit).join(", ")}.\n${envBlocked.map((e) => `  • ${e.unit}: ${e.reason}`).join("\n")}\n\nBEST-EFFORT BOOT (one attempt): bring the declared service(s) up with the available tooling, then call \`haiku_dispatch_quality_gates\` again — on a real pass the approval stamps and the stage advances.\n\nDeclared services (.haiku/boot.md):\n${serviceList}\n\nAvailable tools: ${liveTools.length > 0 ? liveTools.join(", ") : "(none of docker/compose/make are live)"}.\n\nIf the service comes up and the gate passes, you're done. If it does NOT come up, escalate to the user (next dispatch will say so). Do NOT advance — a gate that didn't run verified nothing.`
+				: `Quality gates can't reach a live environment on: ${envBlocked.map((e) => e.unit).join(", ")}, and the engine can't bring it up here (${guidance.bootable ? "best-effort boot already attempted" : "no declared service with a live tool"}).\n${envBlocked.map((e) => `  • ${e.unit}: ${e.reason}`).join("\n")}\n\nESCALATE TO THE USER. Tell them exactly what's unavailable and what to do — e.g. "start the database, then tell me to retry." Recommend a \`.haiku/boot.md\` service recipe if none exists:\n${serviceList}\n\nThen WAIT for the user. Do NOT advance, do NOT call \`haiku_run_next\` in a loop, do NOT mark the gate passed. The stage holds until the dependency is live and the gate actually runs.`
+		return text(
+			JSON.stringify(
+				{
+					action: "quality_gate_environment_blocked",
+					scope: "stage",
+					mode,
+					env_blocked: envBlocked.map((e) => ({
+						unit: e.unit,
+						reason: e.reason,
+						requires_tool: e.requires_tool ?? null,
+						attempts: e.attempts,
+					})),
+					services: guidance.services,
+					available_tools: liveTools,
+					passed,
+					message,
+				},
+				null,
+				2,
+			),
+		)
 	}
 
 	const deferredNote =
@@ -438,6 +583,61 @@ function runIntentScope(intent: string) {
 				2,
 			),
 		)
+	}
+
+	// Environment-blocked at intent scope (mirror of the stage path): a gate
+	// that couldn't reach a live dependency verified nothing. Do NOT stamp
+	// the intent approval and do NOT file a `blocker` FB into the studio
+	// fix-hat loop — escalate to best-effort-boot / the user instead. The
+	// intent cannot seal on a gate that didn't run.
+	{
+		let requiredTools: string[] = []
+		try {
+			requiredTools = [
+				...new Set(
+					readServiceProcesses(primaryRepoRoot())
+						.map((s) => s.requires_tool)
+						.filter((t): t is string => typeof t === "string" && t.length > 0),
+				),
+			]
+		} catch {
+			requiredTools = []
+		}
+		const envClass = classifyGateRun(failures, { requiredTools })
+		if (envClass.environment) {
+			const guidance = bootGuidance()
+			const serviceList =
+				guidance.services.length > 0
+					? guidance.services
+							.map(
+								(s) =>
+									`  - ${s.name}: \`${s.command}\`${s.requires_tool ? ` (needs ${s.requires_tool}: ${s.tool_live ? "LIVE" : "NOT AVAILABLE"})` : ""}`,
+							)
+							.join("\n")
+					: "  (no services declared in .haiku/boot.md)"
+			const liveTools = availableTools()
+			return text(
+				JSON.stringify(
+					{
+						action: "quality_gate_environment_blocked",
+						scope: "intent",
+						mode: guidance.bootable ? "best_effort_boot" : "escalate_to_user",
+						reason: envClass.reason,
+						requires_tool: envClass.requiresTool ?? null,
+						services: guidance.services,
+						available_tools: liveTools,
+						message:
+							`Intent-scope quality gates can't reach a live environment: ${envClass.reason}.\n\n` +
+							(guidance.bootable
+								? `BEST-EFFORT BOOT: bring the declared service(s) up, then re-run \`haiku_dispatch_quality_gates { intent, scope: "intent" }\`. `
+								: `The engine can't bring it up here. ESCALATE TO THE USER: tell them what's unavailable and to start it, then retry. `) +
+							`Do NOT seal the intent — a gate that didn't run verified nothing.\n\nDeclared services:\n${serviceList}\n\nAvailable tools: ${liveTools.length > 0 ? liveTools.join(", ") : "(none live)"}.`,
+					},
+					null,
+					2,
+				),
+			)
+		}
 	}
 
 	// Non-convergent intent gates → defer to CI (mirror of the stage-scope

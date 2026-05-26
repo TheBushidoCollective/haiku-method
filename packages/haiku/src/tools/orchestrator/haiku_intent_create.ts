@@ -32,6 +32,7 @@ import {
 	setFrontmatterField,
 	timestamp,
 } from "../../state-tools.js"
+import { resolveStudio } from "../../studio-reader.js"
 import { emitTelemetry } from "../../telemetry.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
@@ -140,7 +141,7 @@ function detectWorkflowMetaPollution(s: string): string | null {
 export default defineTool({
 	name: "haiku_intent_create",
 	description:
-		"Create a new intent. Returns the slug + path. Title is required (crisp 3–8 word summary, ≤80 chars, single line). If the user started the intent from a referenced file (a spec, a doc, a screenshot, a path like `~/Downloads/spec.pdf`, or a dragged-in attachment), READ it and synthesize its relevant substance directly into `description` and `context` — NEVER pass the file path in any field. An absolute path leaks the user's machine layout and the external file won't travel with the intent; the intent must stand on its own from its own text (capture what the file says, not where it lives). Studio, mode, and (for quick) stage are selected by the engine on the next haiku_run_next call — the tick blocks on the SPA picker until the user chooses, then continues to real workflow actions. The agent does NOT call select_* tools directly; just call haiku_run_next after creating the intent. Always creates a fresh intent — `/haiku:haiku-start` does not resume; use `/haiku:haiku-pickup` for that.",
+		"Create a new intent. Returns the slug + path. Title is required (crisp 3–8 word summary, ≤80 chars, single line). If the user started the intent from a referenced file (a spec, a doc, a screenshot, a path like `~/Downloads/spec.pdf`, or a dragged-in attachment), READ it and synthesize its relevant substance directly into `description` and `context` — NEVER pass the file path in any field. An absolute path leaks the user's machine layout and the external file won't travel with the intent; the intent must stand on its own from its own text (capture what the file says, not where it lives). Studio, mode, and (for quick) stage are selected by the engine on the next haiku_run_next call — the tick blocks on the SPA picker until the user chooses, then continues to real workflow actions. The agent does NOT call select_* tools directly; just call haiku_run_next after creating the intent. To keep the studio picker from showing the whole registry, pass `studio_candidates` — the 2–4 studios from `haiku_studio_list` that best fit what you just described. The picker presents those first and tucks the rest behind a 'Show all' expansion; omit it (or pass an empty list) only when the work is too generic to narrow. Always creates a fresh intent — `/haiku:haiku-start` does not resume; use `/haiku:haiku-pickup` for that.",
 	inputSchema: {
 		type: "object" as const,
 		properties: {
@@ -148,6 +149,12 @@ export default defineTool({
 			description: { type: "string" },
 			slug: { type: "string" },
 			context: { type: "string" },
+			studio_candidates: {
+				type: "array" as const,
+				items: { type: "string" as const },
+				description:
+					"2–4 studio names (canonical name, slug, or alias) that best fit the description — used to pre-narrow the studio picker. Resolved against the registry; unresolvable entries are dropped. Omit when the work is too generic to narrow.",
+			},
 			state_file: { type: "string" },
 		},
 		required: ["title", "description"],
@@ -338,6 +345,31 @@ export default defineTool({
 		].join("\n")
 
 		writeFileSync(join(iDir, "intent.md"), intentContent)
+
+		// Stamp the agent's studio shortlist (presentation hint for the
+		// inline studio picker). Resolve each candidate to its canonical
+		// name and dedupe; silently drop anything that doesn't resolve so a
+		// stray name never blocks creation — the picker falls back to the
+		// full registry when the list ends up empty. `studio` itself stays
+		// "" here; the user still locks it via the picker.
+		const candidateInput = Array.isArray(args.studio_candidates)
+			? (args.studio_candidates as unknown[])
+			: []
+		const resolvedCandidates: string[] = []
+		for (const raw of candidateInput) {
+			if (typeof raw !== "string") continue
+			const resolved = resolveStudio(raw)
+			if (resolved && !resolvedCandidates.includes(resolved.name)) {
+				resolvedCandidates.push(resolved.name)
+			}
+		}
+		if (resolvedCandidates.length > 0) {
+			setFrontmatterField(
+				join(iDir, "intent.md"),
+				"studio_candidates",
+				resolvedCandidates,
+			)
+		}
 
 		// Seed `.gitattributes` for engine-owned append-only event
 		// streams. Both `action-log.jsonl` and `write-audit.jsonl` are

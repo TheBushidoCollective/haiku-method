@@ -456,6 +456,7 @@ export function StageReview({
 
 	const stageSummary = resolveStageSummary(session, stageName)
 	const stageBrief = resolveStageBrief(session, stageName)
+	const stageObservations = resolveStageObservations(session, stageName)
 	const seen = useSeenTracker(seenScopeId)
 
 	// Detail mode: when set, the active tab renders a single-item focused
@@ -619,6 +620,7 @@ export function StageReview({
 					stageName={stageName}
 					stageSummary={stageSummary}
 					stageBrief={stageBrief}
+					stageObservations={stageObservations}
 					units={units}
 					knowledge={knowledgeVMs}
 					outputs={outputVMs}
@@ -867,6 +869,7 @@ function OverviewTab({
 	stageName,
 	stageSummary,
 	stageBrief,
+	stageObservations,
 	units,
 	knowledge,
 	outputs,
@@ -881,6 +884,7 @@ function OverviewTab({
 	stageName: string
 	stageSummary: string | null
 	stageBrief: string | null
+	stageObservations: string | null
 	units: ParsedUnit[]
 	knowledge: ArtifactViewModel[]
 	outputs: ArtifactViewModel[]
@@ -913,6 +917,20 @@ function OverviewTab({
 						</span>
 					</SectionHeading>
 					<MarkdownViewer id={`brief-${stageName}`}>{stageBrief}</MarkdownViewer>
+				</Card>
+			)}
+
+			{stageObservations && (
+				<Card as="article" ariaLabelledBy="stage-observations-heading">
+					<SectionHeading id="stage-observations-heading" variant="eyebrow">
+						Observations{" "}
+						<span className="font-normal normal-case text-stone-500">
+							(what the agent saw building this stage)
+						</span>
+					</SectionHeading>
+					<MarkdownViewer id={`observations-${stageName}`}>
+						{stageObservations}
+					</MarkdownViewer>
 				</Card>
 			)}
 
@@ -2305,6 +2323,20 @@ function resolveStageBrief(
 	const briefs = session.stage_briefs
 	if (briefs && typeof briefs[stageName] === "string" && briefs[stageName]) {
 		return briefs[stageName]
+	}
+	return null
+}
+
+/** The per-stage agent OBSERVATIONS (markdown) — the free-form reflection
+ *  the agent wrote at stage close (mandate ambiguity, engine friction,
+ *  surprises). Shown in the Overview tab beneath the brief. */
+function resolveStageObservations(
+	session: ReviewPageSessionData,
+	stageName: string,
+): string | null {
+	const obs = session.stage_observations
+	if (obs && typeof obs[stageName] === "string" && obs[stageName]) {
+		return obs[stageName]
 	}
 	return null
 }

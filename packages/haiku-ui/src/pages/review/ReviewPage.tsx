@@ -1156,6 +1156,22 @@ function IntentOverviewPane({
 					)}
 				</div>
 
+				{/* Reflection — the intent-scope synthesis the agent wrote at
+				    intent close (reflection.md). Intent-level, so it lives here
+				    rather than on any single stage. Teal-accented to read as the
+				    intent's own retrospective; absent until the reflection phase
+				    runs. */}
+				{session.reflection && (
+					<div className="bg-white dark:bg-stone-900 rounded-lg border-2 border-teal-200 dark:border-teal-900/60 px-5 py-4">
+						<p className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 mb-3">
+							Reflection
+						</p>
+						<MarkdownViewer id="intent-reflection">
+							{session.reflection}
+						</MarkdownViewer>
+					</div>
+				)}
+
 				{/* Drift assessments — intent-scope drift history (per
 				    SPA-UI-SPECS §4). Renders after the intent-definition
 				    block. Hooks the existing

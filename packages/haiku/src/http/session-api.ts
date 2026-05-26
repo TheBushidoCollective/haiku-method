@@ -370,6 +370,7 @@ export function respondSessionApi(
 					const milestonesByStage: Record<string, unknown> = {}
 					const summaries: Record<string, string> = {}
 					const briefs: Record<string, string> = {}
+					const observations: Record<string, string> = {}
 					for (const st of stages) {
 						try {
 							const steps = deriveStageMilestones({
@@ -401,12 +402,37 @@ export function respondSessionApi(
 						} catch {
 							/* skip this stage's brief — others still ship */
 						}
+						// Per-stage agent OBSERVATIONS — the free-form reflection
+						// written at stage close. Same shape as the brief; surfaced
+						// on the SPA's per-stage browse view.
+						try {
+							const obsPath = join(dir, "stages", st, "observations.md")
+							if (existsSync(obsPath)) {
+								const body = readFileSync(obsPath, "utf8").trim()
+								if (body) observations[st] = body
+							}
+						} catch {
+							/* skip this stage's observations — others still ship */
+						}
 					}
 					if (Object.keys(milestonesByStage).length > 0)
 						data.stage_milestones = milestonesByStage
 					if (Object.keys(summaries).length > 0)
 						data.stage_summaries = summaries
 					if (Object.keys(briefs).length > 0) data.stage_briefs = briefs
+					if (Object.keys(observations).length > 0)
+						data.stage_observations = observations
+					// Intent-scope synthesized REFLECTION — written once at intent
+					// close. Surfaced at the intent level (not per stage).
+					try {
+						const reflPath = join(dir, "reflection.md")
+						if (existsSync(reflPath)) {
+							const body = readFileSync(reflPath, "utf8").trim()
+							if (body) data.reflection = body
+						}
+					} catch {
+						/* skip reflection — the rest of the payload still ships */
+					}
 				} catch {
 					/* leave both unset — SPA falls back to its defaults */
 				}

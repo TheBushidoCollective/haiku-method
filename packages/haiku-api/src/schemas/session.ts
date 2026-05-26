@@ -317,6 +317,18 @@ export const ReviewSessionPayloadSchema = z
 		 *  surface. Built server-side (engine reads BRIEF.md); the focused
 		 *  work agents never read it. Absent when the stage has no brief. */
 		stage_briefs: z.record(z.string()).optional(),
+		/** Per-stage agent OBSERVATIONS (markdown) keyed by stage name — the
+		 *  free-form reflection the agent wrote at stage close (mandate
+		 *  ambiguity, engine friction, surprises, out-of-band churn that the
+		 *  FB stream / outputs / iterations don't already show). Read
+		 *  server-side from `stages/<stage>/observations.md`; absent for a
+		 *  stage that hasn't recorded any. */
+		stage_observations: z.record(z.string()).optional(),
+		/** Intent-scope synthesized REFLECTION (markdown) — the agent's
+		 *  end-of-intent `reflection.md`, written once at intent close: a
+		 *  synthesis across every stage's observations, feedback, and
+		 *  outputs. Read server-side; absent until the reflection phase runs. */
+		reflection: z.string().optional(),
 		/** Per-stage granular milestone track keyed by stage name, so the
 		 *  SPA renders the SAME fine-grained dot stepper on every stage —
 		 *  completed and upcoming — not only the engine-active stage (whose

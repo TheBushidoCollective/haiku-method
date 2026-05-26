@@ -377,6 +377,40 @@ export function recordTickResult(
  *  fires, the caller swaps in the halt action and records THAT instead.
  *  Per goal "ensure nothing in our engine can put us in an infinite
  *  loop" (2026-05-15): the engine can detect AND stop. */
+/** Cursor actions that BLOCK on a human (or an external event/system)
+ *  rather than on the engine making on-disk progress. They are expected
+ *  to re-emit the identical signature tick-after-tick until the human
+ *  acts — so they're exempt from the no-progress / churn halt. A wedged
+ *  human gate is recovered by the SPA-presence watch (await fail-fast),
+ *  by the user acting, or by /haiku:haiku-repair — never by the engine
+ *  yanking the workflow into `loop_halted`. */
+const EXTERNAL_INPUT_ACTIONS = new Set<string>([
+	"user_gate", // per-stage + intent-completion human review gate
+	"feedback_question", // surfaces a discovery question, waits for the answer
+	"await_gate", // external-review wait
+	"await_design_direction",
+	"await_visual_answer",
+	"select_studio", // pre-cursor human pickers (also inline-intercepted)
+	"select_mode",
+	"select_stage",
+])
+
+function actionWaitsOnExternalInput(
+	action: Record<string, unknown> | null | undefined,
+): boolean {
+	if (!action || typeof action !== "object") return false
+	const kind = (action as Record<string, unknown>).action
+	if (typeof kind !== "string") return false
+	if (EXTERNAL_INPUT_ACTIONS.has(kind)) return true
+	// The intent-completion HUMAN gate rides `intent_review` with role
+	// "user" (the engine reviewers are `spec`/`continuity`/… and DO make
+	// progress; only the terminal user role waits on the human).
+	if (kind === "intent_review" && (action as Record<string, unknown>).role === "user") {
+		return true
+	}
+	return false
+}
+
 export function wouldDeadlock(
 	slug: string,
 	action: Record<string, unknown> | null | undefined,
@@ -384,6 +418,18 @@ export function wouldDeadlock(
 	| { kind: "repeat"; count: number; signature: string }
 	| { kind: "churn"; distinct: number; window: number }
 	| null {
+	// Human / external-input gates legitimately re-emit the SAME action
+	// across ticks while they WAIT for the user (or an external event) to
+	// act — that is the gate working, not a wedge. They must never trip
+	// the no-progress halt, or a user who's slow to open the review SPA
+	// (or whose SPA was slow to connect) gets the workflow forcibly halted
+	// out from under them with no way to advance. (2026-05-26 CRITICAL: a
+	// `user_gate` halted after 4 ticks because the reviewer hadn't yet
+	// approved — leaving the intent unadvanceable.) Liveness of the gate's
+	// SPA is handled separately by the never-attached watch in
+	// `awaitGateReviewSession`; THIS detector only guards ENGINE wedges (a
+	// fix-hat that doesn't change disk, a verifier that won't sign).
+	if (actionWaitsOnExternalInput(action)) return null
 	const signature = actionSignatureForDeadlock(action)
 	const prev = loadEntry(slug)
 	if (!prev) return null

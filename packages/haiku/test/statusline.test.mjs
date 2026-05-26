@@ -130,7 +130,7 @@ test("renderStatusline: intent-level setup phase (no stage, no track)", async ()
 	assert.equal(line, "H·AI·K·U ⬢ new-thing · intent ❯ select studio")
 })
 
-test("renderStatusline: gated line uses ‖ (paused) and keeps the active hexagon", async () => {
+test("renderStatusline: gated line uses Π (doorway) and keeps the active hexagon", async () => {
 	const { renderStatusline } = await import(`${SRC}statusline/render.ts`)
 	const line = renderStatusline(
 		{
@@ -146,7 +146,7 @@ test("renderStatusline: gated line uses ‖ (paused) and keeps the active hexago
 		},
 		{ color: false },
 	)
-	assert.match(line, /design .*‖ approval gate/)
+	assert.match(line, /design .*Π approval gate/)
 	assert.ok(!line.includes("❯"), "gated line must not use the flow glyph")
 })
 
@@ -1491,7 +1491,7 @@ test("renderStatusline: 'recovering' phase renders cyan + flowing (not gated)", 
 	).split("\n")[0]
 	assert.match(line, /\x1b\[38;5;44m/, "recovering → cyan (44) hue")
 	assert.match(line, /resolving conflicts/, "label is shown verbatim")
-	assert.ok(!line.includes("‖"), "recovering is NOT gated — flows (❯), not ‖")
+	assert.ok(!line.includes("Π"), "recovering is NOT gated — flows (❯), not Π")
 	assert.ok(line.includes("❯"), "recovering shows the flowing mark")
 })
 

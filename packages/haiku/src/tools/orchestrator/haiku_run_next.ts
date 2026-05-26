@@ -211,8 +211,8 @@ import { reportError } from "../../sentry.js"
 import { launchBrowserBestEffort } from "../../server/tool-call.js"
 import { logSessionEvent } from "../../session-metadata.js"
 import {
-	findLiveReviewSessionForIntent,
 	getSession,
+	hasAttachedReviewSessionForIntent,
 	isBrowserAttached,
 	updateSession,
 } from "../../sessions.js"
@@ -1950,9 +1950,18 @@ export default defineTool({
 				// confirmed the tab was open. The user's guidance:
 				// `run_next` should always handle the pop AND the await on
 				// these hosts.
+				// "Attached" means a browser is GENUINELY heartbeating for
+				// this intent — NOT merely that a session record exists.
+				// `findLiveReviewSessionForIntent` returns any non-presence-
+				// lost record, including a session whose SPA never connected;
+				// keying the launch decision off that left a never-attached
+				// session SUPPRESSING the launch, so no browser opened and the
+				// inline await blocked silently for minutes (2026-05-26
+				// CRITICAL — the gate "wouldn't open"). Use genuine attachment
+				// so the browser (re)launches whenever no live tab exists.
 				const isAttachedForIntent = () =>
 					isBrowserAttached(prepared.session_id) ||
-					findLiveReviewSessionForIntent(slug) !== undefined
+					hasAttachedReviewSessionForIntent(slug)
 				if (!prepared.browser_attached && !isAttachedForIntent()) {
 					launchBrowserBestEffort(prepared.review_url, "Gate review")
 				}

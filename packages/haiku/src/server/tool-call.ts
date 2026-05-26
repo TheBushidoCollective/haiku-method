@@ -50,6 +50,7 @@ import {
 	findLiveReviewSessionForIntent,
 	getPreviousReviewSnapshot,
 	getSession,
+	hasAttachedReviewSessionForIntent,
 	hasPresenceLost,
 	isBrowserAttached,
 	updateSession,
@@ -1542,10 +1543,15 @@ export function shouldLaunchReviewBrowser(
 	if (!autoOpen) return false
 	if (!reviewUrl) return false
 	if (isBrowserAttached(sessionId)) return false
-	// Intent-scoped dedupe: if a live session for this intent already
-	// exists (any session id), skip the launch. The SPA tab on that
-	// session receives the broadcast and refreshes; no new tab needed.
-	if (intentSlug && findLiveReviewSessionForIntent(intentSlug)) return false
+	// Intent-scoped dedupe: skip the launch ONLY when a browser is
+	// GENUINELY attached (fresh heartbeat) on some session for this intent
+	// — that tab receives the broadcast and refreshes, so a second window
+	// would be a duplicate. We must NOT suppress on mere session EXISTENCE:
+	// a session record can linger with no live tab (never opened, or closed
+	// within the heartbeat grace, or never-attached), and suppressing on
+	// that left the user with NO SPA at all and the gate unable to open
+	// (2026-05-26 CRITICAL). No attached tab → always (re)launch.
+	if (intentSlug && hasAttachedReviewSessionForIntent(intentSlug)) return false
 	return true
 }
 

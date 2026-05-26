@@ -218,45 +218,24 @@ test("intent_slug arg: no live session for intent → launch", () => {
 	)
 })
 
-// Never-attached presence loss (2026-05-26). The reported bug: at a
-// gate the SPA never opened, so the session never heartbeated. The old
-// sweep only watched sessions that heartbeated at least once, so the
-// never-attached session was NEVER marked presence-lost — it lingered as
-// "live", and `findLiveReviewSessionForIntent` kept returning it, which
-// made `shouldLaunchReviewBrowser` SUPPRESS the launch on every later
-// gate ("the gate won't open a browser"). The never-attached watch marks
-// it presence-lost after 60s so the launch fires.
-test("never-attached session, once swept to presence-lost, stops suppressing the launch (the bug)", () => {
-	// ONE stale never-attached session for the intent. A new gate fires and
-	// asks whether to launch for a brand-new session id (not yet registered)
-	// — the stale session is what (wrongly) suppresses it.
+// The reported bug (2026-05-26 CRITICAL): at a gate the SPA never opened,
+// so the session never heartbeated. `shouldLaunchReviewBrowser` suppressed
+// the launch on mere session EXISTENCE (findLiveReviewSessionForIntent),
+// so the never-attached session record made the engine think "a tab's
+// already open, just refresh it" — and NOTHING opened. The fix: suppress
+// only when a browser is GENUINELY attached (fresh heartbeat). A stale /
+// never-attached session must NOT suppress — the gate always (re)launches.
+test("a never-attached session for the intent does NOT suppress the launch (the bug)", () => {
+	// ONE stale never-attached session for the intent. A new gate fires; the
+	// stale record must NOT block the launch, since no browser is attached.
 	const stale = createSession({
 		intent_dir: "/tmp/no-such-dir",
 		intent_slug: "never-attached-intent",
 		target: "test",
 	})
 	try {
-		// An await began watching `stale` 61s ago; it never heartbeated.
+		// `stale` exists but never heartbeated → not genuinely attached.
 		beginPresenceWatch(stale.session_id, { startedAt: Date.now() - 61_000 })
-		// Pre-sweep: the stale session looks live → the new gate's launch is
-		// suppressed. This is the bug.
-		assert.strictEqual(
-			shouldLaunchReviewBrowser(
-				true,
-				"https://example.test",
-				"new-gate-session",
-				"never-attached-intent",
-			),
-			false,
-			"pre-sweep: a stale never-attached session suppresses the launch (the reported bug)",
-		)
-		_runPresenceSweepForTests()
-		assert.ok(
-			hasPresenceLost(stale.session_id),
-			"never-attached session MUST be marked presence-lost after 60s",
-		)
-		// Post-sweep: presence-lost sessions are skipped by
-		// findLiveReviewSessionForIntent → no live session for the intent → launch.
 		assert.strictEqual(
 			shouldLaunchReviewBrowser(
 				true,
@@ -265,10 +244,42 @@ test("never-attached session, once swept to presence-lost, stops suppressing the
 				"never-attached-intent",
 			),
 			true,
-			"post-sweep: stale session cleared → the gate launches the browser",
+			"a stale never-attached session must NOT suppress the launch — the gate opens",
+		)
+		// And the 60s never-attached sweep still marks it presence-lost (so
+		// the await fails-fast with a recovery path rather than hanging).
+		_runPresenceSweepForTests()
+		assert.ok(
+			hasPresenceLost(stale.session_id),
+			"never-attached session is also marked presence-lost after 60s",
 		)
 	} finally {
 		deleteSession(stale.session_id)
+	}
+})
+
+test("an ATTACHED session for the intent DOES suppress a duplicate launch", () => {
+	// The dedupe that must still hold: a genuinely-attached tab (fresh
+	// heartbeat) for the intent means a second window would be a duplicate.
+	const attached = createSession({
+		intent_dir: "/tmp/no-such-dir",
+		intent_slug: "attached-dedupe-intent",
+		target: "test",
+	})
+	try {
+		recordHeartbeat(attached.session_id) // a live tab is attached now
+		assert.strictEqual(
+			shouldLaunchReviewBrowser(
+				true,
+				"https://example.test",
+				"new-gate-session",
+				"attached-dedupe-intent",
+			),
+			false,
+			"an attached tab for the intent suppresses the duplicate launch",
+		)
+	} finally {
+		deleteSession(attached.session_id)
 	}
 })
 

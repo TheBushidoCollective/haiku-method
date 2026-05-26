@@ -814,6 +814,25 @@ export function isBrowserAttached(sessionId: string): boolean {
 	return Date.now() - ts <= BROWSER_ATTACHED_FRESHNESS_MS
 }
 
+/** True when SOME non-ad-hoc review session for the intent has a browser
+ *  GENUINELY attached (a fresh heartbeat) right now. This is the right
+ *  test for "is a tab already open, so skip the launch" — distinct from
+ *  `findLiveReviewSessionForIntent`, which only checks a session RECORD
+ *  exists and isn't presence-lost. A session can exist with no live tab
+ *  (never opened, or closed inside the heartbeat grace), and suppressing
+ *  the launch on that record left the user with NO SPA at all — the gate
+ *  "wouldn't open." (2026-05-26 CRITICAL.) Launch is suppressed only when
+ *  a real tab is attached; otherwise the gate always (re)launches. */
+export function hasAttachedReviewSessionForIntent(intentSlug: string): boolean {
+	for (const [id, s] of sessions) {
+		if (s.session_type !== "review") continue
+		if (s.intent_slug !== intentSlug) continue
+		if (s.ad_hoc) continue
+		if (isBrowserAttached(id)) return true
+	}
+	return false
+}
+
 /**
  * Drop a session from the in-memory registry. Callers should use this
  * when the session's purpose is complete (tool call returned, user

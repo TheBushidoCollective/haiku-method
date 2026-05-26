@@ -1099,20 +1099,29 @@ export default defineTool({
 		// directly — no stashing needed there. Agent roles (spec,
 		// continuity, studio review-agents) need this engine-side
 		// stamp because nothing else writes their slot on intent.md.
-		if (
-			result.action === "intent_review" &&
-			typeof result.role === "string" &&
-			result.role !== "user"
-		) {
-			try {
-				const { stashPendingIntentReview } = await import(
-					"../../orchestrator/workflow/dispatch-stamps.js"
-				)
-				stashPendingIntentReview(slug, result.role as string)
-			} catch (err) {
-				console.error(
-					`[haiku_run_next] stashPendingIntentReview failed: ${err instanceof Error ? err.message : String(err)}`,
-				)
+		// The adversarial fan-out dispatches MANY roles in one tick
+		// (`dispatches[]`); stash EVERY one so the pre-tick drain signs
+		// each (or re-dispatches the ones that filed findings).
+		if (result.action === "intent_review") {
+			const batchRoles = Array.isArray(result.dispatches)
+				? (result.dispatches as Array<{ role?: unknown }>)
+						.map((d) => (typeof d?.role === "string" ? d.role : ""))
+						.filter((r): r is string => r.length > 0)
+				: typeof result.role === "string"
+					? [result.role]
+					: []
+			const toStash = batchRoles.filter((r) => r !== "user")
+			if (toStash.length > 0) {
+				try {
+					const { stashPendingIntentReview } = await import(
+						"../../orchestrator/workflow/dispatch-stamps.js"
+					)
+					for (const r of toStash) stashPendingIntentReview(slug, r)
+				} catch (err) {
+					console.error(
+						`[haiku_run_next] stashPendingIntentReview failed: ${err instanceof Error ? err.message : String(err)}`,
+					)
+				}
 			}
 		}
 

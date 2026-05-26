@@ -234,12 +234,23 @@ function describeAction(action: CursorAction | null): {
 			return { kind: "complete", label: "complete", gated: false }
 		case "record_observations":
 			return { kind: "complete", label: "observations", gated: false }
-		case "intent_review":
+		case "intent_review": {
+			// The terminal human gate.
+			if (action.role === "user")
+				return { kind: "gate", label: "intent gate", gated: true }
+			// The adversarial fan-out dispatches many roles in one tick — show
+			// the GROUP name ("adversarial review"), not each agent, just like
+			// the per-stage walk. A single-role dispatch (spec) keeps its name.
+			const dispatches = (action as { dispatches?: unknown[] }).dispatches
 			return {
 				kind: "review",
-				label: `${shortRole(action.role)} review`,
+				label:
+					Array.isArray(dispatches) && dispatches.length > 1
+						? "adversarial review"
+						: `${shortRole(action.role)} review`,
 				gated: false,
 			}
+		}
 		case "record_reflection":
 			return { kind: "complete", label: "reflection", gated: false }
 		case "seal_intent":
@@ -546,8 +557,12 @@ export function snapshotMilestoneIndex(
 			return adversarial
 				? find((key) => key.startsWith("approve:adversarial"))
 				: find((key) => key === `approve:${role ?? "spec"}`)
-		case "dispatch_quality_gates":
-			return find((key) => key === "approve:quality_gates")
+		case "dispatch_quality_gates": {
+			// Stage scope → `approve:quality_gates`; intent scope → the intent
+			// track's `intent-quality-gates`.
+			const i = find((key) => key === "approve:quality_gates")
+			return i >= 0 ? i : find((key) => key === "intent-quality-gates")
+		}
 		case "user_gate":
 			return gateKind === "approval"
 				? find((key) => key === "approve:user")
@@ -555,6 +570,20 @@ export function snapshotMilestoneIndex(
 		case "write_brief":
 			// The brief is written just before the review user gate.
 			return find((key) => key === "review:user")
+		case "intent_review":
+			// Intent-completion review (intent track). `spec` and the `user`
+			// gate are their own pips; the adversarial fan-out is ONE grouped
+			// `intent-review:adversarial` pip (matches the "adversarial review"
+			// label + the parallel dispatch).
+			if (role === "user") return find((key) => key === "intent-review:user")
+			return adversarial
+				? find((key) => key.startsWith("intent-review:adversarial"))
+				: find((key) => key === `intent-review:${role ?? "spec"}`)
+		case "record_reflection":
+			return find((key) => key === "reflection")
+		case "seal_intent":
+		case "sealed":
+			return find((key) => key === "seal")
 		default:
 			return -1
 	}

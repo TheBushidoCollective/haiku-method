@@ -1,9 +1,10 @@
-// orchestrator/prompts/intent_review/index.ts — Per-role
-// intent-completion review. Cursor returns `intent_review { role }`
-// once every stage is merged into intent main and at least one role
-// on `intent.approvals` is still missing. One tick per role; the
-// engine signs each via the review server / agent dispatch and walks
-// again until every role is signed, then emits `seal_intent`.
+// orchestrator/prompts/intent_review/index.ts — Intent-completion review.
+// The cursor returns `intent_review { role, dispatches[] }` once every stage
+// is merged into intent main and a role on `intent.approvals` is still
+// missing. `spec` dispatches serial-alone first, then the adversarial
+// intent-review agents (continuity, cross-stage-consistency, the studio
+// agents) fan out in ONE parallel batch (`dispatches[]`), then the `user`
+// gate runs serial-last — exactly the per-stage `dispatch_review` shape.
 //
 // Roles fall into three buckets:
 //   - "spec"        → spec-conformance subagent over the merged intent
@@ -11,10 +12,11 @@
 //   - "user"        → open the human gate (haiku_review_open)
 //   - <studio-agent> → studio-level review-agent mandate
 //
-// The companion `intent_completion_review` builder handles the bulk
-// "spawn every studio review-agent in parallel" pass that happens
-// once per intent. This builder serializes the per-role drumbeat the
-// cursor walks after that pass.
+// Each non-user role becomes a uniform `<subagent>` dispatch block (engine
+// body, studio mandate, or — only on registry drift — a fallback mandate);
+// the parent spawns them all in one response. Intent-review subagents do NOT
+// self-stamp (`haiku_review_stamp`'s note); the pre-tick drain signs each
+// pending role (or re-dispatches the ones that filed findings).
 
 import { Eta } from "eta"
 import {
@@ -54,23 +56,36 @@ const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
 const SUBAGENT_TEMPLATE = loadTemplate(import.meta.url, "subagent.eta.md")
 
-export default definePromptBuilder(({ slug, studio, action }) => {
-	const role = (action.role as string) || ""
+/** Fallback mandate for a role that's neither an engine built-in nor a
+ *  configured studio agent — reached only on registry drift (a test locks
+ *  the cursor's `intentRoles` ↔ engine registry sync). Spawned as a normal
+ *  subagent so the batch path stays uniform. */
+function fallbackMandate(slug: string, role: string): string {
+	return [
+		`You are the \`${role}\` intent-completion reviewer for intent \`${slug}\`.`,
+		"",
+		"## Mandate (fallback — no studio-configured mandate file was found)",
+		"",
+		`1. Read every stage's \`outputs/\` and \`elaboration.md\` under \`.haiku/intents/${slug}/stages/\`.`,
+		`2. Read the intent body at \`.haiku/intents/${slug}/intent.md\`.`,
+		"3. Judge the intent-as-a-whole: work that contradicts another stage's output, missing coverage of an acceptance criterion across all stages, any cross-stage inconsistency (terminology, scope, technical choices).",
+		`4. For each finding, file \`haiku_feedback\` with \`intent: "${slug}"\` (omit \`stage\`), \`origin: "agent"\`, \`author: "${role}"\`, and a body that quotes the artifact you're flagging. ALSO file one against the studio noting the missing mandate file at \`plugin/studios/<studio>/intent-review-agents/${role}.md\`.`,
+		'5. When done, return your verdict in one paragraph: which findings you filed (by FB-NN), or "no findings".',
+		"",
+		"Do NOT modify any artifact files. Reviewer role, not fixer.",
+	].join("\n")
+}
 
-	if (role === "user") {
-		return eta.renderString(TEMPLATE, { slug, role })
-	}
-
-	// Resolve a mandate snapshot for the role — engine body (rendered)
-	// or studio review-agent file (FM-stripped) — materialized into the
-	// intent's prompts tree and referenced by path. Engine roles resolve
-	// BEFORE the studio lookup so a same-name studio file can never shadow
-	// a built-in. Both buckets flow through ONE file-backed subagent
-	// dispatch below; the dispatch record reflects exactly what the
-	// reviewer audited against.
+/** Build ONE `<subagent>` dispatch block for a non-user intent-review role. */
+function buildRoleBlock(
+	slug: string,
+	studio: string,
+	role: string,
+): { dispatchBlock: string; isEngine: boolean } {
 	const engineBodyTpl = ENGINE_REVIEW_BODIES[role]
 	let mandateRef = ""
 	let mandateModel: string | undefined
+	let promptBody: string
 
 	if (engineBodyTpl) {
 		// Engine role — rendered, not a studio file. Snapshot directly.
@@ -83,9 +98,8 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		})
 		mandateRef = `**Read** \`${snap}\``
 	} else {
-		// Studio intent-completion review agent — resolve via the same
-		// reader haiku_read_review_agent uses; only spawn when it resolves
-		// (else fall through to the generic fallback below).
+		// Studio intent-completion review agent — resolve via the same reader
+		// haiku_read_review_agent uses; only when it resolves.
 		const body = readReviewAgentBody(studio, undefined, role)
 		if (body) {
 			mandateRef = studioReadRef({
@@ -103,50 +117,66 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		}
 	}
 
-	if (mandateRef) {
-		const reviewPrompt = eta.renderString(SUBAGENT_TEMPLATE, {
-			slug,
-			role,
-			mandateRef,
-			doctrineRef: RUNTIME_OBSERVATION_ROLES.has(role)
-				? sharedBlockRef("runtime-verification")
-				: "",
-			prInteraction: PR_INTERACTION_ROLES.has(role),
-			existingFeedback: buildExistingFeedbackBlock(slug, ""),
-			decisions: buildDecisionsBlock(slug),
-		})
+	promptBody = mandateRef
+		? eta.renderString(SUBAGENT_TEMPLATE, {
+				slug,
+				role,
+				mandateRef,
+				doctrineRef: RUNTIME_OBSERVATION_ROLES.has(role)
+					? sharedBlockRef("runtime-verification")
+					: "",
+				prInteraction: PR_INTERACTION_ROLES.has(role),
+				existingFeedback: buildExistingFeedbackBlock(slug, ""),
+				decisions: buildDecisionsBlock(slug),
+			})
+		: fallbackMandate(slug, role)
 
-		const dispatchBlock = emitSubagentDispatchBlock({
-			unit: "review",
-			hat: role,
-			bolt: 1,
-			intent: slug,
-			agentType: "general-purpose",
-			model: mandateModel,
-			promptBody: reviewPrompt,
-			heading: `### Subagent: \`${role}\``,
-			omitBolt: true,
-		})
+	const dispatchBlock = emitSubagentDispatchBlock({
+		unit: "review",
+		hat: role,
+		bolt: 1,
+		intent: slug,
+		agentType: "general-purpose",
+		model: mandateModel,
+		promptBody,
+		heading: `### Subagent: \`${role}\``,
+		omitBolt: true,
+	})
+	return { dispatchBlock, isEngine: !!engineBodyTpl }
+}
+
+export default definePromptBuilder(({ slug, studio, action }) => {
+	const dispatches: Array<{ role: string }> = Array.isArray(action.dispatches)
+		? (action.dispatches as Array<{ role: string }>)
+		: [{ role: (action.role as string) || "" }]
+
+	// The user gate dispatches serial-alone — no subagent, opens the
+	// human review session instead.
+	if (dispatches.length === 1 && dispatches[0]?.role === "user") {
 		return eta.renderString(TEMPLATE, {
 			slug,
-			role,
-			// Parent template keys its "spawn the subagent" branch on a
-			// truthy mandatePath; mandateRef is truthy whenever we resolved.
-			mandatePath: mandateRef,
-			dispatchBlock,
+			role: "user",
+			roles: ["user"],
+			dispatchCount: 1,
+			mandatePath: "",
+			dispatchBlock: "",
+			isEngineRole: false,
 			description: "",
 		})
 	}
 
-	// Fallback: role is neither engine-built-in nor a configured studio
-	// agent. This is the legacy "audit for the unknown role" stub —
-	// reached only if the cursor's `intentRoles` list and the engine
-	// review registry drift apart, which a test locks against.
+	const blocks = dispatches.map((d) => buildRoleBlock(slug, studio, d.role))
+	const dispatchBlock = blocks.map((b) => b.dispatchBlock).join("\n\n")
+
 	return eta.renderString(TEMPLATE, {
 		slug,
-		role,
-		mandatePath: "",
-		dispatchBlock: "",
-		description: `audit the intent for the \`${role}\` standard`,
+		role: dispatches[0]?.role ?? "",
+		roles: dispatches.map((d) => d.role),
+		dispatchCount: dispatches.length,
+		// Parent template keys its "spawn" branch on a truthy mandatePath.
+		mandatePath: dispatchBlock,
+		dispatchBlock,
+		isEngineRole: blocks[0]?.isEngine ?? false,
+		description: "",
 	})
 })

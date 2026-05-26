@@ -141,8 +141,15 @@ function stageSteps(opts: {
 function intentSteps(opts: {
 	intentDir: string
 	mode: string
+	/** Group the adversarial intent-review roles into ONE `adversarial
+	 *  review` pip (the compact track) instead of one pip per agent. `spec`
+	 *  and the `user` gate stay serial. Mirrors the per-stage walk; matches
+	 *  the parallel `intent_review` dispatch the cursor now emits. Default
+	 *  true; `deriveProgressRoleSteps` passes false to keep the per-agent
+	 *  chip row. */
+	groupAdversarial?: boolean
 }): ProgressStep[] {
-	const { intentDir, mode } = opts
+	const { intentDir, mode, groupAdversarial = true } = opts
 	const steps: { key: string; label: string; done: boolean }[] = []
 	const intentFm = (readFm(join(intentDir, "intent.md"))?.data ?? {}) as Fm
 	// Intent-completion sign-offs stamp `approvals.<role>` on intent.md
@@ -157,13 +164,37 @@ function intentSteps(opts: {
 	const intentStudioAgents = intentStudio
 		? Object.keys(readStudioReviewAgentPaths(intentStudio)).sort()
 		: []
+	// `spec` (serial conformance) and `user` (the gate) dispatch alone; every
+	// other intent-review role is an adversarial fan-out agent.
+	const isSerialIntentRole = (role: string) =>
+		role === "spec" || role === "user"
+	let pendingAdv: string[] = []
+	const flushAdv = () => {
+		if (pendingAdv.length === 0) return
+		const signed = pendingAdv.filter((r) => Boolean(intentApprovals[r])).length
+		steps.push({
+			key: "intent-review:adversarial:0",
+			label:
+				pendingAdv.length > 1
+					? `adversarial review (${signed}/${pendingAdv.length})`
+					: "adversarial review",
+			done: pendingAdv.every((r) => Boolean(intentApprovals[r])),
+		})
+		pendingAdv = []
+	}
 	for (const role of intentReviewRoles(mode, intentStudioAgents)) {
+		if (groupAdversarial && !isSerialIntentRole(role)) {
+			pendingAdv.push(role)
+			continue
+		}
+		flushAdv() // serial role — close any open adversarial group first
 		steps.push({
 			key: `intent-review:${role}`,
 			label: role === "user" ? "intent gate" : `${role} review`,
 			done: Boolean(intentApprovals[role]),
 		})
 	}
+	flushAdv()
 	// 2. Intent-scope quality gates (union of every unit's gates).
 	steps.push({
 		key: "intent-quality-gates",
@@ -244,7 +275,9 @@ export function deriveProgressRoleSteps(opts: {
 	const { slug, studio, intentDir, intentMode, stage } = opts
 	const activeStage =
 		stage !== undefined ? stage : findCurrentStage(slug, studio, intentDir)
-	if (!activeStage) return intentSteps({ intentDir, mode: intentMode })
+	// Ungrouped: one step per agent so the chip row shows each reviewer.
+	if (!activeStage)
+		return intentSteps({ intentDir, mode: intentMode, groupAdversarial: false })
 	return stageSteps({
 		slug,
 		studio,

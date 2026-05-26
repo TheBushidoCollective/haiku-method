@@ -276,7 +276,14 @@ export type CursorAction =
 	// User-facing only — the focused work agents never read it. Forward-only
 	// (see `stageOwesBrief`): never interrupts a stage already executing.
 	| { kind: "write_brief"; stage: string }
-	| { kind: "intent_review"; role: string }
+	// `role` is the lead role (back-compat / single-role shadow); `dispatches`
+	// carries the full parallel batch when >1 (the adversarial fan-out — same
+	// shape as `dispatch_review`). `spec` and `user` dispatch single (serial).
+	| {
+			kind: "intent_review"
+			role: string
+			dispatches?: Array<{ role: string }>
+	  }
 	// Reflection (2026-05-19) — fires once at intent close, after
 	// every intent-scope approval is signed but before seal_intent.
 	// The agent reads every stage's observations.md + the FB stream
@@ -2227,12 +2234,60 @@ export function derivePosition(args: {
 		// skips it.
 		const studioAgents = Object.keys(readStudioReviewAgentPaths(studio)).sort()
 		const intentRoles = intentReviewRoles(mode, studioAgents)
+		// Mirror the per-stage review walk: `spec` runs serial-alone first,
+		// then the adversarial intent-review agents (continuity, cross-stage-
+		// consistency, the studio agents) fan out in ONE parallel
+		// `intent_review` dispatch (`dispatches[]`), then the terminal `user`
+		// gate runs serial-last. Without this batching the adversarial roles
+		// ran one-per-tick (serial), slower and inconsistent with stages.
+		const pendingAdversarial: Array<{ role: string }> = []
+		let userMissing = false
 		for (const role of intentRoles) {
-			if (!intentApprovals[role]) {
+			if (intentApprovals[role]) continue
+			if (role === "user") {
+				userMissing = true
+				continue
+			}
+			if (SERIAL_REVIEW_ROLES.has(role)) {
+				// Serial role (spec) — flush any pending adversarial batch first
+				// so the parallel fan-out completes before the serial gate.
+				if (pendingAdversarial.length > 0) {
+					return {
+						track: "intent",
+						action: {
+							kind: "intent_review",
+							role: pendingAdversarial[0].role,
+							dispatches: pendingAdversarial,
+						},
+					}
+				}
 				return {
 					track: "intent",
-					action: { kind: "intent_review", role },
+					action: { kind: "intent_review", role, dispatches: [{ role }] },
 				}
+			}
+			// Adversarial role — collect for the parallel batch.
+			pendingAdversarial.push({ role })
+		}
+		// Flush the adversarial fan-out before the user gate.
+		if (pendingAdversarial.length > 0) {
+			return {
+				track: "intent",
+				action: {
+					kind: "intent_review",
+					role: pendingAdversarial[0].role,
+					dispatches: pendingAdversarial,
+				},
+			}
+		}
+		if (userMissing) {
+			return {
+				track: "intent",
+				action: {
+					kind: "intent_review",
+					role: "user",
+					dispatches: [{ role: "user" }],
+				},
 			}
 		}
 		// Intent-scope quality_gates re-run. Per GOALS § "Quality gates

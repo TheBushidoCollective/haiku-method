@@ -192,6 +192,18 @@ test("cursor's intent-level walk includes cross-stage-consistency role", async (
 			cursor.intentReviewRoles("continuous").includes("cross-stage-consistency"),
 			"intentReviewRoles(continuous) MUST include cross-stage-consistency",
 		)
+		// The terminal human `user` gate is the always-on final-feedback
+		// checkpoint — it MUST be the last role in EVERY mode, autopilot
+		// included (2026-05-26: autopilot previously dropped it and sealed
+		// unattended with no final-feedback window).
+		for (const m of ["autopilot", "continuous", "discrete", "quick"]) {
+			const roles = cursor.intentReviewRoles(m)
+			assert.strictEqual(
+				roles[roles.length - 1],
+				"user",
+				`intentReviewRoles(${m}) MUST end with the terminal user gate`,
+			)
+		}
 	} finally {
 		process.chdir(origCwd)
 		rmSync(tmp, { recursive: true, force: true })
@@ -237,11 +249,22 @@ test("intentReviewRoles appends studio intent-review agents (deduped, before use
 	)
 
 	// Autopilot keeps the studio agents (the delivery gate still matters
-	// with no human watching) but drops the user gate.
+	// with no human watching) AND — as of 2026-05-26 — keeps the terminal
+	// user gate: the final intent gate is the always-on final-feedback
+	// checkpoint, sacred in every mode. (Previously autopilot dropped it
+	// and sealed unattended.)
 	const auto = cursor.intentReviewRoles("autopilot", ["delivery-verifier"])
 	assert.ok(
 		auto.includes("delivery-verifier"),
 		"autopilot MUST still run intent-completion verifiers",
 	)
-	assert.ok(!auto.includes("user"), "autopilot drops the user gate")
+	assert.strictEqual(
+		auto[auto.length - 1],
+		"user",
+		"autopilot MUST keep the terminal user gate (final-feedback checkpoint)",
+	)
+	assert.ok(
+		auto.indexOf("delivery-verifier") < auto.indexOf("user"),
+		"studio agents still run before the human gate in autopilot",
+	)
 })

@@ -72,7 +72,10 @@ test("seal_intent COMMITS the sealed_at stamp (so the auto-push can fire)", asyn
 		const intentDir = join(repoRoot, ".haiku", "intents", slug)
 		// Autopilot intent, every intent-completion approval pre-signed, so the
 		// cursor walks straight to seal_intent. Reflection off so it doesn't
-		// detour through record_reflection first.
+		// detour through record_reflection first. NOTE: the terminal `user`
+		// gate fires in EVERY mode now (2026-05-26) — autopilot included — so
+		// it must be pre-signed here too, or the walk parks at the final gate
+		// instead of sealing (which is the whole point of the always-on gate).
 		makeIntent({
 			intentDir,
 			slug,
@@ -82,6 +85,7 @@ test("seal_intent COMMITS the sealed_at stamp (so the auto-push can fire)", asyn
 				spec: { at: AT },
 				continuity: { at: AT },
 				"cross-stage-consistency": { at: AT },
+				user: { at: AT },
 				intent_quality_gates: { at: AT },
 			},
 		})

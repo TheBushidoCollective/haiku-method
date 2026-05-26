@@ -21,6 +21,7 @@ import {
 	HAIKU_AWAIT_GATE_INPUT_SCHEMA,
 	HAIKU_DEBUG_INPUT_SCHEMA,
 	HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA,
+	HAIKU_INTENT_CREATE_INPUT_SCHEMA,
 	HAIKU_INTENT_SEAL_INPUT_SCHEMA,
 	HAIKU_REVIEW_STAMP_INPUT_SCHEMA,
 	HAIKU_SELECT_MODE_INPUT_SCHEMA,
@@ -59,6 +60,16 @@ export const orchestratorToolDefs = [
 					type: "string",
 					description: "URL where stage was submitted for external review",
 				},
+				state_file: {
+					type: "string",
+					description:
+						"Override path to the engine state file (testing / foreign callers). Omit in normal use.",
+				},
+				pickup: {
+					type: "boolean" as const,
+					description:
+						"Set true when invoked from /haiku:haiku-pickup. The engine fetches origin and materializes the active stage branch locally so the user can `git switch` into in-flight work, then appends a pickup hint to the response.",
+				},
 			},
 		},
 	},
@@ -81,39 +92,7 @@ export const orchestratorToolDefs = [
 		name: "haiku_intent_create",
 		description:
 			'Create a new H·AI·K·U intent. Studio, mode, and (for quick) stage are selected separately via the engine-controlled elicitation chain (haiku_select_studio → haiku_select_mode → optional haiku_select_stage). You must provide a crisp `title` (3–8 words, ≤80 chars, single line, no trailing punctuation — e.g. "Add archivable intents"), a richer `description` (2–5 sentences covering scope, motivation, and constraints), AND `studio_candidates` — the 2–4 studios (from `haiku_studio_list`) that best fit, which pre-narrow the studio picker so the user is not scrolling the whole registry. The title is NOT derived from the description — write it deliberately as a human-readable summary. The agent never sets `mode` or `stages` — those flow through elicitation tools so the user picks them.',
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				title: {
-					type: "string",
-					description:
-						'Short human-readable title (3–8 words, max 80 chars, single line, no trailing period). Must be a deliberate summary — NOT the first 80 chars of the description. Good: "Add archivable intents". Bad: "Add archivable intents to H·AI·K·U. Users need a way to soft-hide…".',
-				},
-				description: {
-					type: "string",
-					description:
-						"Full description of what the intent is about (2–5 sentences covering scope, motivation, and constraints). Stored verbatim in the intent body.",
-				},
-				studio_candidates: {
-					type: "array" as const,
-					items: { type: "string" as const },
-					description:
-						"REQUIRED. The 2–4 studios (canonical name, slug, or alias) that best fit the description — pre-narrows the studio picker. Fetch the options from `haiku_studio_list` (name + description per studio) and pick the closest matches. At least one must resolve; the picker still shows the rest behind a 'Show all studios…' expansion. Omitting it is rejected with instructions to fetch the list and retry.",
-				},
-				slug: {
-					type: "string",
-					description:
-						"URL-friendly slug for the intent (auto-generated from title if not provided)",
-				},
-				context: {
-					type: "string",
-					description:
-						"Conversation context summary — highlights from the conversation that led to this intent",
-				},
-			},
-			required: ["title", "description", "studio_candidates"],
-			additionalProperties: false,
-		},
+		inputSchema: jsonSchemaOf(HAIKU_INTENT_CREATE_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_select_studio",
@@ -228,10 +207,16 @@ export const orchestratorToolDefs = [
 				units: {
 					type: "array",
 					items: { type: "string" },
-					description: "Unit names to run gates for",
+					description: "Unit names to run gates for (stage scope)",
+				},
+				scope: {
+					type: "string",
+					enum: ["intent", "stage"],
+					description:
+						"Which scope to run. Defaults to 'intent' when stage is empty, else 'stage'.",
 				},
 			},
-			required: ["intent", "stage", "units"],
+			required: ["intent"],
 		},
 	},
 	{

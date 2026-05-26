@@ -2230,8 +2230,9 @@ export function derivePosition(args: {
 		// `intent-review-agents/` (e.g. runtime-verifier, delivery-verifier)
 		// follow the engine roles — `intentReviewRoles` dedupes them against
 		// the engine base and `intent_review/index.ts` resolves their mandate
-		// bodies. Only the human gate (`user`) is mode-conditional: autopilot
-		// skips it.
+		// bodies. The terminal human gate (`user`) now fires in EVERY mode —
+		// autopilot included (2026-05-26): the final intent gate is the
+		// always-on final-feedback checkpoint before seal.
 		const studioAgents = Object.keys(readStudioReviewAgentPaths(studio)).sort()
 		const intentRoles = intentReviewRoles(mode, studioAgents)
 		// Mirror the per-stage review walk: `spec` runs serial-alone first,
@@ -2345,10 +2346,10 @@ export function derivePosition(args: {
  *  stage directory. Mode bypass for autopilot mirrors the original
  *  cursor block exactly. */
 /** The ordered intent-completion review roles — the engine-built agent
- *  roles (spec, continuity, cross-stage-consistency), plus the human
- *  `user` gate in non-autopilot modes. Source of truth for both the
- *  intent-level cursor walk and the progress track. Done-ness is read
- *  from intent.md `approvals.<role>` (NOT reviews.*). */
+ *  roles (spec, continuity, cross-stage-consistency), the studio
+ *  intent-review agents, then the terminal human `user` gate. Source of
+ *  truth for both the intent-level cursor walk and the progress track.
+ *  Done-ness is read from intent.md `approvals.<role>` (NOT reviews.*). */
 export function intentReviewRoles(
 	mode: string,
 	studioAgents: ReadonlyArray<string> = [],
@@ -2359,13 +2360,18 @@ export function intentReviewRoles(
 	// shadows an engine role (e.g. an `intent-review-agents/cross-stage-
 	// consistency.md`) doesn't double-walk — the engine body wins, same as
 	// `intent_review/index.ts` resolves engine bodies before studio files.
-	// Autopilot keeps the agents (intent-completion verifiers are the final
-	// delivery gate — CI-green still matters when no human is watching) but
-	// drops the terminal `user` gate.
 	const extras = studioAgents.filter((a) => !base.includes(a))
-	return mode === "autopilot"
-		? [...base, ...extras]
-		: [...base, ...extras, "user"]
+	// The terminal `user` gate ALWAYS fires at intent completion — EVERY
+	// mode, autopilot included. It is the final-feedback checkpoint: the
+	// user reviews the whole delivered intent and signs off before the
+	// engine seals, and an intent must never seal without that last human
+	// look. Autopilot still trims the PER-STAGE human gates (see
+	// `stageRoleLists` — unattended drive through the stages) but the
+	// FINAL intent gate is sacred and is exempt from the never-attached
+	// fail-fast (it holds for the human; see `awaitGateReviewSession`).
+	// (2026-05-26: autopilot previously dropped this, so autopilot intents
+	// sealed unattended with no final-feedback window — the reported bug.)
+	return [...base, ...extras, "user"]
 }
 
 /** The ordered review + approval role lists for a stage — the SINGLE

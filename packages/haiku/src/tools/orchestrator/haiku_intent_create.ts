@@ -24,6 +24,8 @@ import {
 } from "../../git-worktree.js"
 import { validateIdentifier } from "../../prompts/helpers.js"
 import { logSessionEvent } from "../../session-metadata.js"
+import { HAIKU_INTENT_CREATE_INPUT_SCHEMA } from "../../state/schemas/index.js"
+import { jsonSchemaOf } from "../../state/schemas/inputs/_validate.js"
 import {
 	findHaikuRoot,
 	gitCommitState,
@@ -143,24 +145,12 @@ export default defineTool({
 	name: "haiku_intent_create",
 	description:
 		"Create a new intent. Returns the slug + path. Title is required (crisp 3–8 word summary, ≤80 chars, single line). If the user started the intent from a referenced file (a spec, a doc, a screenshot, a path like `~/Downloads/spec.pdf`, or a dragged-in attachment), READ it and synthesize its relevant substance directly into `description` and `context` — NEVER pass the file path in any field. An absolute path leaks the user's machine layout and the external file won't travel with the intent; the intent must stand on its own from its own text (capture what the file says, not where it lives). Studio, mode, and (for quick) stage are selected by the engine on the next haiku_run_next call — the tick blocks on the SPA picker until the user chooses, then continues to real workflow actions. The agent does NOT call select_* tools directly; just call haiku_run_next after creating the intent. **`studio_candidates` is REQUIRED** — the 2–4 studios from `haiku_studio_list` that best fit what you just described. You have the description in context right now; this is the moment to narrow the picker so the user isn't scrolling the whole registry. The picker presents your shortlist first and tucks the rest behind a 'Show all studios…' expansion, so narrowing is never lossy. If you call without it, the tool tells you to fetch `haiku_studio_list` and retry. Always creates a fresh intent — `/haiku:haiku-start` does not resume; use `/haiku:haiku-pickup` for that.",
-	inputSchema: {
-		type: "object" as const,
-		properties: {
-			title: { type: "string" },
-			description: { type: "string" },
-			slug: { type: "string" },
-			context: { type: "string" },
-			studio_candidates: {
-				type: "array" as const,
-				items: { type: "string" as const },
-				description:
-					"REQUIRED. The 2–4 studios (canonical name, slug, or alias) that best fit the description — pre-narrows the studio picker. Fetch the options from `haiku_studio_list` (name + description per studio) and pick the closest matches. Resolved against the registry; unresolvable entries are dropped, but at least one must resolve. The picker still shows the rest behind a 'Show all studios…' expansion.",
-			},
-			state_file: { type: "string" },
-		},
-		required: ["title", "description", "studio_candidates"],
-		additionalProperties: false,
-	},
+	// Single source of truth for the schema — same object the advertised
+	// def in orchestrator/tool-defs.ts feeds `jsonSchemaOf`, so the two can
+	// never drift (see HAIKU_INTENT_CREATE_INPUT_SCHEMA). The handler does
+	// NOT run the AJV validate-gate; its bespoke checks below cover the
+	// semantic rules the schema can't express.
+	inputSchema: jsonSchemaOf(HAIKU_INTENT_CREATE_INPUT_SCHEMA),
 	handle(args) {
 		const description = args.description as string
 		const titleInput = args.title as string | undefined

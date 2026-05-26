@@ -115,11 +115,13 @@ export {
 	validateHaikuFeedbackWriteInputSchema,
 } from "./inputs/feedback-variants.js"
 export type {
+	HaikuIntentCreateInput,
 	HaikuIntentGetInput,
 	HaikuIntentListInput,
 	HaikuIntentSetInput,
 } from "./inputs/intents.js"
 export {
+	HAIKU_INTENT_CREATE_INPUT_SCHEMA,
 	HAIKU_INTENT_GET_INPUT_SCHEMA,
 	HAIKU_INTENT_LIST_INPUT_SCHEMA,
 	HAIKU_INTENT_SET_INPUT_SCHEMA,

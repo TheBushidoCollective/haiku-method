@@ -199,6 +199,49 @@ test("orchestratorToolDefs and orchestratorToolHandlers are in sync", async () =
 	)
 })
 
+// inputSchema parity: the ADVERTISED schema (orchestratorToolDefs, what
+// ListTools returns) and the HANDLER's ToolDef.inputSchema must agree on
+// WHICH params exist and which are required. They're hand-maintained in
+// two files; the canonical pattern is for both to feed
+// `jsonSchemaOf(SHARED_SCHEMA)` so they can't drift. They DID drift on
+// 2026-05-26 — `studio_candidates` was added to haiku_intent_create's
+// handler schema but not the advertised one, so the agent never saw the
+// param and the studio picker never narrowed. This guard catches that
+// class — a param the handler accepts but the agent can't see, or a
+// required-set mismatch — for every tool. (We compare the property KEY
+// set + the `required` array, not full deep-equal: per-property
+// description wording is allowed to differ between the advertised blurb
+// and the handler's, but the CONTRACT — which params, which required —
+// must not.)
+test("every orchestrator tool's advertised params + required match its handler's", async () => {
+	const { orchestratorToolHandlers } = await import(
+		"../src/tools/orchestrator/index.ts"
+	)
+	const keysOf = (s) => Object.keys(s?.properties ?? {}).sort()
+	const reqOf = (s) => [...(s?.required ?? [])].sort()
+	const mismatches = []
+	for (const def of orchestratorToolDefs) {
+		const handler = orchestratorToolHandlers.get(def.name)
+		if (!handler) continue // names-parity test owns the missing-handler case
+		const dk = keysOf(def.inputSchema)
+		const hk = keysOf(handler.inputSchema)
+		const sameKeys = JSON.stringify(dk) === JSON.stringify(hk)
+		const sameReq =
+			JSON.stringify(reqOf(def.inputSchema)) ===
+			JSON.stringify(reqOf(handler.inputSchema))
+		if (!sameKeys || !sameReq) {
+			mismatches.push(
+				`${def.name} (advertised props [${dk}] req [${reqOf(def.inputSchema)}] vs handler props [${hk}] req [${reqOf(handler.inputSchema)}])`,
+			)
+		}
+	}
+	assert.deepStrictEqual(
+		mismatches,
+		[],
+		`Tools whose advertised contract ≠ handler contract — the agent sees the wrong params. Feed both from one jsonSchemaOf(SHARED_SCHEMA):\n${mismatches.join("\n")}`,
+	)
+})
+
 // AGENT_AUTHORABLE_INTENT_FIELDS must be DISJOINT from FSM_DRIVEN_INTENT_FIELDS.
 // haiku_intent_set's tool description interpolates the authorable list verbatim;
 // if FSM fields leak in, the description advertises fields like `verified_at` /

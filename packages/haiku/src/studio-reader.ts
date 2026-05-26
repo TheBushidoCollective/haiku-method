@@ -893,13 +893,21 @@ function resolveArtifactPath(
 	intentDir: string,
 	intentSlug: string,
 ): string {
-	// Location templates look like: .haiku/intents/{intent-slug}/stages/design/DESIGN-BRIEF.md
-	// or: .haiku/intents/{intent-slug}/knowledge/DESIGN-TOKENS.md
-	// We need to resolve relative to the intent dir
-	const relativePath = locationTemplate
-		.replace(/^\.haiku\/intents\/\{intent-slug\}\//, "")
-		.replace(/\{intent-slug\}/g, intentSlug)
-	return join(intentDir, relativePath)
+	// Location templates take two shapes:
+	//   • Intent-scoped (scope: intent|stage): `.haiku/intents/{intent-slug}/…`
+	//     — resolve relative to the intent dir.
+	//   • Project-scoped (scope: project): `.haiku/knowledge/…` — long-lived
+	//     repo knowledge that persists across intents, anchored at the repo
+	//     root, NOT under the intent dir. Resolve relative to `process.cwd()`
+	//     (the same base the cursor's discovery existence check uses).
+	const withSlug = locationTemplate.replace(/\{intent-slug\}/g, intentSlug)
+	const intentPrefix = `.haiku/intents/${intentSlug}/`
+	if (withSlug.startsWith(intentPrefix)) {
+		return join(intentDir, withSlug.slice(intentPrefix.length))
+	}
+	if (withSlug.startsWith("/")) return withSlug
+	// Repo-root-relative (project-scope, or any non-intent `.haiku/` path).
+	return join(process.cwd(), withSlug)
 }
 
 /** Studio metadata. `dir` is the stable on-disk identifier; `name` is the canonical

@@ -14,8 +14,8 @@ List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, fi
 ### 1. Read your inputs
 
 - The unit body — completion criteria, designer's notes, links to produced mockup artifacts under `stages/design/artifacts/`
-- `knowledge/DESIGN-SYSTEM-ANCHOR.md` — the source-grounded token / atom inventory the designer-prep hat produced
-- `knowledge/DESIGN-TOKENS.md` and `stages/design/DESIGN-BRIEF.md` — the design-system inputs the designer was expected to honor
+- `.haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md` — the source-grounded token / atom inventory the designer-prep hat produced (long-lived repo knowledge, persists across intents)
+- `.haiku/knowledge/DESIGN-TOKENS.md` and `stages/design/DESIGN-BRIEF.md` — the design-system inputs the designer was expected to honor
 - The intent's decision register — any locked design choice that the unit must conform to
 - Sibling units' completed bodies — consistency across units is part of the verifier's mandate
 

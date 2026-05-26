@@ -1246,9 +1246,11 @@ test("resolveStatuslineState: discovery chips are ACTIVE before units exist — 
 
 		// Land ONE artifact (design-system-anchor) → that chip flips to done,
 		// the rest stay active. Existence is the single source of truth.
-		mkdirSync(join(intentDir, "knowledge"), { recursive: true })
+		// design-system-anchor is PROJECT-scope now (`.haiku/knowledge/…`,
+		// repo-rooted), so it lands at the repo root, not under the intent.
+		mkdirSync(join(repoRoot, ".haiku", "knowledge"), { recursive: true })
 		writeFileSync(
-			join(intentDir, "knowledge", "DESIGN-SYSTEM-ANCHOR.md"),
+			join(repoRoot, ".haiku", "knowledge", "DESIGN-SYSTEM-ANCHOR.md"),
 			"# anchor\n",
 		)
 		state = resolveStatuslineState()

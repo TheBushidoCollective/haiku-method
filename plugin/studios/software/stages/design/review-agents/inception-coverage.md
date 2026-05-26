@@ -39,8 +39,8 @@ The agent **MUST** dynamically enumerate the following design output locations a
 
 - Every file under `.haiku/intents/{slug}/stages/design/artifacts/`
 - `.haiku/intents/{slug}/stages/design/DESIGN-BRIEF.md`
-- `.haiku/intents/{slug}/knowledge/DESIGN-TOKENS.md`
-- `.haiku/intents/{slug}/knowledge/DESIGN-SYSTEM-ANCHOR.md`
+- `.haiku/knowledge/DESIGN-TOKENS.md`
+- `.haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md`
 
 **Short-circuit on no design output:** If none of the above paths exist, emit a single info-severity note:
 

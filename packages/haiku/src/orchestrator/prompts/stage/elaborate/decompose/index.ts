@@ -53,6 +53,7 @@ import {
 	readPhaseOverride,
 	readReviewAgentBody,
 	readReviewAgentPaths,
+	readStageArtifactDefs,
 	readStageBody,
 	readStageDef,
 	resolveStageInputs,
@@ -420,7 +421,7 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			const priorDir = `.haiku/intents/${slug}/stages/${prior}`
 			priorStageReferenceLines.push(
 				`- **${prior}**`,
-				`  - knowledge / discovery: \`${priorDir}/knowledge/\` (+ project-scope \`.haiku/knowledge/\` produced during that stage)`,
+				`  - knowledge / discovery: \`${priorDir}/knowledge/\``,
 				`  - unit specs: \`${priorDir}/units/unit-*.md\``,
 				`  - stage outputs: any files under \`${priorDir}/\` outside \`units/\` (\`.md\` reports, \`artifacts/\`)`,
 				`  - resolved feedback: \`${priorDir}/feedback/*.md\``,
@@ -452,6 +453,37 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 		if (upstreamRefPaths.length > 0) {
 			sections.push(
 				`## Unit Inputs Requirement (MANDATORY)\n\nEvery unit **MUST** have a non-empty \`inputs:\` field in its frontmatter. At minimum, every unit should reference the intent document and discovery docs. Units will be **blocked from execution** if \`inputs:\` is empty.\n\nAvailable upstream artifacts:\n\`\`\`yaml\ninputs:\n${upstreamRefPaths.map((p) => `  - ${p}`).join("\n")}\n\`\`\`\nInclude all inputs relevant to the unit's scope. Frontend/UI units should reference design artifacts. Backend units should reference behavioral specs and data contracts.`,
+			)
+		}
+	}
+
+	// Long-lived repo knowledge (scope: project) — cross-intent priors.
+	// Unlike intent-scoped discovery (produced once per intent, then
+	// skipped), these persist at `.haiku/knowledge/` across every intent.
+	// When one already exists, the agent READS it as a starting point and
+	// refreshes it in place only if this intent's work shows it diverged.
+	// This is a NON-blocking reference, never a gate signal: the cursor
+	// gates discovery on existence (cursor.ts), so forcing a "refresh"
+	// signal would re-emit every tick (the file still exists after the
+	// refresh). The read-as-prior splice gives the value (don't rediscover)
+	// without the loop.
+	{
+		const priors = readStageArtifactDefs(studio, stage)
+			.filter(
+				(d) => d.kind === "discovery" && d.scope === "project" && d.location,
+			)
+			.map((d) => ({
+				name: d.name,
+				rel: d.location.replace(/\{intent-slug\}/g, slug),
+			}))
+			.filter((p) => existsSync(join(process.cwd(), p.rel)))
+			.sort((a, b) => a.name.localeCompare(b.name))
+		if (priors.length > 0) {
+			const list = priors
+				.map((p) => `- **${p.name}** — \`${p.rel}\``)
+				.join("\n")
+			sections.push(
+				`## Long-Lived Repo Knowledge (read as prior)\n\nThis project carries knowledge that persists across intents (\`scope: project\`). It already exists on disk — read it FIRST as your starting point so you build on what the project already established instead of rediscovering or reinventing it:\n\n${list}\n\nThese are priors, not gospel. The research and work this intent requires may confirm or contradict them. If your work shows a prior has diverged from the codebase's current reality (a value moved, a pattern changed, a component was removed), update it in place during this stage — preserve what still holds, correct what doesn't. If it still holds, leave it untouched. When a unit builds on one of these, list its path in that unit's \`inputs:\` so the downstream hat reads the same prior.`,
 			)
 		}
 	}

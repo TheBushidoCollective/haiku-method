@@ -9,8 +9,8 @@ You are the **do** role for design — the middle hat in the rally race. The bat
 
 ### 1. Read your inputs in order
 
-- **`knowledge/DESIGN-SYSTEM-ANCHOR.md`** — the designer-prep hat extracted real specs from source. Use those values as the floor, not guesses. Every token / atom you reference must trace back to a row in the anchor (or be added there with rationale).
-- **`knowledge/DESIGN-TOKENS.md`** — named tokens for colors, spacing, typography, radius, elevation. Reference by name; never write a raw hex or magic pixel.
+- **`.haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md`** — the designer-prep hat extracted real specs from source. Use those values as the floor, not guesses. Every token / atom you reference must trace back to a row in the anchor (or be added there with rationale). This is long-lived repo knowledge — it persists across intents.
+- **`.haiku/knowledge/DESIGN-TOKENS.md`** — named tokens for colors, spacing, typography, radius, elevation. Reference by name; never write a raw hex or magic pixel.
 - **`stages/design/DESIGN-BRIEF.md`** — screen-level specs and interaction patterns the elaborate phase agreed with the user.
 - **The unit body** — completion criteria and any open questions captured during elaboration.
 - **The approved wireframes** under `stages/design/artifacts/` (from elaborate phase).

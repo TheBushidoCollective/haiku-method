@@ -234,8 +234,9 @@ function discoveryOutputPath(
  * discovery/output template's declared `location:` plus every current-
  * stage unit's `outputs:`. A witnessed INPUT that matches one of these is
  * the stage's OWN output evolving inside the loop — e.g. a shared baton
- * (`knowledge/DESIGN-SYSTEM-ANCHOR.md`) that every `designer-prep` hat
- * appends its per-unit section to, which is ALSO a drift-witnessed input
+ * (`.haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md`, project-scope) that every
+ * `designer-prep` hat appends its per-unit section to, which is ALSO a
+ * drift-witnessed input
  * for the pre-execute review slots. Firing `input_mutation` on it creates
  * an input==output cycle: each hat append changes the hash, drift
  * re-fires against every witnessing slot, the fix loop runs, the next

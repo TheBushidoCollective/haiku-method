@@ -1,7 +1,7 @@
 ---
 name: design-system-anchor
-location: .haiku/intents/{intent-slug}/knowledge/DESIGN-SYSTEM-ANCHOR.md
-scope: intent
+location: .haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md
+scope: project
 format: text
 required: true
 purpose: Concrete design-system specs extracted from real source — button heights, radii, color tokens, spacing scale — cited to file:line.
@@ -10,6 +10,8 @@ purpose: Concrete design-system specs extracted from real source — button heig
 # Design System Anchor
 
 Concrete design-system specs extracted from the project's source code. Every value is cited to its source file and line number. Downstream hats (designer, design-reviewer) must use these values — not guesses.
+
+This is **long-lived repo knowledge** (`scope: project`) — it persists across intents at `.haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md`. When it already exists, read it as your prior and refresh it in place only where the source has actually moved on; don't re-derive the whole system from scratch every intent.
 
 ## Content Guide
 

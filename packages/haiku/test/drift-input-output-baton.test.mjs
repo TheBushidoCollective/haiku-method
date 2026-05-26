@@ -5,8 +5,9 @@
 // also witnessed as an input — it's the loop's own output evolving, not
 // external/upstream drift. Regression for the 2026-05-20
 // drift-input-output-loop report: the design stage's `designer-prep` hats
-// append per-unit sections to `knowledge/DESIGN-SYSTEM-ANCHOR.md` and
-// `knowledge/DESIGN-TOKENS.md` (both design discovery `location:` files),
+// append per-unit sections to `.haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md` and
+// `.haiku/knowledge/DESIGN-TOKENS.md` (both design discovery `location:`
+// files — promoted to project scope, repo-rooted, persist across intents),
 // which are ALSO drift-witnessed inputs for the pre-execute review slots.
 // Every append changed the whole-file hash and re-fired drift against
 // every witnessing slot — an input==output cycle that never converges
@@ -89,11 +90,17 @@ async function sweep(intentDir) {
 
 test("stage-produced baton (design discovery location) does NOT fire input_mutation when appended in-loop", async () => {
 	await withIntent("baton", async ({ intentDir }) => {
-		// DESIGN-SYSTEM-ANCHOR.md is a design-stage discovery `location:`
-		// (knowledge/DESIGN-SYSTEM-ANCHOR.md) AND a witnessed input.
-		const baton = join(intentDir, "knowledge", "DESIGN-SYSTEM-ANCHOR.md")
+		// DESIGN-SYSTEM-ANCHOR.md is a design-stage discovery `location:`,
+		// now PROJECT-scope (`.haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md`,
+		// repo-rooted), AND a witnessed input. The witness key + the
+		// produced-set key both normalize to the repo-relative form, so the
+		// in-loop append exemption still matches at the promoted path.
+		const repoRoot = join(intentDir, "..", "..", "..")
+		const batonRel = ".haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md"
+		const baton = join(repoRoot, batonRel)
+		mkdirSync(dirname(baton), { recursive: true })
 		writeFileSync(baton, matter.stringify("# Anchor\n\n## Section 1\n", { title: "anchor" }))
-		await signUnitWithInput(intentDir, "unit-01", "knowledge/DESIGN-SYSTEM-ANCHOR.md")
+		await signUnitWithInput(intentDir, "unit-01", batonRel)
 
 		// A designer-prep hat appends Section 2 (additive, in-loop write).
 		writeFileSync(
@@ -103,7 +110,7 @@ test("stage-produced baton (design discovery location) does NOT fire input_mutat
 
 		const result = await sweep(intentDir)
 		const mut = result.events.filter(
-			(e) => e.kind === "input_mutation" && e.file === "knowledge/DESIGN-SYSTEM-ANCHOR.md",
+			(e) => e.kind === "input_mutation" && e.file === batonRel,
 		)
 		assert.equal(
 			mut.length,

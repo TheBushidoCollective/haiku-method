@@ -346,7 +346,7 @@ No SessionStart hooks are registered. `inject-context` and `ensure-deps` were re
 ### Software Studio Input/Output Chain
 
 - [ ] Inception produces discovery `discovery` → written to `.haiku/intents/{slug}/knowledge/DISCOVERY.md`
-- [ ] Design consumes inception/discovery (discovery); produces discovery `design-brief` (→ `stages/design/DESIGN-BRIEF.md`), discovery `design-tokens` (→ `knowledge/DESIGN-TOKENS.md`), and output `design-artifacts` (→ `stages/design/artifacts/` — hi-fi mockups stored inside the intent as part of the spec)
+- [ ] Design consumes inception/discovery (discovery); produces discovery `design-brief` (→ `stages/design/DESIGN-BRIEF.md`), discovery `design-tokens` (→ project-scope `.haiku/knowledge/DESIGN-TOKENS.md`), and output `design-artifacts` (→ `stages/design/artifacts/` — hi-fi mockups stored inside the intent as part of the spec)
 - [ ] Product consumes inception/discovery, design/design-brief, design/design-tokens (all discovery); produces discovery `behavioral-spec` (→ `knowledge/BEHAVIORAL-SPEC.md`) and discovery `data-contracts` (→ `knowledge/DATA-CONTRACTS.md`)
 - [ ] Development consumes discovery artifacts from inception, design, product + output `design-artifacts` from design; produces output `code` (→ project source tree) and discovery `architecture` (→ `.haiku/knowledge/ARCHITECTURE.md`)
 - [ ] Operations consumes inception/discovery, product/behavioral-spec (discovery) + development/code (output), development/architecture (discovery)

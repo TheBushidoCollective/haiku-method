@@ -8,7 +8,7 @@
 //   ⬢ <intent> · <pipeline> <stage> <flow> <phase> · <aggregate>
 //
 //   pipeline  ⬢ done (green) · ⬣ active (amber, magenta when gated) · ⬡ pending (dim)
-//   flow      ❯ flowing  ·  ⊘ gated/blocked
+//   flow      ❯ flowing  ·  ‖ gated (parked on a human/external gate)
 //   delimiter ·  dim microdot between the three groups (who · where · how-much)
 //   phase     color-coded — the fastest "what's happening" signal
 //
@@ -68,7 +68,7 @@ export interface StatuslineState {
 	/** Phase kind — drives the phase color + the flow glyph. */
 	phaseKind: StatuslinePhaseKind
 	/** True when the workflow is parked on a human/external gate. Flips
-	 *  the flow mark to ⊘ and the middle group to magenta. */
+	 *  the flow mark to ‖ (paused/held) and the middle group to magenta. */
 	gated: boolean
 	/** Right-hand aggregate ("7/12 units", "2/6 closed", "decomposing").
 	 *  Empty string renders no third group. */
@@ -131,7 +131,12 @@ const HEX_PENDING = "⬡"
 const WORDMARK = "H·AI·K·U"
 const BRAND = "⬢"
 const FLOW = "❯"
-const GATED = "⊘"
+// Gated = parked at a human/external gate, waiting on you — NOT an error.
+// `⊘` (the old mark) is a prohibition / "no entry" sign and read as a
+// failure. `‖` is a pause bar: the natural "held, flow forward (❯) is
+// paused" counterpart, and the magenta hue carries the "your turn"
+// attention without alarm.
+const GATED = "‖"
 const DOT = "·"
 const PIP_DONE = "▰"
 const PIP_PENDING = "▱"

@@ -20,9 +20,11 @@ import {
 	type DriftEvent,
 	runDriftSweep,
 } from "../orchestrator/workflow/drift-sweep.js"
+import { derivePosition } from "../orchestrator/workflow/cursor.js"
 import {
 	deriveProgressTrack,
 	deriveStageMilestones,
+	snapshotMilestoneIndex,
 } from "../orchestrator/workflow/progress-track.js"
 import { getSession, type ReviewSession } from "../sessions.js"
 import { intentDir, parseFrontmatter } from "../state-tools.js"
@@ -337,7 +339,30 @@ export function respondSessionApi(
 					})
 					if (track.total > 0) {
 						current.milestones = track.steps
-						current.progress_index = track.index
+						// Place the active milestone from the LIVE cursor action,
+						// not the stamp-derived `track.index` (which lags the
+						// action — an intent at the approval gate still reads
+						// "spec review" from stamps alone). This is the SAME
+						// mapping the status line uses, so the SPA's phase strip
+						// and the status line agree (reported 2026-05-26: status
+						// line "approval gate" vs SPA "spec review"). Fall back to
+						// the track index for actions with no stage milestone.
+						let activeIdx = track.index
+						try {
+							const pos = derivePosition({
+								slug: session.intent_slug,
+								intentDir: intentDir(session.intent_slug),
+								studio: current.studio as string,
+							})
+							const snapIdx = snapshotMilestoneIndex(
+								pos.action as { kind?: string } | null,
+								track.steps,
+							)
+							if (snapIdx >= 0) activeIdx = snapIdx
+						} catch {
+							/* fall back to the stamp-derived index */
+						}
+						current.progress_index = activeIdx
 						current.progress_total = track.total
 					}
 				} catch {

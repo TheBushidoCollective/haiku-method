@@ -54,6 +54,101 @@ export interface ProgressTrack {
 
 type Fm = Record<string, unknown>
 
+// ── Action → milestone index (shared by the status line AND the SPA) ──
+// The track's `index` is the first NOT-done milestone from on-disk stamps,
+// which LAGS the live cursor action (a stamp lands a tick after the action
+// fires — so an intent at the approval gate can still read "spec review"
+// from stamps alone). Both surfaces must instead place the active milestone
+// from the LIVE action, or the status line and the SPA's phase strip
+// disagree (reported 2026-05-26: status line "approval gate" vs SPA "spec
+// review"). This is the single shared mapper; callers pass the action they
+// got from `derivePosition` and fall back to the track index only when the
+// action carries no stage milestone.
+type MilestoneAction = {
+	kind?: string
+	role?: string
+	gate_kind?: string
+	dispatches?: unknown[]
+}
+
+/** Roles that run one-at-a-time (no parallel fan-out): the spec gate, the
+ *  mechanical quality-gate runner, the human gate. */
+const SINGLE_ACTOR_ROLES = new Set(["spec", "quality_gates", "user"])
+export const rawRoleOf = (key: string): string =>
+	key.includes(":") ? key.slice(key.indexOf(":") + 1) : key
+
+/** True when the dispatched action is a PARALLEL fan-out — more than one
+ *  agent runs at once (a multi-dispatch batch, or a single non-single-actor
+ *  role). */
+export function actionIsFanOut(action: MilestoneAction | null): boolean {
+	if (!action) return false
+	if (Array.isArray(action.dispatches) && action.dispatches.length > 1) {
+		return true
+	}
+	const role = action.role
+	return (
+		typeof role === "string" && role.length > 0 && !SINGLE_ACTOR_ROLES.has(role)
+	)
+}
+
+export { SINGLE_ACTOR_ROLES }
+
+/** Locate the milestone index the DISPATCHED action sits at, within the
+ *  given (grouped) milestone steps. Returns -1 for actions with no stage
+ *  milestone (the caller falls back to the track index). */
+export function snapshotMilestoneIndex(
+	action: MilestoneAction | null,
+	steps: ReadonlyArray<{ key: string }>,
+): number {
+	if (!action) return -1
+	const k = action.kind as string
+	const role = action.role
+	const gateKind = action.gate_kind
+	const adversarial = actionIsFanOut(action)
+	const find = (pred: (key: string) => boolean) =>
+		steps.findIndex((s) => pred(s.key))
+	switch (k) {
+		case "elaborate_loop":
+			return find((key) => key === "elaborate")
+		case "dispatch_review":
+			return adversarial
+				? find((key) => key.startsWith("review:adversarial"))
+				: find((key) => key === `review:${role ?? "spec"}`)
+		case "start_unit_hat":
+		case "start_units":
+		case "execute":
+		case "continue_unit":
+		case "continue_units":
+			return find((key) => key === "execute")
+		case "dispatch_approval":
+			return adversarial
+				? find((key) => key.startsWith("approve:adversarial"))
+				: find((key) => key === `approve:${role ?? "spec"}`)
+		case "dispatch_quality_gates": {
+			const i = find((key) => key === "approve:quality_gates")
+			return i >= 0 ? i : find((key) => key === "intent-quality-gates")
+		}
+		case "user_gate":
+			return gateKind === "approval"
+				? find((key) => key === "approve:user")
+				: find((key) => key === "review:user")
+		case "write_brief":
+			return find((key) => key === "review:user")
+		case "intent_review":
+			if (role === "user") return find((key) => key === "intent-review:user")
+			return adversarial
+				? find((key) => key.startsWith("intent-review:adversarial"))
+				: find((key) => key === `intent-review:${role ?? "spec"}`)
+		case "record_reflection":
+			return find((key) => key === "reflection")
+		case "seal_intent":
+		case "sealed":
+			return find((key) => key === "seal")
+		default:
+			return -1
+	}
+}
+
 function reviewsOf(fm: Fm): Record<string, unknown> {
 	const r = fm.reviews
 	return r && typeof r === "object" ? (r as Record<string, unknown>) : {}

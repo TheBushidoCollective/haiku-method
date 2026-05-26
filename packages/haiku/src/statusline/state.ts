@@ -30,9 +30,17 @@ import {
 	isStageComplete,
 } from "../orchestrator/workflow/cursor.js"
 import {
+	actionIsFanOut,
 	deriveProgressRoleSteps,
 	deriveProgressTrack,
+	rawRoleOf,
+	SINGLE_ACTOR_ROLES,
+	snapshotMilestoneIndex,
 } from "../orchestrator/workflow/progress-track.js"
+// Re-exported for callers/tests that have always imported these from the
+// statusline module; the canonical home is now progress-track (shared with
+// the SPA's phase strip so they can't drift).
+export { actionIsFanOut, snapshotMilestoneIndex }
 import {
 	type FeedbackSeverity,
 	feedbackSeverityRank,
@@ -500,93 +508,6 @@ function feedbackBars(dir: string, fixHats: string[]): ItemBar[] {
 		})
 	}
 	return out
-}
-
-/** Roles that run one-at-a-time (no parallel fan-out): the spec gate, the
- *  mechanical quality-gate runner, the human gate. They get no chip row —
- *  it would just restate the phase label. */
-const SINGLE_ACTOR_ROLES = new Set(["spec", "quality_gates", "user"])
-const rawRoleOf = (key: string): string =>
-	key.includes(":") ? key.slice(key.indexOf(":") + 1) : key
-
-/** True when the dispatched action is a PARALLEL fan-out — more than one
- *  agent runs at once, so its per-agent chip row carries information. A
- *  multi-dispatch batch (`dispatches.length > 1`) or a single non-single-
- *  actor role both qualify. */
-export function actionIsFanOut(action: CursorAction | null): boolean {
-	if (!action) return false
-	const dispatches = (action as { dispatches?: unknown[] }).dispatches
-	if (Array.isArray(dispatches) && dispatches.length > 1) return true
-	const role = (action as { role?: string }).role
-	return (
-		typeof role === "string" && role.length > 0 && !SINGLE_ACTOR_ROLES.has(role)
-	)
-}
-
-/** Locate the milestone index the DISPATCHED action sits at, within the
- *  given (grouped) milestone steps. The phase label is read from this same
- *  snapshot action, so deriving the pip done/active boundary from it — rather
- *  than from a live re-derive of the unit frontmatter — keeps the pips, the
- *  label, and the chips on ONE clock. Returns -1 for actions with no stage
- *  milestone (the caller falls back to the live track index). */
-export function snapshotMilestoneIndex(
-	action: CursorAction | null,
-	steps: ReadonlyArray<{ key: string }>,
-): number {
-	if (!action) return -1
-	const k = action.kind as string
-	const role = (action as { role?: string }).role
-	const gateKind = (action as { gate_kind?: string }).gate_kind
-	const adversarial = actionIsFanOut(action)
-	const find = (pred: (key: string) => boolean) =>
-		steps.findIndex((s) => pred(s.key))
-	switch (k) {
-		case "elaborate_loop":
-			return find((key) => key === "elaborate")
-		case "dispatch_review":
-			return adversarial
-				? find((key) => key.startsWith("review:adversarial"))
-				: find((key) => key === `review:${role ?? "spec"}`)
-		case "start_unit_hat":
-		case "start_units":
-		case "execute":
-		case "continue_unit":
-		case "continue_units":
-			return find((key) => key === "execute")
-		case "dispatch_approval":
-			return adversarial
-				? find((key) => key.startsWith("approve:adversarial"))
-				: find((key) => key === `approve:${role ?? "spec"}`)
-		case "dispatch_quality_gates": {
-			// Stage scope → `approve:quality_gates`; intent scope → the intent
-			// track's `intent-quality-gates`.
-			const i = find((key) => key === "approve:quality_gates")
-			return i >= 0 ? i : find((key) => key === "intent-quality-gates")
-		}
-		case "user_gate":
-			return gateKind === "approval"
-				? find((key) => key === "approve:user")
-				: find((key) => key === "review:user")
-		case "write_brief":
-			// The brief is written just before the review user gate.
-			return find((key) => key === "review:user")
-		case "intent_review":
-			// Intent-completion review (intent track). `spec` and the `user`
-			// gate are their own pips; the adversarial fan-out is ONE grouped
-			// `intent-review:adversarial` pip (matches the "adversarial review"
-			// label + the parallel dispatch).
-			if (role === "user") return find((key) => key === "intent-review:user")
-			return adversarial
-				? find((key) => key.startsWith("intent-review:adversarial"))
-				: find((key) => key === `intent-review:${role ?? "spec"}`)
-		case "record_reflection":
-			return find((key) => key === "reflection")
-		case "seal_intent":
-		case "sealed":
-			return find((key) => key === "seal")
-		default:
-			return -1
-	}
 }
 
 /** Resolve the current project's status-line state, or null when there

@@ -1688,3 +1688,50 @@ test("snapshotMilestoneIndex: action maps to the matching milestone (label↔pip
 		"quality gates is single-actor (no chips)",
 	)
 })
+
+test("snapshotMilestoneIndex: user_gate maps by gate_kind — approval is LATE, spec is EARLY (SPA↔statusline coherence)", async () => {
+	// The 2026-05-26 bug: the SPA placed an intent at the APPROVAL gate on
+	// "spec review" (2/10) while the status line correctly said "approval
+	// gate". Both now share this mapper via progress-track; assert it from
+	// the canonical home AND the statusline re-export so they can't drift.
+	const fromCanonical = await import(
+		`${SRC}orchestrator/workflow/progress-track.ts`
+	)
+	const fromStatusline = await import(`${SRC}statusline/state.ts`)
+	const steps = [
+		{ key: "elaborate" },
+		{ key: "review:spec" },
+		{ key: "review:adversarial:0" },
+		{ key: "review:user" },
+		{ key: "execute" },
+		{ key: "approve:spec" },
+		{ key: "approve:adversarial:0" },
+		{ key: "approve:quality_gates" },
+		{ key: "approve:user" },
+		{ key: "observations" },
+	]
+	for (const mod of [fromCanonical, fromStatusline]) {
+		const approvalIdx = mod.snapshotMilestoneIndex(
+			{ kind: "user_gate", gate_kind: "approval" },
+			steps,
+		)
+		const specIdx = mod.snapshotMilestoneIndex(
+			{ kind: "user_gate", gate_kind: "spec" },
+			steps,
+		)
+		assert.equal(
+			steps[approvalIdx].key,
+			"approve:user",
+			"user_gate approval → approve:user (post-execute, late)",
+		)
+		assert.equal(
+			steps[specIdx].key,
+			"review:user",
+			"user_gate spec → review:user (pre-execute, early)",
+		)
+		assert.ok(
+			approvalIdx > specIdx,
+			"the approval gate is LATER than the spec gate — not 2/10 spec review",
+		)
+	}
+})

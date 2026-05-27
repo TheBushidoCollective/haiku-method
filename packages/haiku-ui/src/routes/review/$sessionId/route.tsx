@@ -44,7 +44,10 @@ import type { AnnotationPin } from "../../../organisms/AnnotationCanvas"
 import { AnnotationModeFab } from "../../../organisms/AnnotationModeFab"
 import { FeedbackRail } from "../../../organisms/FeedbackRail"
 import { FeedbackSheet } from "../../../organisms/FeedbackSheet"
-import { RAIL_GUTTER_CLASS } from "../../../organisms/feedbackRailLayout"
+import {
+	RAIL_GUTTER_CLASS,
+	RAIL_GUTTER_MARGIN_CLASS,
+} from "../../../organisms/feedbackRailLayout"
 import type { InlineCommentEntry } from "../../../organisms/InlineComments"
 import { FeedbackComposer } from "../../../pages/review/FeedbackComposer"
 import { FeedbackPanelBody } from "../../../pages/review/FeedbackPanelBody"
@@ -52,6 +55,7 @@ import { FeedbackSidebar } from "../../../pages/review/FeedbackSidebar"
 import { GateDecisionBar } from "../../../pages/review/GateDecisionBar"
 import { IntentCompleteView } from "../../../pages/review/IntentCompleteView"
 import type { ReviewPageSessionData } from "../../../pages/review/shared/session-data"
+import { useHeaderHeightVar } from "../../../pages/review/shared/useHeaderHeightVar"
 import { useFeedbackSidebarController } from "../../../pages/review/useFeedbackSidebarController"
 import { useIsMobile } from "../../../pages/review/useIsMobile"
 import { usePageTitle } from "../../../shell/PageTitleContext"
@@ -241,6 +245,9 @@ function ReviewLayoutLoaded({
 }): React.ReactElement {
 	const navigate = useNavigate()
 	const routerState = useRouterState()
+	// Keep `--review-header-h` on the page root in sync with the dynamic
+	// header height so the left rail + slide-out drawer anchor below it.
+	const { rootRef, headerRef } = useHeaderHeightVar()
 
 	// After a successful Approve / External decision render the terminal
 	// success card + try to close the tab. MCP review usually opens via
@@ -462,10 +469,14 @@ function ReviewLayoutLoaded({
 		<ReviewRouteProvider value={contextValue}>
 			<FeedbackProvider intent={intentSlug} stage={selectedStage}>
 				<div
+					ref={rootRef}
 					data-testid="review-page-ready"
 					className="h-screen overflow-hidden flex flex-col bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100"
 				>
-					<HeaderLandmark className="shrink-0 z-40 bg-white/80 dark:bg-stone-900/80 backdrop-blur-sm border-b border-stone-200 dark:border-stone-800">
+					<HeaderLandmark
+						ref={headerRef}
+						className="shrink-0 z-40 bg-white/80 dark:bg-stone-900/80 backdrop-blur-sm border-b border-stone-200 dark:border-stone-800"
+					>
 						<div className="px-4 sm:px-6 py-3 flex items-center justify-between border-b border-stone-100 dark:border-stone-800/60">
 							<div className="flex items-center gap-3 min-w-0">
 								<span className="text-base font-bold tracking-tight text-stone-900 dark:text-stone-100">
@@ -629,7 +640,7 @@ function ReviewLayoutLoaded({
 					    sidebar, so it owns its own decision state. */}
 					{isMobile && !isIntentTerminal && (
 						<div
-							className={`sticky bottom-0 z-[60] w-full border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 ${RAIL_GUTTER_CLASS}`}
+							className={`sticky bottom-0 z-[60] border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 ${RAIL_GUTTER_MARGIN_CLASS}`}
 						>
 							<GateDecisionBar
 								stage={chromeSelectedStage}
@@ -658,7 +669,7 @@ function ReviewLayoutLoaded({
 					    GateDecisionBar when that bar is docked. */}
 					<AnnotationModeFab
 						bottomClass={
-							isMobile && !isIntentTerminal ? "bottom-44" : undefined
+							isMobile && !isIntentTerminal ? "bottom-28" : undefined
 						}
 					/>
 				</div>

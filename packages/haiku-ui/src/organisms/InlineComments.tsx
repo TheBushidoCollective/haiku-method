@@ -429,6 +429,29 @@ export function InlineComments({
 		redrawHighlights()
 	}
 
+	// Escape cancels an in-progress comment in EITHER popover mode (the
+	// "+ Comment" prompt and the editing textarea). Scoped to when the
+	// popover is open (popoverPos set); torn down on close. The textarea's
+	// own onKeyDown also handles Escape — this document-level listener
+	// covers the prompt-mode case (the + button isn't a textarea, so it
+	// has no onKeyDown) and any focus-outside-the-textarea case. When it
+	// consumes a cancel it stops propagation so Escape doesn't also reach
+	// an outer handler (e.g. the FeedbackSheet's close-on-Escape).
+	// biome-ignore lint/correctness/useExhaustiveDependencies: handleCancelComment is a stable closure over refs/setters; re-binding only on popover open/close is correct
+	useEffect(() => {
+		if (!popoverPos) return
+		function handleEsc(e: KeyboardEvent) {
+			if (e.key !== "Escape") return
+			e.preventDefault()
+			e.stopPropagation()
+			handleCancelComment()
+		}
+		// Capture phase so we consume Escape before it bubbles to other
+		// document-level keydown handlers (FeedbackSheet, etc.).
+		document.addEventListener("keydown", handleEsc, true)
+		return () => document.removeEventListener("keydown", handleEsc, true)
+	}, [popoverPos])
+
 	// Close popover on outside clicks (but not when the click is inside
 	// the content or the popover itself).
 	useEffect(() => {
@@ -507,18 +530,43 @@ export function InlineComments({
 					style={{ left: popoverPos.x, top: popoverPos.y }}
 				>
 					{popoverMode === "button" ? (
-						<button
-							type="button"
-							className="px-3 py-1.5 cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-700 transition-colors rounded-lg text-left"
-							aria-label="Add comment on selected text"
-							onClick={handleShowCommentInput}
-						>
-							<span className="text-sm font-medium text-teal-600 dark:text-teal-400">
-								+ Comment
-							</span>
-						</button>
+						<div className="flex items-center">
+							<button
+								type="button"
+								className="px-3 py-1.5 cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-700 transition-colors rounded-l-lg text-left"
+								aria-label="Add comment on selected text"
+								onClick={handleShowCommentInput}
+							>
+								<span className="text-sm font-medium text-teal-600 dark:text-teal-400">
+									+ Comment
+								</span>
+							</button>
+							<button
+								type="button"
+								onClick={handleCancelComment}
+								aria-label="Cancel comment"
+								data-testid="inline-comment-cancel"
+								className="px-2 py-1.5 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 transition-colors rounded-r-lg"
+							>
+								<span aria-hidden="true">&times;</span>
+							</button>
+						</div>
 					) : (
 						<div className="p-3 w-64">
+							<div className="flex items-center justify-between mb-2">
+								<span className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
+									Comment
+								</span>
+								<button
+									type="button"
+									onClick={handleCancelComment}
+									aria-label="Cancel comment"
+									data-testid="inline-comment-cancel"
+									className="-mr-1 -mt-1 px-1.5 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200 transition-colors rounded"
+								>
+									<span aria-hidden="true">&times;</span>
+								</button>
+							</div>
 							<textarea
 								ref={popoverTextareaRef}
 								className="w-full min-h-[60px] p-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 resize-y"

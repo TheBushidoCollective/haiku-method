@@ -152,12 +152,15 @@ describe("FeedbackRail — canonical a11y classes", () => {
 })
 
 describe("FeedbackRail — full-height left-edge column geometry", () => {
-	it("is a full-height column pinned to the left edge (left-0 + top-0 + bottom-0 + fixed width), not a bottom FAB nor a floating centered tab", () => {
+	it("is a full-height column pinned to the left edge below the header (left-0 + top-[var(--review-header-h)] + bottom-0 + fixed width), not a bottom FAB nor a floating centered tab", () => {
 		render(<FeedbackRail open={false} onToggle={() => {}} />)
 		const btn = screen.getByRole("button")
 		const cls = btn.className
 		expect(cls).toMatch(/\bleft-0\b/)
-		expect(cls).toMatch(/\btop-0\b/)
+		// Top is pinned to the header's bottom edge via the CSS var (the rail
+		// sits BELOW the app header, aligned with the drawer), not top-0.
+		expect(cls).toMatch(/top-\[var\(--review-header-h/)
+		expect(cls).not.toMatch(/\btop-0\b/)
 		expect(cls).toMatch(/\bbottom-0\b/)
 		expect(cls).toMatch(/\bfixed\b/)
 		// Reserved width — matches RAIL_WIDTH_CLASS / RAIL_GUTTER_CLASS.

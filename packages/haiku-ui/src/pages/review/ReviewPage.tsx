@@ -29,7 +29,10 @@ import { SubmitSuccess } from "../../molecules/SubmitSuccess"
 import type { AnnotationPin } from "../../organisms/AnnotationCanvas"
 import { FeedbackRail } from "../../organisms/FeedbackRail"
 import { FeedbackSheet } from "../../organisms/FeedbackSheet"
-import { RAIL_GUTTER_CLASS } from "../../organisms/feedbackRailLayout"
+import {
+	RAIL_GUTTER_CLASS,
+	RAIL_GUTTER_MARGIN_CLASS,
+} from "../../organisms/feedbackRailLayout"
 import type { InlineCommentEntry } from "../../organisms/InlineComments"
 import type { ReviewAnnotations } from "../../types"
 import { ArtifactsPane } from "./ArtifactsPane"
@@ -41,6 +44,7 @@ import { IntentDriftAssessmentsSection } from "./IntentDriftAssessmentsSection"
 import { RereviewBanner } from "./shared/RereviewBanner"
 import type { ReviewPageSessionData } from "./shared/session-data"
 import type { ReviewDetailKind, ReviewTab } from "./shared/stage-tabs"
+import { useHeaderHeightVar } from "./shared/useHeaderHeightVar"
 import { StageReview } from "./stage/StageReview"
 import { useFeedbackSidebarController } from "./useFeedbackSidebarController"
 import { useIsMobile } from "./useIsMobile"
@@ -436,6 +440,9 @@ export function ReviewPage({
 	const gateModes = resolveGateModes(session.gate_type)
 	const gateBadges = gateModes.map(gateBadgeCopy)
 	const isMobile = useIsMobile()
+	// Keep `--review-header-h` on the page root in sync with the dynamic
+	// header height so the left rail + slide-out drawer anchor below it.
+	const { rootRef, headerRef } = useHeaderHeightVar()
 
 	// Stepper navigation — which stage's content the main pane is showing.
 	// Defaults to the active stage (what the intent is currently on).
@@ -556,10 +563,14 @@ export function ReviewPage({
 	return (
 		<FeedbackProvider intent={intentSlug} stage={selectedStage}>
 			<div
+				ref={rootRef}
 				data-testid="review-page-ready"
 				className="h-screen overflow-hidden flex flex-col bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100"
 			>
-				<HeaderLandmark className="shrink-0 z-40 bg-white/80 dark:bg-stone-900/80 backdrop-blur-sm border-b border-stone-200 dark:border-stone-800">
+				<HeaderLandmark
+					ref={headerRef}
+					className="shrink-0 z-40 bg-white/80 dark:bg-stone-900/80 backdrop-blur-sm border-b border-stone-200 dark:border-stone-800"
+				>
 					<div className="px-4 sm:px-6 py-3 flex items-center justify-between border-b border-stone-100 dark:border-stone-800/60">
 						<div className="flex items-center gap-3 min-w-0">
 							<span className="text-base font-bold tracking-tight text-stone-900 dark:text-stone-100">
@@ -779,7 +790,7 @@ export function ReviewPage({
 				    post-submit screens, which have no stage gate to drive. */}
 				{isMobile && !viewingIntent && !submittedDecision && (
 					<div
-						className={`sticky bottom-0 z-[60] w-full border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 ${RAIL_GUTTER_CLASS}`}
+						className={`sticky bottom-0 z-[60] border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 ${RAIL_GUTTER_MARGIN_CLASS}`}
 					>
 						<GateDecisionBar
 							stage={selectedStage ?? activeStage}

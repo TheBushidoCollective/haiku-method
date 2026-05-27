@@ -69,13 +69,16 @@ export interface FeedbackRailProps {
 }
 
 const RAIL_CLASSES = [
-	// Full-height column pinned to the LEFT edge. The content container
-	// reserves a matching `RAIL_GUTTER_CLASS` left-padding gutter so content
-	// never renders underneath this column — closed rail overlays NOTHING.
-	// z-30 sits BELOW the header (a flex item at z-40, whose z-index applies)
-	// so the rail's top can't paint over the header's theme toggle, and BELOW
-	// the drawer (z-50) + gate bar (z-[60]). It's still above page content.
-	`fixed left-0 top-0 bottom-0 z-30 ${RAIL_WIDTH_CLASS}`,
+	// Column pinned to the LEFT edge, starting BELOW the app header. The
+	// content container reserves a matching `RAIL_GUTTER_CLASS` left-padding
+	// gutter so content never renders underneath this column — closed rail
+	// overlays NOTHING. z-30 sits BELOW the header (a flex item at z-40, whose
+	// z-index applies) and BELOW the drawer (z-50) + gate bar (z-[60]); it's
+	// still above page content. The top is pinned to the header's bottom edge
+	// via the `--review-header-h` CSS var the review page writes (same anchor
+	// as the drawer, so rail + drawer top-align below the header). Falls back
+	// to `0px` when the var is unset.
+	`fixed left-0 top-[var(--review-header-h,0px)] bottom-0 z-30 ${RAIL_WIDTH_CLASS}`,
 	// Only the RIGHT corners round (left edge is flush with the viewport).
 	"rounded-r-lg",
 	"bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800",

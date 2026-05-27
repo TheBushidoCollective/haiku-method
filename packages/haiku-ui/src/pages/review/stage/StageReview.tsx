@@ -26,7 +26,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, SectionHeading } from "../../../atoms/Card"
 import { OutputCardMenu } from "../../../molecules/OutputCardMenu"
 import { type TabDef, Tabs } from "../../../molecules/Tabs"
-import { UnitMetaPanel } from "../../../molecules/UnitMetaPanel"
+import {
+	type ArtifactIndex,
+	type ArtifactIndexEntry,
+	UnitMetaPanel,
+} from "../../../molecules/UnitMetaPanel"
 import { ArtifactAnnotator } from "../../../organisms/ArtifactAnnotator"
 import {
 	type InlineCommentEntry,
@@ -429,6 +433,33 @@ export function StageReview({
 	const outputVMs: ArtifactViewModel[] = outputArtifacts.map(toArtifactVM)
 	const otherVMs: ArtifactViewModel[] = otherFiles.map(toArtifactVM)
 
+	// Artifact index for unit-input/output/depends_on link resolution
+	// (UnitMetaPanel). Built from the FULL session artifact lists — NOT the
+	// per-stage filtered views above — because a unit's input can point at an
+	// artifact produced by ANOTHER stage (e.g. a development unit consumes
+	// `product/ACCEPTANCE-CRITERIA.md`, produced by the product stage). The
+	// index keys each artifact by its intent-dir-relative path (the artifact's
+	// `name`) so `pathToReviewRoute` can resolve a bare intent-relative path
+	// that carries no `stages/`/`knowledge/` prefix to the producing stage's
+	// outputs / knowledge / other tab. First writer wins (output > knowledge >
+	// other) so a path declared as a real output links to its Outputs view.
+	const artifactIndex = useMemo<ArtifactIndex>(() => {
+		const index: ArtifactIndex = new Map()
+		const add = (name: string, entry: ArtifactIndexEntry) => {
+			if (!index.has(name)) index.set(name, entry)
+		}
+		for (const a of session.output_artifacts ?? []) {
+			add(a.name, { stage: a.stage, kind: "outputs", name: a.name })
+		}
+		for (const a of session.stage_artifacts ?? []) {
+			add(a.name, { stage: a.stage, kind: "knowledge", name: a.name })
+		}
+		for (const a of session.other_files ?? []) {
+			add(a.name, { stage: a.stage, kind: "other", name: a.name })
+		}
+		return index
+	}, [session.output_artifacts, session.stage_artifacts, session.other_files])
+
 	// Pre-compute feedback → target maps (keyed by unit slug / knowledge name / output name)
 	const { feedbackByUnit, feedbackByKnowledge, feedbackByOutput } =
 		useMemo(() => {
@@ -671,6 +702,7 @@ export function StageReview({
 						stageId={stageName}
 						sessionId={sessionId}
 						intentSlug={intentSlug}
+						artifactIndex={artifactIndex}
 						feedbackByUnit={feedbackByUnit}
 						walkIndex={walkIndex}
 						walkTotal={walkthroughItems.length}
@@ -1510,6 +1542,7 @@ function UnitDetailView({
 	stageId,
 	sessionId,
 	intentSlug,
+	artifactIndex,
 	feedbackByUnit,
 	walkIndex,
 	walkTotal,
@@ -1529,6 +1562,7 @@ function UnitDetailView({
 	stageId: string
 	sessionId: string
 	intentSlug: string | null
+	artifactIndex?: ArtifactIndex
 	feedbackByUnit: Map<string, FeedbackItemData[]>
 	walkIndex: number
 	walkTotal: number
@@ -1667,6 +1701,7 @@ function UnitDetailView({
 						bolt={fm.bolt}
 						sessionId={sessionId}
 						currentStage={stageId}
+						artifactIndex={artifactIndex}
 					/>
 					{current.rawContent &&
 						(() => {

@@ -22,16 +22,11 @@ import { buildBrowseUrl } from "@/lib/browse/url"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
 import { BrowseMarkdown } from "./BrowseMarkdown"
+import { FilePreview, isTextFile } from "./FilePreview"
 import { RESOLUTION_BADGES, SEVERITY_BADGES } from "./feedback-badges"
 import { FixHistory } from "./IterationHistory"
 import { IntentKanban } from "./KanbanView"
 import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
-import {
-	KiCanvasViewer,
-	ModelViewer,
-	TracespaceViewer,
-	TscircuitViewer,
-} from "./SpecializedViewers"
 import { UnitDetailView } from "./UnitDetailView"
 
 function titleCase(s: string): string {
@@ -1176,174 +1171,307 @@ function ArtifactThumbnail({
 	return null
 }
 
-/** Renders a markdown artifact as collapsible with a fullscreen option. */
-function MarkdownArtifactCard({
-	artifact,
-	assets,
-	host,
-}: {
-	artifact: HaikuArtifact
-	assets?: HaikuAsset[]
-	host?: string
-}) {
-	const [expanded, setExpanded] = useState(false)
-	const [fullscreen, setFullscreen] = useState(false)
 
+/** Group a stage's artifacts by their top-level directory (`proof`, `artifacts`,
+ *  …). Files that sit directly at the stage root (no slash in the name) land in
+ *  the `(other)` group. Groups are sorted by name with `(other)` last so the
+ *  catch-all reads as a footer, not a lead. */
+function groupArtifactsByDir(
+	artifacts: HaikuArtifact[],
+): Array<{ dir: string; artifacts: HaikuArtifact[] }> {
+	const byDir = new Map<string, HaikuArtifact[]>()
+	for (const a of artifacts) {
+		const slash = a.name.indexOf("/")
+		const dir = slash >= 0 ? a.name.slice(0, slash) : "(other)"
+		const list = byDir.get(dir)
+		if (list) list.push(a)
+		else byDir.set(dir, [a])
+	}
+	return Array.from(byDir.entries())
+		.map(([dir, list]) => ({ dir, artifacts: list }))
+		.sort((x, y) => {
+			if (x.dir === "(other)") return 1
+			if (y.dir === "(other)") return -1
+			return x.dir.localeCompare(y.dir)
+		})
+}
+
+/** One per-directory section of stage files. Image/HTML files render as a
+ *  clickable thumbnail grid (opening the existing fullscreen modal); everything
+ *  else renders inline via the type-dispatching FilePreview. */
+function StageDirSection({
+	dir,
+	artifacts,
+	host,
+	provider,
+	assets,
+	baseDir,
+	onOpenFullscreen,
+}: {
+	dir: string
+	artifacts: HaikuArtifact[]
+	host?: string
+	provider?: BrowseProvider
+	assets?: HaikuAsset[]
+	baseDir: (name: string) => string
+	onOpenFullscreen: (a: HaikuArtifact) => void
+}) {
+	const thumbnails = artifacts.filter(
+		(a) => a.type === "image" || (a.type === "html" && a.content),
+	)
+	const inline = artifacts.filter((a) => !thumbnails.includes(a))
 	return (
-		<>
-			<div className="rounded-lg border border-stone-200 dark:border-stone-700">
-				<div className="flex w-full items-center justify-between px-4 py-3 text-left text-sm">
-					<button
-						type="button"
-						onClick={() => setExpanded(!expanded)}
-						className="flex flex-1 items-center gap-2 hover:text-stone-900 dark:hover:text-stone-100"
-					>
-						<svg
-							className={`h-4 w-4 text-stone-400 transition ${expanded ? "rotate-180" : ""}`}
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-							aria-hidden="true"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M19 9l-7 7-7-7"
-							/>
-						</svg>
-						<span className="font-mono text-stone-600 dark:text-stone-400">
-							{artifact.name}
-						</span>
-					</button>
-					<button
-						type="button"
-						onClick={() => setFullscreen(true)}
-						className="ml-2 rounded px-2 py-1 text-xs text-stone-500 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-300"
-					>
-						Full Screen
-					</button>
-				</div>
-				{expanded && (
-					<div className="border-t border-stone-100 px-4 py-4 dark:border-stone-800">
-						<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
-							<BrowseMarkdown assets={assets} host={host}>
-								{artifact.content || "(empty)"}
-							</BrowseMarkdown>
-						</div>
-					</div>
-				)}
+		<div className="space-y-2">
+			<div className="flex items-center gap-2">
+				<span className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[11px] text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+					{dir === "(other)" ? "(other)" : `${dir}/`}
+				</span>
+				<span className="text-[11px] text-stone-400">
+					{artifacts.length} file{artifacts.length === 1 ? "" : "s"}
+				</span>
 			</div>
-			{fullscreen && (
-				<ArtifactFullscreenModal
-					artifact={artifact}
-					assets={assets}
-					host={host}
-					onClose={() => setFullscreen(false)}
-				/>
+			{thumbnails.length > 0 && (
+				<div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+					{thumbnails.map((artifact) => (
+						<ArtifactThumbnail
+							key={artifact.name}
+							artifact={artifact}
+							host={host}
+							provider={provider}
+							baseDir={baseDir(artifact.name)}
+							onClick={() => onOpenFullscreen(artifact)}
+						/>
+					))}
+				</div>
 			)}
-		</>
+			{inline.map((artifact) => (
+				<CollapsibleFile
+					key={artifact.name}
+					name={artifact.name}
+					content={artifact.content}
+					rawUrl={artifact.rawUrl}
+					host={host}
+					assets={assets}
+					provider={provider}
+					baseDir={baseDir(artifact.name)}
+				/>
+			))}
+		</div>
 	)
 }
 
-/** Renders an "other" artifact type as a simple row. */
-/** Dispatch otherwise-unhandled artifact extensions to specialized
- *  viewers — mirrors the SPA's `/view/<session>?artifact=...` mime
- *  dispatch so engineering artifacts (KiCad schematics + PCBs,
- *  Gerber files, glTF/GLB 3D models, tscircuit circuits) render
- *  inline instead of as a "Download" link. Falls back to the plain
- *  card when the extension isn't recognized. */
-function OtherArtifactCard({ artifact }: { artifact: HaikuArtifact }) {
-	const lower = artifact.name.toLowerCase()
-	const url = artifact.rawUrl
-	if (url) {
-		if (/\.(kicad_sch|kicad_pcb|kicad_pro)$/.test(lower)) {
-			return (
-				<div className="rounded-lg border border-stone-200 dark:border-stone-700">
-					<div className="border-b border-stone-200 px-4 py-2 dark:border-stone-700">
-						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
-							{artifact.name}
-						</span>
-					</div>
-					<KiCanvasViewer url={url} name={artifact.name} />
+/** A collapsible row that previews any single file by type when expanded.
+ *  Used for both stage files and unit outputs. Header shows the name; the
+ *  body lazy-renders only once opened so a stage with many files stays light. */
+function CollapsibleFile({
+	name,
+	content,
+	rawUrl,
+	host,
+	assets,
+	provider,
+	baseDir,
+}: {
+	name: string
+	content?: string | null
+	rawUrl?: string | null
+	host?: string
+	assets?: HaikuAsset[]
+	provider?: BrowseProvider
+	baseDir?: string
+}) {
+	const [open, setOpen] = useState(false)
+	return (
+		<div className="rounded-lg border border-stone-200 dark:border-stone-700">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left"
+			>
+				<span className="truncate font-mono text-xs text-stone-600 dark:text-stone-400">
+					{name}
+				</span>
+				<span className="text-stone-400">{open ? "▾" : "▸"}</span>
+			</button>
+			{open && (
+				<div className="border-t border-stone-100 p-4 dark:border-stone-800">
+					<FilePreview
+						name={name}
+						content={content}
+						rawUrl={rawUrl}
+						host={host}
+						assets={assets}
+						provider={provider}
+						baseDir={baseDir}
+					/>
 				</div>
-			)
-		}
-		if (/\.(gbr|drl)$/.test(lower)) {
-			return (
-				<div className="rounded-lg border border-stone-200 dark:border-stone-700">
-					<div className="border-b border-stone-200 px-4 py-2 dark:border-stone-700">
-						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
-							{artifact.name}
-						</span>
-					</div>
-					<TracespaceViewer url={url} name={artifact.name} />
-				</div>
-			)
-		}
-		if (/\.(glb|gltf)$/.test(lower)) {
-			return (
-				<div className="rounded-lg border border-stone-200 dark:border-stone-700">
-					<div className="border-b border-stone-200 px-4 py-2 dark:border-stone-700">
-						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
-							{artifact.name}
-						</span>
-					</div>
-					<ModelViewer url={url} name={artifact.name} />
-				</div>
-			)
-		}
-		if (/circuit\.tsx$/.test(lower) || /\.circuit\.tsx$/.test(lower)) {
-			return (
-				<div className="rounded-lg border border-stone-200 dark:border-stone-700">
-					<div className="border-b border-stone-200 px-4 py-2 dark:border-stone-700">
-						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
-							{artifact.name}
-						</span>
-					</div>
-					<TscircuitViewer url={url} name={artifact.name} />
-				</div>
-			)
-		}
-		if (/\.pdf$/.test(lower)) {
-			return (
-				<div className="rounded-lg border border-stone-200 dark:border-stone-700">
-					<div className="border-b border-stone-200 px-4 py-2 dark:border-stone-700">
-						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
-							{artifact.name}
-						</span>
-					</div>
-					<iframe src={url} title={artifact.name} className="h-[85vh] w-full" />
-				</div>
-			)
-		}
-		if (/\.svg$/.test(lower)) {
-			return (
-				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-					<div className="mb-2">
-						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
-							{artifact.name}
-						</span>
-					</div>
-					<img src={url} alt={artifact.name} className="max-w-full" />
-				</div>
-			)
+			)}
+		</div>
+	)
+}
+
+/** The stage's unit outputs. Collects the union of every unit's `outputs:`
+ *  frontmatter, dedupes, and previews each one — lazily fetching the file's
+ *  bytes from the provider on expand. Each row links the unit(s) that declared
+ *  the output, so a viewer can trace a deliverable back to its producing unit.
+ *  Text files preview inline (syntax-highlighted); binaries resolve to a media
+ *  URL via the provider. */
+function UnitOutputsSection({
+	units,
+	host,
+	provider,
+}: {
+	units: HaikuUnit[]
+	host?: string
+	provider?: BrowseProvider
+}) {
+	// path → set of unit names that declare it
+	const byOutput = new Map<string, string[]>()
+	for (const u of units) {
+		for (const out of u.outputs ?? []) {
+			if (typeof out !== "string" || !out.trim()) continue
+			const list = byOutput.get(out)
+			if (list) {
+				if (!list.includes(u.name)) list.push(u.name)
+			} else {
+				byOutput.set(out, [u.name])
+			}
 		}
 	}
+	const outputs = Array.from(byOutput.entries()).sort((a, b) =>
+		a[0].localeCompare(b[0]),
+	)
+	if (outputs.length === 0) return null
+
 	return (
-		<div className="rounded-lg border border-stone-200 px-4 py-3 dark:border-stone-700">
-			<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
-				{artifact.name}
-			</span>
-			{url && (
-				<a
-					href={url}
-					target="_blank"
-					rel="noopener noreferrer"
-					className="ml-2 text-xs text-teal-600 hover:underline dark:text-teal-400"
-				>
-					Download
-				</a>
+		<div className="space-y-2">
+			<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+				Unit Outputs
+			</h4>
+			<p className="-mt-1 text-[11px] text-stone-400">
+				Deliverables this stage's units declared in their{" "}
+				<code className="font-mono">outputs:</code> frontmatter. Expand to
+				preview; each is linked to the unit(s) that produced it.
+			</p>
+			{outputs.map(([path, unitNames]) => (
+				<LazyOutputPreview
+					key={path}
+					path={path}
+					unitNames={unitNames}
+					host={host}
+					provider={provider}
+				/>
+			))}
+		</div>
+	)
+}
+
+/** A single unit-output row. Fetches the file's content (text) or a media URL
+ *  (binary) from the provider the first time it's expanded, then renders it via
+ *  FilePreview. Read failures (e.g. the output lives on a branch the provider
+ *  can't see, or hasn't been produced yet) surface a plain "couldn't load" note
+ *  rather than a blank. */
+function LazyOutputPreview({
+	path,
+	unitNames,
+	host,
+	provider,
+}: {
+	path: string
+	unitNames: string[]
+	host?: string
+	provider?: BrowseProvider
+}) {
+	const [open, setOpen] = useState(false)
+	const [state, setState] = useState<{
+		loading: boolean
+		content: string | null
+		rawUrl: string | null
+		error: string | null
+		loaded: boolean
+	}>({ loading: false, content: null, rawUrl: null, error: null, loaded: false })
+
+	useEffect(() => {
+		if (!open || state.loaded || state.loading || !provider) return
+		let cancelled = false
+		setState((s) => ({ ...s, loading: true }))
+		;(async () => {
+			try {
+				if (isTextFile(path)) {
+					const text = await provider.readFile(path)
+					if (cancelled) return
+					setState({
+						loading: false,
+						content: text,
+						rawUrl: null,
+						error: text == null ? "File not found on this branch." : null,
+						loaded: true,
+					})
+				} else {
+					const url = provider.resolveAssetUrl
+						? await provider.resolveAssetUrl(path)
+						: null
+					if (cancelled) return
+					setState({
+						loading: false,
+						content: null,
+						rawUrl: url,
+						error: url == null ? "File not found on this branch." : null,
+						loaded: true,
+					})
+				}
+			} catch (e) {
+				if (cancelled) return
+				setState({
+					loading: false,
+					content: null,
+					rawUrl: null,
+					error: e instanceof Error ? e.message : "Failed to load.",
+					loaded: true,
+				})
+			}
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [open, state.loaded, state.loading, provider, path])
+
+	return (
+		<div className="rounded-lg border border-stone-200 dark:border-stone-700">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left"
+			>
+				<span className="truncate font-mono text-xs text-stone-600 dark:text-stone-400">
+					{path}
+				</span>
+				<span className="flex items-center gap-2">
+					<span className="text-[10px] text-stone-400">
+						{unitNames.length === 1
+							? unitNames[0]
+							: `${unitNames.length} units`}
+					</span>
+					<span className="text-stone-400">{open ? "▾" : "▸"}</span>
+				</span>
+			</button>
+			{open && (
+				<div className="border-t border-stone-100 p-4 dark:border-stone-800">
+					{state.loading && (
+						<p className="text-xs text-stone-400">Loading…</p>
+					)}
+					{!state.loading && state.error && (
+						<p className="text-xs text-stone-400">{state.error}</p>
+					)}
+					{!state.loading && !state.error && (
+						<FilePreview
+							name={path}
+							content={state.content}
+							rawUrl={state.rawUrl}
+							host={host}
+						/>
+					)}
+				</div>
 			)}
 		</div>
 	)
@@ -1529,17 +1657,6 @@ function StageDetail({
 		merged: "Merged",
 		closed: "Closed",
 	}
-
-	// Split artifacts into thumbnailable (html/image) and non-thumbnailable (markdown/other)
-	const thumbnailArtifacts =
-		stage.artifacts?.filter((a) => a.type === "html" || a.type === "image") ??
-		[]
-	const markdownArtifacts =
-		stage.artifacts?.filter((a) => a.type === "markdown") ?? []
-	const otherArtifacts =
-		stage.artifacts?.filter(
-			(a) => a.type !== "html" && a.type !== "image" && a.type !== "markdown",
-		) ?? []
 
 	if (!(hasUnits || hasArtifacts || hasFeedback)) {
 		return (
@@ -1756,46 +1873,35 @@ function StageDetail({
 				title="Stage Feedback"
 			/>
 			{hasArtifacts && (
-				<div className="space-y-3">
+				<div className="space-y-4">
 					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-						Stage Artifacts
+						Stage Files
 					</h4>
-					<p className="-mt-1 text-[11px] text-stone-400">
-						Files under{" "}
-						<code className="font-mono">stages/{stage.name}/artifacts/</code> —
-						declared outputs, discovery inputs from upstream stages, and other
-						working files.
+					<p className="-mt-2 text-[11px] text-stone-400">
+						Everything under{" "}
+						<code className="font-mono">stages/{stage.name}/</code> the engine
+						doesn't manage as units or feedback — declared artifacts, runtime
+						verifier <code className="font-mono">proof/</code>, and any working
+						files — grouped by directory.
 					</p>
-					{/* Thumbnail grid for HTML and Image artifacts */}
-					{thumbnailArtifacts.length > 0 && (
-						<div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-							{thumbnailArtifacts.map((artifact) => (
-								<ArtifactThumbnail
-									key={artifact.name}
-									artifact={artifact}
-									host={host}
-									provider={provider}
-									baseDir={artifactBaseDir(artifact.name)}
-									onClick={() => setFullscreenArtifact(artifact)}
-								/>
-							))}
-						</div>
-					)}
-					{/* Collapsible markdown artifacts */}
-					{markdownArtifacts.map((artifact) => (
-						<MarkdownArtifactCard
-							key={artifact.name}
-							artifact={artifact}
-							assets={assets}
+					{groupArtifactsByDir(stage.artifacts ?? []).map((group) => (
+						<StageDirSection
+							key={group.dir}
+							dir={group.dir}
+							artifacts={group.artifacts}
 							host={host}
+							provider={provider}
+							assets={assets}
+							baseDir={artifactBaseDir}
+							onOpenFullscreen={setFullscreenArtifact}
 						/>
-					))}
-					{/* Other artifacts — simple row */}
-					{otherArtifacts.map((artifact) => (
-						<OtherArtifactCard key={artifact.name} artifact={artifact} />
 					))}
 				</div>
 			)}
+			{/* Unit outputs — every path the stage's units declare in their
+			    `outputs:` frontmatter, previewed by type and linked to the
+			    unit(s) that produced them. */}
+			<UnitOutputsSection units={stage.units} host={host} provider={provider} />
 			{/* Per-stage OBSERVATIONS — the agent's free-form reflection
 			    written at stage close. Shown last; it's a retrospective. */}
 			{stage.observations && (

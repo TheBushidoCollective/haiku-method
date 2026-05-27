@@ -1,6 +1,7 @@
 "use client"
 
 import ReactMarkdown from "react-markdown"
+import rehypeHighlight from "rehype-highlight"
 import remarkGfm from "remark-gfm"
 import type { HaikuAsset } from "@/lib/browse/types"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
@@ -69,6 +70,7 @@ export function BrowseMarkdown({ children, assets, host, basePath }: Props) {
 	return (
 		<ReactMarkdown
 			remarkPlugins={[remarkGfm]}
+			rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
 			components={{
 				img: ({ src, alt }) => {
 					const srcStr = typeof src === "string" ? src : ""

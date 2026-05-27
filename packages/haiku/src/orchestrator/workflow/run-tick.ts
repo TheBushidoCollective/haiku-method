@@ -34,6 +34,7 @@ import "../migrations/v5-to-v6.js"
 import "../migrations/v6-to-v7.js"
 import "../migrations/v7-to-v8.js"
 import "../migrations/v8-to-v9.js"
+import { killAllOrphanedMicroApps } from "../../micro-app.js"
 import { writeStatuslineSnapshot } from "../../statusline/snapshot.js"
 import { killAllOrphanedBootSessions } from "../../view-boot.js"
 import { hasV3CruftInIntent } from "../migrations/v0-to-v4.js"
@@ -329,6 +330,10 @@ export function runWorkflowTick(
 	// before calling haiku_view_close, etc.) gets SIGTERMed here so
 	// stale dev servers don't accumulate across ticks.
 	killAllOrphanedBootSessions()
+
+	// Reap micro-app review windows whose owning session is gone (gate
+	// resolved, session evicted). Mirrors the boot-session sweep above.
+	killAllOrphanedMicroApps()
 
 	// Pre-cursor selection gates. Each emits a structured `select_*`
 	// action when the corresponding field is missing on intent.md.

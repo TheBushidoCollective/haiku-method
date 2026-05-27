@@ -11,6 +11,7 @@ import { appendFileSync } from "node:fs"
 import { WsClientMessageSchema, type WsServerMessage } from "haiku-api"
 import type { WebSocket as WsWebSocket } from "ws"
 import { broadcastIntent } from "../intent-broadcaster.js"
+import { closeMicroApp } from "../micro-app.js"
 import {
 	getSession,
 	type QuestionAnnotations,
@@ -125,6 +126,12 @@ export function closeSessionConnection(
 	logClose(
 		`closeSessionConnection(${sessionId}) invoked [build:fastify] reason=${reason ?? "null"}`,
 	)
+	// Tear down a micro-app window if this session opened one — the gate
+	// resolved (or the session was cancelled), so the standalone SPA
+	// window should close. Runs before the early-return below so it
+	// fires even when no WS socket was ever registered (headless-launch
+	// hosts, or a window that closed its own socket).
+	closeMicroApp(sessionId)
 	const socket = wsConnections.get(sessionId)
 	if (!socket) {
 		logClose(

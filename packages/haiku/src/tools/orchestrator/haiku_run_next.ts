@@ -1937,7 +1937,11 @@ export default defineTool({
 					isBrowserAttached(prepared.session_id) ||
 					hasAttachedReviewSessionForIntent(slug)
 				if (!prepared.browser_attached && !isAttachedForIntent()) {
-					launchBrowserBestEffort(prepared.review_url, "Gate review")
+					launchBrowserBestEffort(
+						prepared.review_url,
+						"Gate review",
+						prepared.session_id,
+					)
 				}
 
 				// Engine-side blocking: dispatch to haiku_await_gate

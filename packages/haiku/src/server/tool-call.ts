@@ -31,6 +31,7 @@ import {
 	toMermaidDefinition,
 } from "../index.js"
 import { broadcastIntent } from "../intent-broadcaster.js"
+import { launchMicroApp } from "../micro-app.js"
 import { handleOrchestratorTool } from "../orchestrator.js"
 import { buildOutputDeclaredBy } from "../output-declared-by.js"
 import { isSentryConfigured, reportFeedback } from "../sentry.js"
@@ -195,23 +196,44 @@ const PickDesignDirectionInput = z.object({
 })
 
 /**
- * Launch the OS default browser at `url`. Best-effort — a failure HERE
- * never advances a review gate on its own (the caller still `await`s
+ * Open the review SPA for the user. Best-effort — a failure HERE never
+ * advances a review gate on its own (the caller still `await`s
  * `waitForSession` which either hears a real decision or times out),
  * but we log loudly so the reviewer has a visible URL they can paste
- * manually. The previous implementation swallowed all three failure
- * modes (sync throw, async 'error', non-zero exit) silently, which
- * left the workflow engine "waiting quietly" with no UI hint anywhere.
+ * manually.
  *
- * `label` lands in log lines so operators can tell which surface
- * tried to open — review gate, question, direction, or the always-on
- * review pane.
+ * Two strategies, in order:
+ *   1. Micro-app window — a Chromium-family browser launched in app-mode
+ *      against a clean, per-session profile. Chrome-less window, no
+ *      profile picker, no extensions, no cross-talk with the user's real
+ *      browser, and we own the process so we can close it when the gate
+ *      resolves. Used whenever a Chromium-family binary exists and the
+ *      caller passed the `sessionId` (so the window is trackable +
+ *      closable). See micro-app.ts.
+ *   2. OS default browser — `open` / `xdg-open` / `Start-Process`. The
+ *      universal fallback for headless hosts, missing Chromium, or when
+ *      the micro-app is disabled. Drops the URL into the user's default
+ *      browser exactly as before.
+ *
+ * `label` lands in log lines so operators can tell which surface tried
+ * to open — review gate, question, direction, or the always-on pane.
  */
-export function launchBrowserBestEffort(url: string, label: string): void {
+export function launchBrowserBestEffort(
+	url: string,
+	label: string,
+	sessionId?: string,
+): void {
 	console.error(
 		`[haiku] ${label} ready → ${url}\n` +
 			`         Share this URL with the reviewer if the browser didn't auto-open.`,
 	)
+	// Strategy 1: dedicated micro-app window. Returns false on a headless
+	// host / no Chromium / disabled, in which case we fall through to the
+	// OS-open path below.
+	if (launchMicroApp(url, sessionId ? { sessionId } : {})) {
+		return
+	}
+	// Strategy 2 (fallback): OS default browser.
 	// On Windows we use PowerShell `Start-Process` rather than `cmd /c start`.
 	// cmd.exe interprets `&`, `|`, `^`, `<`, `>`, `%`, `!` even in argv-passed
 	// args, which would mangle a URL like `?session=a&token=b` (everything
@@ -609,7 +631,7 @@ export async function handleToolCall(
 		const gateKind = (a.gate_kind as string | undefined) || ""
 		if (gateKind === "spec" || gateKind === "approval") {
 			session.ad_hoc = false
-			launchBrowserBestEffort(reviewUrl, "User gate review")
+			launchBrowserBestEffort(reviewUrl, "User gate review", session.session_id)
 			// Gate session pointers (gate_review_session_<stage>,
 			// gate_review_url_<stage>, gate_review_context) are written
 			// to intent.md frontmatter by haiku_run_next when it
@@ -627,7 +649,7 @@ export async function handleToolCall(
 			}
 		}
 
-		launchBrowserBestEffort(reviewUrl, "Ad-hoc review")
+		launchBrowserBestEffort(reviewUrl, "Ad-hoc review", session.session_id)
 
 		// Non-blocking by design. /haiku:haiku-show is a browse surface,
 		// not a gate — there is no workflow decision to wait on, so we
@@ -720,7 +742,7 @@ export async function handleToolCall(
 		// call, not a "URL + call await" two-step. haiku_await_visual_answer
 		// stays as a resume entry point but isn't part of the canonical
 		// flow.
-		launchBrowserBestEffort(questionUrl, "Question session")
+		launchBrowserBestEffort(questionUrl, "Question session", session.session_id)
 		return await awaitVisualAnswerSession(session.session_id, {
 			url: questionUrl,
 			signal,

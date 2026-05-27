@@ -64,7 +64,20 @@ export function _resetMicroAppDiscoveryForTests(): void {
 /** The highest-versioned full Chromium build in Playwright's browser
  *  cache, or null. We deliberately skip `chromium_headless_shell-*` —
  *  the headless shell can't open a visible window, and `@playwright/mcp
- *  --headless` may install only that variant. */
+ *  --headless` may install only that variant.
+ *
+ *  The darwin layout is NOT stable across Playwright builds and we used
+ *  to hardcode it, which silently broke on Apple Silicon: older x64
+ *  builds extract to `chrome-mac/Chromium.app/.../Chromium`, but newer
+ *  arm64 builds extract to
+ *  `chrome-mac-arm64/Google Chrome for Testing.app/.../Google Chrome for
+ *  Testing`. The hardcoded x64 path didn't exist in an arm64 build, so
+ *  `findChromiumExecutable` fell through to the user's SYSTEM Chrome —
+ *  defeating the whole point of the isolated profile and leaving the
+ *  user's real browser running after close. So on darwin we PROBE the
+ *  build dir for the actual per-arch `chrome-mac…` dir and the `.app`
+ *  inside it rather than assuming a name. win32/linux layouts are
+ *  stable. */
 export function playwrightChromiumPath(
 	platform: NodeJS.Platform = process.platform,
 	env: NodeJS.ProcessEnv = process.env,
@@ -95,14 +108,28 @@ export function playwrightChromiumPath(
 		})
 	if (builds.length === 0) return null
 
-	const build = builds[0] as string
-	const rel =
-		platform === "darwin"
-			? join("chrome-mac", "Chromium.app", "Contents", "MacOS", "Chromium")
-			: platform === "win32"
-				? join("chrome-win", "chrome.exe")
-				: join("chrome-linux", "chrome")
-	return join(cacheRoot, build, rel)
+	const buildRoot = join(cacheRoot, builds[0] as string)
+
+	if (platform === "win32") {
+		return join(buildRoot, "chrome-win", "chrome.exe")
+	}
+	if (platform !== "darwin") {
+		return join(buildRoot, "chrome-linux", "chrome")
+	}
+
+	// darwin: find the per-arch dir (`chrome-mac`, `chrome-mac-arm64`,
+	// `chrome-mac-x64`), then the `.app` inside it. The MacOS binary name
+	// is the app name minus the `.app` suffix (`Chromium.app` → `Chromium`;
+	// `Google Chrome for Testing.app` → `Google Chrome for Testing`).
+	const macDir = readDir(buildRoot).find((name) =>
+		name.startsWith("chrome-mac"),
+	)
+	if (!macDir) return null
+	const macRoot = join(buildRoot, macDir)
+	const app = readDir(macRoot).find((name) => name.endsWith(".app"))
+	if (!app) return null
+	const binaryName = app.slice(0, -".app".length)
+	return join(macRoot, app, "Contents", "MacOS", binaryName)
 }
 
 /** System Chromium-family executable candidates, in priority order, for
@@ -289,7 +316,15 @@ export function launchMicroApp(
 	try {
 		const child = spawn(exe, buildMicroAppArgs(url, profileDir), {
 			stdio: "ignore",
-			detached: false,
+			// detached → the Chromium launcher leads its OWN process group, so
+			// on close we can signal the whole group (`process.kill(-pid)`) and
+			// reap every helper process (GPU, network, storage, renderers) in
+			// one shot. With detached:false those helpers sat in the MCP's group
+			// and a single-pid SIGTERM to the launcher left them running — the
+			// "window closed but the browser instance stayed open" ghost. We do
+			// NOT unref(): keeping the handle is what lets the orphan sweep + the
+			// process-exit reaper find and kill it.
+			detached: true,
 		})
 		child.on("error", (err) => {
 			console.error(
@@ -320,6 +355,35 @@ function cleanupProfileDir(profileDir: string): void {
 }
 
 /**
+ * Signal a launched Chromium and ALL of its helper processes. Because the
+ * child was spawned `detached`, it leads its own process group and the
+ * negative-pid form reaps the whole tree (the macOS fix — a single-pid
+ * signal closed the window but left the GPU/network/renderer helpers
+ * running). Falls back to the single-pid signal when group signalling
+ * isn't available (Windows has no POSIX process groups; an already-reaped
+ * group throws ESRCH).
+ */
+function signalProcessTree(
+	record: MicroAppRecord,
+	signal: NodeJS.Signals,
+): void {
+	const pid = record.child.pid
+	if (pid !== undefined) {
+		try {
+			process.kill(-pid, signal)
+			return
+		} catch {
+			// Group gone, or no process-group support — fall through.
+		}
+	}
+	try {
+		record.child.kill(signal)
+	} catch {
+		// Already gone.
+	}
+}
+
+/**
  * Close the micro-app window for a session and remove its profile dir.
  * Idempotent — a no-op when no window is tracked for the session.
  */
@@ -327,17 +391,9 @@ export function closeMicroApp(sessionId: string): boolean {
 	const record = liveApps.get(sessionId)
 	if (!record) return false
 	liveApps.delete(sessionId)
-	try {
-		record.child.kill("SIGTERM")
-	} catch {
-		// Already gone.
-	}
+	signalProcessTree(record, "SIGTERM")
 	const sigkillTimer = setTimeout(() => {
-		try {
-			record.child.kill("SIGKILL")
-		} catch {
-			// Already gone.
-		}
+		signalProcessTree(record, "SIGKILL")
 	}, 2000)
 	sigkillTimer.unref?.()
 	cleanupProfileDir(record.profileDir)

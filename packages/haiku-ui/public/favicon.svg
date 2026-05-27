@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="H·AI·K·U">
+  <title>H·AI·K·U</title>
+  <!-- mint hexagon -->
+  <path d="M32 3 L58 18 L58 46 L32 61 L6 46 L6 18 Z" fill="#5EEAD4" />
+  <!-- bold black H -->
+  <path d="M19 15 h10 v12 h6 v-12 h10 v34 h-10 v-12 h-6 v12 h-10 Z" fill="#000000" />
+</svg>

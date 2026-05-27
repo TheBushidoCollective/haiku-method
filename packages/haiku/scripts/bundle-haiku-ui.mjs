@@ -78,6 +78,25 @@ html = html.replace(
 	},
 )
 
+// Inline the favicon. The MCP serves the SPA as a single inlined HTML
+// string with no static-asset route, so the dev-time `<link href="/
+// favicon.svg">` would 404 in production. Read dist/favicon.svg (vite
+// copies public/ → dist/) and rewrite the href to a data URI. Single
+// source of truth: packages/haiku-ui/public/favicon.svg.
+html = html.replace(/<link\b[^>]*\brel="icon"[^>]*>/g, (match) => {
+	const hrefMatch = match.match(/\bhref="([^"]+)"/)
+	const href = hrefMatch?.[1] ?? ""
+	const file = href.replace(/^\//, "")
+	const svgPath = join(distDir, file)
+	if (!file.endsWith(".svg") || !existsSync(svgPath)) {
+		console.error(`WARNING: favicon not inlined (missing ${svgPath})`)
+		return match
+	}
+	const svg = readFileSync(svgPath, "utf-8")
+	const dataUri = `data:image/svg+xml;base64,${Buffer.from(svg, "utf-8").toString("base64")}`
+	return `<link rel="icon" type="image/svg+xml" href="${dataUri}" />`
+})
+
 // Bundle-size budget check
 const gzipBytes = gzipSync(html).length
 let budget = { bundleGzipMaxBytes: 1048576, lastKnownGzipBytes: 0 }

@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>H·AI·K·U Review</title>
+  <!-- H·AI·K·U mark (mint hexagon + bold H). Source of truth:
+       public/favicon.svg. In vite dev this resolves to the file; in the
+       bundled MCP build, scripts/bundle-haiku-ui.mjs inlines it to a data
+       URI (the MCP serves the SPA as one inlined HTML string with no
+       static-asset route, so a /favicon.svg reference would 404). -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="theme-color" content="#5EEAD4" />
   <script>
     // No-FOUC theme bootstrap. Reads the same localStorage key the
     // ThemeToggle component uses (haiku-review-theme) and applies the `dark`

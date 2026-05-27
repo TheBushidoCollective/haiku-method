@@ -8,10 +8,7 @@
 import { useNavigate } from "@tanstack/react-router"
 import { useCallback, useEffect } from "react"
 import { useFeedbackContext } from "../../../../../hooks/FeedbackContext"
-import type {
-	ReviewDetailKind,
-	ReviewTab,
-} from "../../../../../pages/review/shared/stage-tabs"
+import type { ReviewDetailKind } from "../../../../../pages/review/shared/stage-tabs"
 import { StageReview } from "../../../../../pages/review/stage/StageReview"
 import { useReviewContext } from "../../-context"
 
@@ -21,7 +18,8 @@ export function StageContent({
 	detail,
 }: {
 	stage: string
-	tab: ReviewTab | undefined
+	// A fixed ReviewTab OR a dynamic per-directory tab id (stage subdir).
+	tab: string | undefined
 	detail: { kind: ReviewDetailKind; name: string } | null
 }): React.ReactElement {
 	const {
@@ -43,7 +41,7 @@ export function StageContent({
 		useFeedbackContext()
 
 	const handleTabChange = useCallback(
-		(next: ReviewTab | undefined) => {
+		(next: string | undefined) => {
 			if (!next || next === "overview") {
 				navigate({
 					to: "/review/$sessionId/stages/$stage",

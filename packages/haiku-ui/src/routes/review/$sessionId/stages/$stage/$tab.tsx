@@ -26,8 +26,14 @@ const VALID_TABS: ReviewTab[] = [
 	"other",
 ]
 
-function isTab(v: string): v is ReviewTab {
-	return (VALID_TABS as string[]).includes(v)
+// A known fixed tab, OR a dynamic per-directory tab id (a stage
+// subdirectory name like `proofs`, lowercased path-segment shape). The
+// fixed set is the allowlist; dir tabs are open-ended, so we accept any
+// safe slug and let StageReview clamp an unknown id back to Overview
+// (it can't validate dir names here — no session data at route-parse time).
+const DIR_TAB_RE = /^[a-z0-9][a-z0-9._-]*$/i
+function isTab(v: string): boolean {
+	return (VALID_TABS as string[]).includes(v) || DIR_TAB_RE.test(v)
 }
 
 function StageTab(): React.ReactElement {

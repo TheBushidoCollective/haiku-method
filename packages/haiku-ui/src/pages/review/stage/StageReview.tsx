@@ -51,7 +51,7 @@ import {
 	stripFrontmatter,
 } from "../shared/section-helpers"
 import type { ReviewPageSessionData } from "../shared/session-data"
-import type { ReviewDetailKind, ReviewTab } from "../shared/stage-tabs"
+import type { ReviewDetailKind } from "../shared/stage-tabs"
 import { deriveUnitStatus } from "../shared/UnitsTable"
 import {
 	type ArtifactKind,
@@ -77,8 +77,10 @@ export interface StageReviewProps {
 	/** Controlled tab selection — the parent (ReviewPage) owns this so
 	 *  it can mirror tab state to the URL. `undefined` is equivalent to
 	 *  the "overview" default. */
-	tab?: ReviewTab | undefined
-	onTabChange?: (tab: ReviewTab | undefined) => void
+	/** A fixed ReviewTab OR a dynamic per-directory tab id (a stage
+	 *  subdirectory name). Typed `string` to admit the dir tabs. */
+	tab?: string | undefined
+	onTabChange?: (tab: string | undefined) => void
 	/** Controlled detail selection — when set, the matching tab renders
 	 *  the single-item focused view. */
 	detail?: { kind: ReviewDetailKind; name: string } | null
@@ -364,7 +366,7 @@ export function StageReview({
 	const setActiveTab = useCallback(
 		(next: string) => {
 			if (onTabChange !== undefined) {
-				onTabChange(next === "overview" ? undefined : (next as ReviewTab))
+				onTabChange(next === "overview" ? undefined : next)
 			} else {
 				setLocalTab(next)
 			}
@@ -437,7 +439,28 @@ export function StageReview({
 		assetUrl: a.relativePath ?? undefined,
 	})
 	const outputVMs: ArtifactViewModel[] = outputArtifacts.map(toArtifactVM)
-	const otherVMs: ArtifactViewModel[] = otherFiles.map(toArtifactVM)
+	// "Other" files split: those living in a subdirectory get a per-directory
+	// tab named after the directory (e.g. `proofs/`); stage-root loose files
+	// (no `directory`) stay in the catch-all "Other" tab. Server tags
+	// `directory` (parser.ts); the SPA groups on it here.
+	const looseOtherVMs: ArtifactViewModel[] = otherFiles
+		.filter((a) => !a.directory)
+		.map(toArtifactVM)
+	const dirTabGroups: Array<{ dir: string; vms: ArtifactViewModel[] }> =
+		(() => {
+			const byDir = new Map<string, ArtifactViewModel[]>()
+			const order: string[] = []
+			for (const a of otherFiles) {
+				if (!a.directory) continue
+				if (!byDir.has(a.directory)) {
+					byDir.set(a.directory, [])
+					order.push(a.directory)
+				}
+				byDir.get(a.directory)?.push(toArtifactVM(a))
+			}
+			order.sort((x, y) => x.localeCompare(y))
+			return order.map((dir) => ({ dir, vms: byDir.get(dir) ?? [] }))
+		})()
 
 	// Artifact index for unit-input/output/depends_on link resolution
 	// (UnitMetaPanel). Built from the FULL session artifact lists — NOT the
@@ -522,7 +545,9 @@ export function StageReview({
 	// Controlled variant mirrors the `tab` prop pattern — parent owns
 	// detail state for URL sync when `onDetailChange` is wired.
 	const [localDetail, setLocalDetail] = useState<{
-		tab: ReviewDetailKind
+		// `string` not `ReviewDetailKind` — a dynamic per-directory tab id can
+		// open a detail view too (its files reuse the Other render path).
+		tab: string
 		name: string
 	} | null>(
 		detailProp && onDetailChange === undefined
@@ -538,7 +563,7 @@ export function StageReview({
 	const setDetail = useCallback(
 		(
 			next: {
-				tab: ReviewDetailKind
+				tab: string
 				name: string
 			} | null,
 		) => {
@@ -554,7 +579,7 @@ export function StageReview({
 	)
 
 	const openDetail = useCallback(
-		(tab: ReviewDetailKind, name: string) => {
+		(tab: string, name: string) => {
 			setActiveTab(tab)
 			setDetail({ tab, name })
 		},
@@ -613,12 +638,16 @@ export function StageReview({
 		() =>
 			resolveWalkthroughForDetail(
 				gateWalkthroughItems,
-				// The walkthrough doesn't include the "other" catchall —
-				// stray files aren't gate-relevant. When the reviewer is
-				// browsing an "other" item, pass null so the resolver
-				// falls back to the gate set rather than trying to find
-				// the item in units/knowledge/outputs.
-				detail && detail.tab !== "other"
+				// The walkthrough only spans gate-relevant items
+				// (units/knowledge/outputs). "Other" stray files and dynamic
+				// per-directory tabs aren't gate-relevant, so when the reviewer
+				// is browsing one, pass null — the resolver falls back to the
+				// gate set instead of hunting for the item in units/knowledge/
+				// outputs. (Also narrows `detail.tab` to the walkthrough kinds.)
+				detail &&
+					(detail.tab === "units" ||
+						detail.tab === "knowledge" ||
+						detail.tab === "outputs")
 					? { tab: detail.tab, name: detail.name }
 					: null,
 				{ units, knowledgeVMs, outputVMs },
@@ -886,42 +915,99 @@ export function StageReview({
 					/>
 				),
 		},
+		// One tab per asset SUBDIRECTORY under `stages/<stage>/` (e.g.
+		// `proofs/`), named after the directory. Same list + detail render as
+		// the Other tab, keyed off the directory id so the generic detail
+		// mechanism (`openDetail(dir, name)` / `detail?.tab === dir`) works
+		// without per-tab plumbing. Stage-root loose files stay in "Other".
+		...dirTabGroups.map(
+			({ dir, vms }): TabDef => ({
+				id: dir,
+				label: `${dir.charAt(0).toUpperCase() + dir.slice(1)} (${vms.length})`,
+				content:
+					detail?.tab === dir ? (
+						<ArtifactDetailView
+							kind="output"
+							artifacts={vms}
+							currentName={detail.name}
+							seen={seen}
+							stageId={stageName}
+							intentSlug={intentSlug}
+							feedbackByName={new Map()}
+							walkIndex={vms.findIndex((a) => a.name === detail.name)}
+							walkTotal={vms.length}
+							onWalkPrev={() => {
+								const idx = vms.findIndex((a) => a.name === detail.name)
+								if (idx > 0) openDetail(dir, vms[idx - 1].name)
+							}}
+							onWalkNext={() => {
+								const idx = vms.findIndex((a) => a.name === detail.name)
+								if (idx >= 0 && idx < vms.length - 1)
+									openDetail(dir, vms[idx + 1].name)
+							}}
+							hasWalkPrev={vms.findIndex((a) => a.name === detail.name) > 0}
+							hasWalkNext={
+								vms.findIndex((a) => a.name === detail.name) < vms.length - 1
+							}
+							onBack={closeDetail}
+							onInlineCommentsChange={onInlineCommentsChange}
+							onSaveInline={onSaveInline}
+							flashAnchor={flashAnchor ?? null}
+							onFlashCommentConsumed={onFlashCommentConsumed}
+						/>
+					) : (
+						<ArtifactsTab
+							kind="output"
+							artifacts={vms}
+							feedbackByName={new Map()}
+							seen={seen}
+							stageId={stageName}
+							highlightRequestId={null}
+							onHighlightConsumed={() => {}}
+							feedback={feedback}
+							onOpenDetail={(name) => openDetail(dir, name)}
+						/>
+					),
+			}),
+		),
 		// Catchall tab for stray stage files: anything under
 		// `stages/<stage>/` not declared by any unit, not under
-		// `artifacts/`, `knowledge/`, or `discovery/`. Reviewer can
-		// see them and link them if relevant. Disabled when empty so
-		// the tab strip doesn't clutter with a noise tab. Same render
-		// shape as Outputs (no per-file drift / replace surface —
-		// these aren't tracked outputs).
+		// `artifacts/`, `knowledge/`, or `discovery/`, AND not in a
+		// subdirectory (those get their own tab above). Reviewer can see
+		// them and link them if relevant. Disabled when empty so the tab
+		// strip doesn't clutter with a noise tab. Same render shape as
+		// Outputs (no per-file drift / replace surface — not tracked outputs).
 		{
 			id: "other",
-			label: `Other (${otherVMs.length})`,
-			disabled: otherVMs.length === 0,
+			label: `Other (${looseOtherVMs.length})`,
+			disabled: looseOtherVMs.length === 0,
 			content:
 				detail?.tab === "other" ? (
 					<ArtifactDetailView
 						kind="output"
-						artifacts={otherVMs}
+						artifacts={looseOtherVMs}
 						currentName={detail.name}
 						seen={seen}
 						stageId={stageName}
 						intentSlug={intentSlug}
 						feedbackByName={new Map()}
-						walkIndex={otherVMs.findIndex((a) => a.name === detail.name)}
-						walkTotal={otherVMs.length}
+						walkIndex={looseOtherVMs.findIndex((a) => a.name === detail.name)}
+						walkTotal={looseOtherVMs.length}
 						onWalkPrev={() => {
-							const idx = otherVMs.findIndex((a) => a.name === detail.name)
-							if (idx > 0) openDetail("other", otherVMs[idx - 1].name)
+							const idx = looseOtherVMs.findIndex((a) => a.name === detail.name)
+							if (idx > 0) openDetail("other", looseOtherVMs[idx - 1].name)
 						}}
 						onWalkNext={() => {
-							const idx = otherVMs.findIndex((a) => a.name === detail.name)
-							if (idx >= 0 && idx < otherVMs.length - 1)
-								openDetail("other", otherVMs[idx + 1].name)
+							const idx = looseOtherVMs.findIndex((a) => a.name === detail.name)
+							if (idx >= 0 && idx < looseOtherVMs.length - 1)
+								openDetail("other", looseOtherVMs[idx + 1].name)
 						}}
-						hasWalkPrev={otherVMs.findIndex((a) => a.name === detail.name) > 0}
+						hasWalkPrev={
+							looseOtherVMs.findIndex((a) => a.name === detail.name) > 0
+						}
 						hasWalkNext={
-							otherVMs.findIndex((a) => a.name === detail.name) <
-							otherVMs.length - 1
+							looseOtherVMs.findIndex((a) => a.name === detail.name) <
+							looseOtherVMs.length - 1
 						}
 						onBack={closeDetail}
 						onInlineCommentsChange={onInlineCommentsChange}
@@ -932,7 +1018,7 @@ export function StageReview({
 				) : (
 					<ArtifactsTab
 						kind="output"
-						artifacts={otherVMs}
+						artifacts={looseOtherVMs}
 						feedbackByName={new Map()}
 						seen={seen}
 						stageId={stageName}
@@ -955,7 +1041,10 @@ export function StageReview({
 			<Tabs
 				groupId={`stage-${stageName}`}
 				tabs={tabs}
-				activeId={activeTab}
+				// Clamp to a real tab: a stale/typo'd tab id in the URL (e.g. a
+				// dynamic dir tab that no longer exists) falls back to Overview
+				// rather than rendering an empty body with no active tab.
+				activeId={tabs.some((t) => t.id === activeTab) ? activeTab : "overview"}
 				onActiveChange={setActiveTab}
 			/>
 			{replaceArtifact && onReplaceOutput ? (

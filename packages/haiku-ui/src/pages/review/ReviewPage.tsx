@@ -452,7 +452,8 @@ export function ReviewPage({
 	// Stage-internal sub-state. In production the router owns these
 	// (StageContent drives them from URL params); this component keeps
 	// local copies so tests that render ReviewPage directly still work.
-	const [stageTab, setStageTab] = useState<ReviewTab | undefined>(initialTab)
+	// `string` not `ReviewTab` — admits dynamic per-directory tab ids.
+	const [stageTab, setStageTab] = useState<string | undefined>(initialTab)
 	const [stageDetail, setStageDetail] = useState<{
 		kind: ReviewDetailKind
 		name: string
@@ -1028,9 +1029,10 @@ function StageScopedContent({
 	onPinsChange: (pins: AnnotationPin[]) => void
 	highlightFeedbackId: string | null
 	onHighlightConsumed: () => void
-	stageTab: ReviewTab | undefined
+	// `string` not `ReviewTab` — admits dynamic per-directory tab ids.
+	stageTab: string | undefined
 	stageDetail: { kind: ReviewDetailKind; name: string } | null
-	onStageTabChange: (tab: ReviewTab | undefined) => void
+	onStageTabChange: (tab: string | undefined) => void
 	onStageDetailChange: (
 		detail: { kind: ReviewDetailKind; name: string } | null,
 	) => void

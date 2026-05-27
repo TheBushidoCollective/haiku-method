@@ -179,3 +179,69 @@ describe("StageReview — Elaboration tab", () => {
 		).toBeTruthy()
 	})
 })
+
+describe("StageReview — per-directory tabs", () => {
+	function sessionWithOther() {
+		return {
+			other_files: [
+				{
+					stage: STAGE,
+					name: "proofs/run-1.md",
+					type: "markdown",
+					content: "# proof one",
+					directory: "proofs",
+				},
+				{
+					stage: STAGE,
+					name: "proofs/run-2.md",
+					type: "markdown",
+					content: "# proof two",
+					directory: "proofs",
+				},
+				{
+					stage: STAGE,
+					name: "scratch.md",
+					type: "markdown",
+					content: "# loose scratch",
+				},
+			],
+		} as unknown as ReviewPageSessionData
+	}
+
+	it("renders a tab named after each asset subdirectory; loose files stay in Other", () => {
+		const { getAllByRole } = render(
+			<StageReview
+				session={sessionWithOther()}
+				sessionId="sess-dir"
+				intentSlug={INTENT}
+				stageName={STAGE}
+				feedback={[]}
+				onInlineCommentsChange={() => {}}
+			/>,
+		)
+		const labels = getAllByRole("tab").map((t) => t.textContent)
+		// A "Proofs (2)" tab for the proofs/ subdir.
+		expect(labels).toContain("Proofs (2)")
+		// "Other" holds ONLY the loose stage-root file — not the proofs files.
+		expect(labels).toContain("Other (1)")
+	})
+
+	it("activating a directory tab shows that directory's files", () => {
+		const { getAllByRole, getByText } = render(
+			<StageReview
+				session={sessionWithOther()}
+				sessionId="sess-dir2"
+				intentSlug={INTENT}
+				stageName={STAGE}
+				feedback={[]}
+				onInlineCommentsChange={() => {}}
+			/>,
+		)
+		const proofsTab = getAllByRole("tab").find((t) =>
+			t.textContent?.startsWith("Proofs"),
+		)
+		expect(proofsTab).toBeTruthy()
+		if (proofsTab) fireEvent.click(proofsTab)
+		expect(getByText("proofs/run-1.md")).toBeTruthy()
+	})
+})

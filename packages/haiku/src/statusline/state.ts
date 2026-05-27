@@ -42,6 +42,7 @@ import {
 // statusline module; the canonical home is now progress-track (shared with
 // the SPA's phase strip so they can't drift).
 export { actionIsFanOut, snapshotMilestoneIndex }
+
 import {
 	type FeedbackSeverity,
 	feedbackSeverityRank,

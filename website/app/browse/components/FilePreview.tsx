@@ -55,6 +55,8 @@ const CODE_LANG: Record<string, string> = {
 	gql: "graphql",
 	json: "json",
 	jsonc: "json",
+	jsonl: "json",
+	ndjson: "json",
 	yaml: "yaml",
 	yml: "yaml",
 	toml: "toml",

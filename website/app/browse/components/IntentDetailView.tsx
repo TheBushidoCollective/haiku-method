@@ -1388,53 +1388,50 @@ function LazyOutputPreview({
 		content: string | null
 		rawUrl: string | null
 		error: string | null
-		loaded: boolean
-	}>({ loading: false, content: null, rawUrl: null, error: null, loaded: false })
+	}>({ loading: false, content: null, rawUrl: null, error: null })
+	// One-shot fetch latch. Must NOT live in the effect deps: an earlier
+	// version keyed the effect on `state.loading`, so flipping it to `true`
+	// re-ran the effect, whose cleanup cancelled the in-flight read — the
+	// fetch never resolved and the row hung on "Loading…" forever (only
+	// surfaced with a real provider whose readFile is slow enough to lose the
+	// race; a fast fake provider resolved before the re-run, hiding the bug).
+	const startedRef = useRef(false)
 
 	useEffect(() => {
-		if (!open || state.loaded || state.loading || !provider) return
-		let cancelled = false
+		if (!open || startedRef.current || !provider) return
+		startedRef.current = true
 		setState((s) => ({ ...s, loading: true }))
 		;(async () => {
 			try {
 				if (isTextFile(path)) {
 					const text = await provider.readFile(path)
-					if (cancelled) return
 					setState({
 						loading: false,
 						content: text,
 						rawUrl: null,
-						error: text == null ? "File not found on this branch." : null,
-						loaded: true,
+						error: text == null ? "Couldn't load this file." : null,
 					})
 				} else {
 					const url = provider.resolveAssetUrl
 						? await provider.resolveAssetUrl(path)
 						: null
-					if (cancelled) return
 					setState({
 						loading: false,
 						content: null,
 						rawUrl: url,
-						error: url == null ? "File not found on this branch." : null,
-						loaded: true,
+						error: url == null ? "Couldn't load this file." : null,
 					})
 				}
 			} catch (e) {
-				if (cancelled) return
 				setState({
 					loading: false,
 					content: null,
 					rawUrl: null,
 					error: e instanceof Error ? e.message : "Failed to load.",
-					loaded: true,
 				})
 			}
 		})()
-		return () => {
-			cancelled = true
-		}
-	}, [open, state.loaded, state.loading, provider, path])
+	}, [open, provider, path])
 
 	return (
 		<div className="rounded-lg border border-stone-200 dark:border-stone-700">

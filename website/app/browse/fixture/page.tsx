@@ -89,6 +89,8 @@ const intent: HaikuIntentDetail = {
 					outputs: [
 						"web/apps/admin/src/views/Workers/WorkerDates.tsx",
 						"web/apps/admin/src/views/Workers/WorkerDates.feature",
+						"stages/development/artifacts/plan-unit-001.md",
+						"action-log.jsonl",
 					],
 				}),
 			],
@@ -147,11 +149,18 @@ const provider: BrowseProvider = {
 		return intent
 	},
 	async readFile(path: string) {
+		// Simulate the real filesystem/git provider's multi-await latency so
+		// the harness reproduces async-timing bugs (e.g. an effect that
+		// cancels its own in-flight read). A zero-delay fake hides them.
+		await new Promise((r) => setTimeout(r, 60))
 		if (path.endsWith(".tsx")) return SAMPLE_TS
 		if (path.endsWith(".feature")) return SAMPLE_FEATURE
+		if (path.endsWith(".jsonl"))
+			return '{"event":"unit_start","at":"2026-05-27T00:00:00Z"}\n{"event":"unit_done"}\n'
 		return null
 	},
 	async resolveAssetUrl() {
+		await new Promise((r) => setTimeout(r, 60))
 		return PNG_DATA_URL
 	},
 	async listFiles() {

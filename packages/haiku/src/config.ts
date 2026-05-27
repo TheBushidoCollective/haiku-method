@@ -12,8 +12,22 @@ import { existsSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
+// Resolve an env var, honoring a HAIKU_-prefixed override for standard /
+// Claude-owned variables. Claude Code does not forward its own env
+// (`OTEL_*`, `CLAUDE_CODE_*`) into MCP subprocesses, so an operator who can
+// only influence the MCP's env sets the SAME name with a `HAIKU_` prefix
+// (e.g. `HAIKU_CLAUDE_CODE_ENABLE_TELEMETRY`). The prefixed value wins when
+// present; we never double-prefix a name that is already `HAIKU_`-scoped.
+function readEnv(name: string): string | undefined {
+	if (!name.startsWith("HAIKU_")) {
+		const prefixed = process.env[`HAIKU_${name}`]
+		if (prefixed !== undefined) return prefixed
+	}
+	return process.env[name]
+}
+
 function flag(name: string, defaultValue: boolean): boolean {
-	const raw = process.env[name]
+	const raw = readEnv(name)
 	if (raw === undefined) return defaultValue
 	const v = raw.trim().toLowerCase()
 	if (v === "1" || v === "true" || v === "yes" || v === "on") return true
@@ -23,7 +37,7 @@ function flag(name: string, defaultValue: boolean): boolean {
 }
 
 function str(name: string, defaultValue: string): string {
-	const raw = process.env[name]
+	const raw = readEnv(name)
 	if (raw === undefined || raw === "") return defaultValue
 	return raw
 }

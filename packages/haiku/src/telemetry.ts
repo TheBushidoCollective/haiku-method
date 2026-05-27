@@ -17,7 +17,20 @@ const ENABLED = features.telemetry
 // Read the env directly — not via config.observability — so the resolvers
 // below reflect the current process env rather than a snapshot taken when
 // config.ts was first imported. This matters for tests that manipulate env.
+//
+// HAIKU_-prefixed fallback: Claude Code no longer forwards its own OTLP env
+// (`OTEL_EXPORTER_OTLP_*`, `OTEL_SERVICE_NAME`, `CLAUDE_CODE_OTEL_*`, …) into
+// MCP subprocesses, so a process that relied on inheriting `OTEL_*` from the
+// harness now sees nothing. To configure telemetry for the MCP directly,
+// operators set the SAME variable name with a `HAIKU_` prefix
+// (`HAIKU_OTEL_EXPORTER_OTLP_ENDPOINT`, `HAIKU_OTEL_EXPORTER_OTLP_HEADERS`,
+// `HAIKU_CLAUDE_CODE_OTEL_HEADERS_HELPER_DEBOUNCE_MS`, …). The prefixed value
+// WINS when present (it's the deliberate MCP-side override); an unset or
+// empty prefixed var falls back to the bare standard name, so existing setups
+// that do export `OTEL_*` keep working unchanged.
 function env(name: string): string {
+	const prefixed = (process.env[`HAIKU_${name}`] ?? "").trim()
+	if (prefixed) return prefixed
 	return (process.env[name] ?? "").trim()
 }
 

@@ -73,6 +73,82 @@ export function classifyArtifact(name: string): HaikuArtifact["type"] {
 	return "other"
 }
 
+// ── Stage / intent file discovery ──────────────────────────────────────────
+//
+// The browse providers used to surface ONLY `stages/<stage>/artifacts/`,
+// which meant anything the engine writes elsewhere — runtime-verifier
+// screenshots under `proof/`, stray working files — was invisible on the
+// browse site even though it's committed to the repo. The model is inverted
+// here: walk the whole stage/intent dir, route the KNOWN structured paths to
+// their typed parsers (units, feedback, briefs, …), drop a small set of engine
+// BOOKKEEPING files, and surface EVERYTHING ELSE as a generic asset rendered
+// by extension. A new artifact dir the engine invents later shows up with no
+// provider change.
+
+/** Top-level entries under `stages/<stage>/` that have dedicated typed
+ *  parsers (surfaced as units, feedback, stage status, brief, observations).
+ *  Excluded from the generic artifact sweep so they aren't double-surfaced. */
+export const STAGE_STRUCTURED_ENTRIES: ReadonlySet<string> = new Set([
+	"units",
+	"feedback",
+	"state.json",
+	"elaboration.md",
+	"BRIEF.md",
+	"observations.md",
+])
+
+/** Top-level entries under `intents/<slug>/` with dedicated parsers. Excluded
+ *  from the intent-level generic asset sweep. `stages` is walked separately;
+ *  `knowledge`/`operations`/`feedback` have their own surfaces. */
+export const INTENT_STRUCTURED_ENTRIES: ReadonlySet<string> = new Set([
+	"stages",
+	"knowledge",
+	"operations",
+	"feedback",
+	"intent.md",
+	"reflection.md",
+])
+
+/** Engine bookkeeping — machine state, never shown to a human browsing. Dot-
+ *  files (`.gitignore`, fs-manifests), decision/append logs (`*.jsonl`),
+ *  coverage acks. Matched on the path's basename so it applies at any depth. */
+export function isBookkeepingArtifact(relPath: string): boolean {
+	const base = relPath.split("/").pop() ?? relPath
+	if (base.startsWith(".")) return true
+	if (base.endsWith(".jsonl")) return true
+	if (base === "coverage-decisions.json") return true
+	if (base.endsWith(".manifest") || base.includes("fs-manifest")) return true
+	return false
+}
+
+/** Should a file at `relPath` (relative to `stages/<stage>/`) be surfaced as a
+ *  generic stage artifact? True for everything that isn't a structured entry
+ *  or bookkeeping — `artifacts/**`, `proof/**`, and any stray working file. */
+export function isCollectibleStageFile(relPath: string): boolean {
+	const top = relPath.split("/")[0]
+	if (STAGE_STRUCTURED_ENTRIES.has(top)) return false
+	if (isBookkeepingArtifact(relPath)) return false
+	return true
+}
+
+/** Should a file at `relPath` (relative to `intents/<slug>/`) be surfaced as a
+ *  generic intent-level asset? Excludes the structured top-level entries and
+ *  bookkeeping; collects intent-level `proof/**`, mockups, and strays. */
+export function isCollectibleIntentAsset(relPath: string): boolean {
+	const top = relPath.split("/")[0]
+	if (INTENT_STRUCTURED_ENTRIES.has(top)) return false
+	if (isBookkeepingArtifact(relPath)) return false
+	return true
+}
+
+/** Extensions whose content the browse viewers need as a URL, not raw text
+ *  (images plus the engineering/3D/PDF binaries the specialized viewers take).
+ *  Text artifacts (md/html/txt/json) are delivered inline as `content`. */
+export function artifactNeedsUrl(name: string): boolean {
+	if (classifyArtifact(name) === "image") return true
+	return /\.(glb|gltf|pdf|kicad_sch|kicad_pcb|kicad_pro|gbr|drl)$/i.test(name)
+}
+
 /** Parsed `state.json` slice the providers attach to each stage. */
 export interface StageStateJson {
 	phase: string

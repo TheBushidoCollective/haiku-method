@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<6e563e99608a0417ce2859624cb7e48b>>
+ * @generated SignedSource<<5b51522ccf615122269a65df0144d9c5>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -11,6 +11,7 @@
 import { ConcreteRequest } from 'relay-runtime';
 export type operationsGetIntentQuery$variables = {
   intentExpr: string;
+  intentTreeExpr: string;
   knowledgeExpr: string;
   name: string;
   operationsExpr: string;
@@ -22,6 +23,18 @@ export type operationsGetIntentQuery$data = {
   readonly repository: {
     readonly intentFile: {
       readonly text?: string | null | undefined;
+    } | null | undefined;
+    readonly intentTree: {
+      readonly entries?: ReadonlyArray<{
+        readonly name: string;
+        readonly object: {
+          readonly entries?: ReadonlyArray<{
+            readonly name: string;
+            readonly type: string;
+          }> | null | undefined;
+        } | null | undefined;
+        readonly type: string;
+      }> | null | undefined;
     } | null | undefined;
     readonly knowledgeTree: {
       readonly entries?: ReadonlyArray<{
@@ -82,34 +95,39 @@ var v0 = {
 v1 = {
   "defaultValue": null,
   "kind": "LocalArgument",
-  "name": "knowledgeExpr"
+  "name": "intentTreeExpr"
 },
 v2 = {
   "defaultValue": null,
   "kind": "LocalArgument",
-  "name": "name"
+  "name": "knowledgeExpr"
 },
 v3 = {
   "defaultValue": null,
   "kind": "LocalArgument",
-  "name": "operationsExpr"
+  "name": "name"
 },
 v4 = {
   "defaultValue": null,
   "kind": "LocalArgument",
-  "name": "owner"
+  "name": "operationsExpr"
 },
 v5 = {
   "defaultValue": null,
   "kind": "LocalArgument",
-  "name": "reflectionExpr"
+  "name": "owner"
 },
 v6 = {
   "defaultValue": null,
   "kind": "LocalArgument",
+  "name": "reflectionExpr"
+},
+v7 = {
+  "defaultValue": null,
+  "kind": "LocalArgument",
   "name": "stagesExpr"
 },
-v7 = [
+v8 = [
   {
     "kind": "Variable",
     "name": "name",
@@ -121,14 +139,14 @@ v7 = [
     "variableName": "owner"
   }
 ],
-v8 = [
+v9 = [
   {
     "kind": "Variable",
     "name": "expression",
     "variableName": "intentExpr"
   }
 ],
-v9 = {
+v10 = {
   "kind": "InlineFragment",
   "selections": [
     {
@@ -142,31 +160,31 @@ v9 = {
   "type": "Blob",
   "abstractKey": null
 },
-v10 = [
-  (v9/*: any*/)
-],
 v11 = [
+  (v10/*: any*/)
+],
+v12 = [
   {
     "kind": "Variable",
     "name": "expression",
-    "variableName": "stagesExpr"
+    "variableName": "intentTreeExpr"
   }
 ],
-v12 = {
+v13 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
   "name": "name",
   "storageKey": null
 },
-v13 = {
+v14 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
   "name": "type",
   "storageKey": null
 },
-v14 = {
+v15 = {
   "kind": "InlineFragment",
   "selections": [
     {
@@ -177,8 +195,35 @@ v14 = {
       "name": "entries",
       "plural": true,
       "selections": [
-        (v12/*: any*/),
         (v13/*: any*/),
+        (v14/*: any*/)
+      ],
+      "storageKey": null
+    }
+  ],
+  "type": "Tree",
+  "abstractKey": null
+},
+v16 = [
+  {
+    "kind": "Variable",
+    "name": "expression",
+    "variableName": "stagesExpr"
+  }
+],
+v17 = {
+  "kind": "InlineFragment",
+  "selections": [
+    {
+      "alias": null,
+      "args": null,
+      "concreteType": "TreeEntry",
+      "kind": "LinkedField",
+      "name": "entries",
+      "plural": true,
+      "selections": [
+        (v13/*: any*/),
+        (v14/*: any*/),
         {
           "alias": null,
           "args": null,
@@ -186,7 +231,7 @@ v14 = {
           "kind": "LinkedField",
           "name": "object",
           "plural": false,
-          "selections": (v10/*: any*/),
+          "selections": (v11/*: any*/),
           "storageKey": null
         }
       ],
@@ -196,50 +241,50 @@ v14 = {
   "type": "Tree",
   "abstractKey": null
 },
-v15 = [
+v18 = [
   {
     "kind": "Variable",
     "name": "expression",
     "variableName": "knowledgeExpr"
   }
 ],
-v16 = [
-  (v14/*: any*/)
+v19 = [
+  (v17/*: any*/)
 ],
-v17 = [
+v20 = [
   {
     "kind": "Variable",
     "name": "expression",
     "variableName": "operationsExpr"
   }
 ],
-v18 = [
+v21 = [
   {
     "kind": "Variable",
     "name": "expression",
     "variableName": "reflectionExpr"
   }
 ],
-v19 = {
+v22 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
   "name": "__typename",
   "storageKey": null
 },
-v20 = {
+v23 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
   "name": "id",
   "storageKey": null
 },
-v21 = [
-  (v19/*: any*/),
-  (v9/*: any*/),
-  (v20/*: any*/)
+v24 = [
+  (v22/*: any*/),
+  (v10/*: any*/),
+  (v23/*: any*/)
 ],
-v22 = {
+v25 = {
   "kind": "InlineFragment",
   "selections": [
     {
@@ -250,8 +295,8 @@ v22 = {
       "name": "entries",
       "plural": true,
       "selections": [
-        (v12/*: any*/),
         (v13/*: any*/),
+        (v14/*: any*/),
         {
           "alias": null,
           "args": null,
@@ -259,7 +304,7 @@ v22 = {
           "kind": "LinkedField",
           "name": "object",
           "plural": false,
-          "selections": (v21/*: any*/),
+          "selections": (v24/*: any*/),
           "storageKey": null
         }
       ],
@@ -269,10 +314,10 @@ v22 = {
   "type": "Tree",
   "abstractKey": null
 },
-v23 = [
-  (v19/*: any*/),
+v26 = [
   (v22/*: any*/),
-  (v20/*: any*/)
+  (v25/*: any*/),
+  (v23/*: any*/)
 ];
 return {
   "fragment": {
@@ -283,7 +328,8 @@ return {
       (v3/*: any*/),
       (v4/*: any*/),
       (v5/*: any*/),
-      (v6/*: any*/)
+      (v6/*: any*/),
+      (v7/*: any*/)
     ],
     "kind": "Fragment",
     "metadata": null,
@@ -291,7 +337,7 @@ return {
     "selections": [
       {
         "alias": null,
-        "args": (v7/*: any*/),
+        "args": (v8/*: any*/),
         "concreteType": "Repository",
         "kind": "LinkedField",
         "name": "repository",
@@ -299,17 +345,17 @@ return {
         "selections": [
           {
             "alias": "intentFile",
-            "args": (v8/*: any*/),
+            "args": (v9/*: any*/),
             "concreteType": null,
             "kind": "LinkedField",
             "name": "object",
             "plural": false,
-            "selections": (v10/*: any*/),
+            "selections": (v11/*: any*/),
             "storageKey": null
           },
           {
-            "alias": "stagesTree",
-            "args": (v11/*: any*/),
+            "alias": "intentTree",
+            "args": (v12/*: any*/),
             "concreteType": null,
             "kind": "LinkedField",
             "name": "object",
@@ -326,8 +372,51 @@ return {
                     "name": "entries",
                     "plural": true,
                     "selections": [
-                      (v12/*: any*/),
                       (v13/*: any*/),
+                      (v14/*: any*/),
+                      {
+                        "alias": null,
+                        "args": null,
+                        "concreteType": null,
+                        "kind": "LinkedField",
+                        "name": "object",
+                        "plural": false,
+                        "selections": [
+                          (v15/*: any*/)
+                        ],
+                        "storageKey": null
+                      }
+                    ],
+                    "storageKey": null
+                  }
+                ],
+                "type": "Tree",
+                "abstractKey": null
+              }
+            ],
+            "storageKey": null
+          },
+          {
+            "alias": "stagesTree",
+            "args": (v16/*: any*/),
+            "concreteType": null,
+            "kind": "LinkedField",
+            "name": "object",
+            "plural": false,
+            "selections": [
+              {
+                "kind": "InlineFragment",
+                "selections": [
+                  {
+                    "alias": null,
+                    "args": null,
+                    "concreteType": "TreeEntry",
+                    "kind": "LinkedField",
+                    "name": "entries",
+                    "plural": true,
+                    "selections": [
+                      (v13/*: any*/),
+                      (v14/*: any*/),
                       {
                         "alias": null,
                         "args": null,
@@ -347,8 +436,8 @@ return {
                                 "name": "entries",
                                 "plural": true,
                                 "selections": [
-                                  (v12/*: any*/),
                                   (v13/*: any*/),
+                                  (v14/*: any*/),
                                   {
                                     "alias": null,
                                     "args": null,
@@ -357,8 +446,8 @@ return {
                                     "name": "object",
                                     "plural": false,
                                     "selections": [
-                                      (v9/*: any*/),
-                                      (v14/*: any*/)
+                                      (v10/*: any*/),
+                                      (v17/*: any*/)
                                     ],
                                     "storageKey": null
                                   }
@@ -384,32 +473,32 @@ return {
           },
           {
             "alias": "knowledgeTree",
-            "args": (v15/*: any*/),
-            "concreteType": null,
-            "kind": "LinkedField",
-            "name": "object",
-            "plural": false,
-            "selections": (v16/*: any*/),
-            "storageKey": null
-          },
-          {
-            "alias": "operationsTree",
-            "args": (v17/*: any*/),
-            "concreteType": null,
-            "kind": "LinkedField",
-            "name": "object",
-            "plural": false,
-            "selections": (v16/*: any*/),
-            "storageKey": null
-          },
-          {
-            "alias": "reflectionFile",
             "args": (v18/*: any*/),
             "concreteType": null,
             "kind": "LinkedField",
             "name": "object",
             "plural": false,
-            "selections": (v10/*: any*/),
+            "selections": (v19/*: any*/),
+            "storageKey": null
+          },
+          {
+            "alias": "operationsTree",
+            "args": (v20/*: any*/),
+            "concreteType": null,
+            "kind": "LinkedField",
+            "name": "object",
+            "plural": false,
+            "selections": (v19/*: any*/),
+            "storageKey": null
+          },
+          {
+            "alias": "reflectionFile",
+            "args": (v21/*: any*/),
+            "concreteType": null,
+            "kind": "LinkedField",
+            "name": "object",
+            "plural": false,
+            "selections": (v11/*: any*/),
             "storageKey": null
           }
         ],
@@ -422,20 +511,21 @@ return {
   "kind": "Request",
   "operation": {
     "argumentDefinitions": [
-      (v4/*: any*/),
-      (v2/*: any*/),
-      (v0/*: any*/),
-      (v6/*: any*/),
-      (v1/*: any*/),
+      (v5/*: any*/),
       (v3/*: any*/),
-      (v5/*: any*/)
+      (v0/*: any*/),
+      (v1/*: any*/),
+      (v7/*: any*/),
+      (v2/*: any*/),
+      (v4/*: any*/),
+      (v6/*: any*/)
     ],
     "kind": "Operation",
     "name": "operationsGetIntentQuery",
     "selections": [
       {
         "alias": null,
-        "args": (v7/*: any*/),
+        "args": (v8/*: any*/),
         "concreteType": "Repository",
         "kind": "LinkedField",
         "name": "repository",
@@ -443,23 +533,23 @@ return {
         "selections": [
           {
             "alias": "intentFile",
-            "args": (v8/*: any*/),
+            "args": (v9/*: any*/),
             "concreteType": null,
             "kind": "LinkedField",
             "name": "object",
             "plural": false,
-            "selections": (v21/*: any*/),
+            "selections": (v24/*: any*/),
             "storageKey": null
           },
           {
-            "alias": "stagesTree",
-            "args": (v11/*: any*/),
+            "alias": "intentTree",
+            "args": (v12/*: any*/),
             "concreteType": null,
             "kind": "LinkedField",
             "name": "object",
             "plural": false,
             "selections": [
-              (v19/*: any*/),
+              (v22/*: any*/),
               {
                 "kind": "InlineFragment",
                 "selections": [
@@ -471,8 +561,8 @@ return {
                     "name": "entries",
                     "plural": true,
                     "selections": [
-                      (v12/*: any*/),
                       (v13/*: any*/),
+                      (v14/*: any*/),
                       {
                         "alias": null,
                         "args": null,
@@ -481,7 +571,54 @@ return {
                         "name": "object",
                         "plural": false,
                         "selections": [
-                          (v19/*: any*/),
+                          (v22/*: any*/),
+                          (v15/*: any*/),
+                          (v23/*: any*/)
+                        ],
+                        "storageKey": null
+                      }
+                    ],
+                    "storageKey": null
+                  }
+                ],
+                "type": "Tree",
+                "abstractKey": null
+              },
+              (v23/*: any*/)
+            ],
+            "storageKey": null
+          },
+          {
+            "alias": "stagesTree",
+            "args": (v16/*: any*/),
+            "concreteType": null,
+            "kind": "LinkedField",
+            "name": "object",
+            "plural": false,
+            "selections": [
+              (v22/*: any*/),
+              {
+                "kind": "InlineFragment",
+                "selections": [
+                  {
+                    "alias": null,
+                    "args": null,
+                    "concreteType": "TreeEntry",
+                    "kind": "LinkedField",
+                    "name": "entries",
+                    "plural": true,
+                    "selections": [
+                      (v13/*: any*/),
+                      (v14/*: any*/),
+                      {
+                        "alias": null,
+                        "args": null,
+                        "concreteType": null,
+                        "kind": "LinkedField",
+                        "name": "object",
+                        "plural": false,
+                        "selections": [
+                          (v22/*: any*/),
                           {
                             "kind": "InlineFragment",
                             "selections": [
@@ -493,8 +630,8 @@ return {
                                 "name": "entries",
                                 "plural": true,
                                 "selections": [
-                                  (v12/*: any*/),
                                   (v13/*: any*/),
+                                  (v14/*: any*/),
                                   {
                                     "alias": null,
                                     "args": null,
@@ -503,10 +640,10 @@ return {
                                     "name": "object",
                                     "plural": false,
                                     "selections": [
-                                      (v19/*: any*/),
-                                      (v9/*: any*/),
                                       (v22/*: any*/),
-                                      (v20/*: any*/)
+                                      (v10/*: any*/),
+                                      (v25/*: any*/),
+                                      (v23/*: any*/)
                                     ],
                                     "storageKey": null
                                   }
@@ -517,7 +654,7 @@ return {
                             "type": "Tree",
                             "abstractKey": null
                           },
-                          (v20/*: any*/)
+                          (v23/*: any*/)
                         ],
                         "storageKey": null
                       }
@@ -528,57 +665,57 @@ return {
                 "type": "Tree",
                 "abstractKey": null
               },
-              (v20/*: any*/)
+              (v23/*: any*/)
             ],
             "storageKey": null
           },
           {
             "alias": "knowledgeTree",
-            "args": (v15/*: any*/),
-            "concreteType": null,
-            "kind": "LinkedField",
-            "name": "object",
-            "plural": false,
-            "selections": (v23/*: any*/),
-            "storageKey": null
-          },
-          {
-            "alias": "operationsTree",
-            "args": (v17/*: any*/),
-            "concreteType": null,
-            "kind": "LinkedField",
-            "name": "object",
-            "plural": false,
-            "selections": (v23/*: any*/),
-            "storageKey": null
-          },
-          {
-            "alias": "reflectionFile",
             "args": (v18/*: any*/),
             "concreteType": null,
             "kind": "LinkedField",
             "name": "object",
             "plural": false,
-            "selections": (v21/*: any*/),
+            "selections": (v26/*: any*/),
             "storageKey": null
           },
-          (v20/*: any*/)
+          {
+            "alias": "operationsTree",
+            "args": (v20/*: any*/),
+            "concreteType": null,
+            "kind": "LinkedField",
+            "name": "object",
+            "plural": false,
+            "selections": (v26/*: any*/),
+            "storageKey": null
+          },
+          {
+            "alias": "reflectionFile",
+            "args": (v21/*: any*/),
+            "concreteType": null,
+            "kind": "LinkedField",
+            "name": "object",
+            "plural": false,
+            "selections": (v24/*: any*/),
+            "storageKey": null
+          },
+          (v23/*: any*/)
         ],
         "storageKey": null
       }
     ]
   },
   "params": {
-    "cacheID": "a6d10f3a75c82fea7be51419dea8a80b",
+    "cacheID": "880861ad74412df68be2d95e8b286e75",
     "id": null,
     "metadata": {},
     "name": "operationsGetIntentQuery",
     "operationKind": "query",
-    "text": "query operationsGetIntentQuery(\n  $owner: String!\n  $name: String!\n  $intentExpr: String!\n  $stagesExpr: String!\n  $knowledgeExpr: String!\n  $operationsExpr: String!\n  $reflectionExpr: String!\n) {\n  repository(owner: $owner, name: $name) {\n    intentFile: object(expression: $intentExpr) {\n      __typename\n      ... on Blob {\n        text\n      }\n      id\n    }\n    stagesTree: object(expression: $stagesExpr) {\n      __typename\n      ... on Tree {\n        entries {\n          name\n          type\n          object {\n            __typename\n            ... on Tree {\n              entries {\n                name\n                type\n                object {\n                  __typename\n                  ... on Blob {\n                    text\n                  }\n                  ... on Tree {\n                    entries {\n                      name\n                      type\n                      object {\n                        __typename\n                        ... on Blob {\n                          text\n                        }\n                        id\n                      }\n                    }\n                  }\n                  id\n                }\n              }\n            }\n            id\n          }\n        }\n      }\n      id\n    }\n    knowledgeTree: object(expression: $knowledgeExpr) {\n      __typename\n      ... on Tree {\n        entries {\n          name\n          type\n          object {\n            __typename\n            ... on Blob {\n              text\n            }\n            id\n          }\n        }\n      }\n      id\n    }\n    operationsTree: object(expression: $operationsExpr) {\n      __typename\n      ... on Tree {\n        entries {\n          name\n          type\n          object {\n            __typename\n            ... on Blob {\n              text\n            }\n            id\n          }\n        }\n      }\n      id\n    }\n    reflectionFile: object(expression: $reflectionExpr) {\n      __typename\n      ... on Blob {\n        text\n      }\n      id\n    }\n    id\n  }\n}\n"
+    "text": "query operationsGetIntentQuery(\n  $owner: String!\n  $name: String!\n  $intentExpr: String!\n  $intentTreeExpr: String!\n  $stagesExpr: String!\n  $knowledgeExpr: String!\n  $operationsExpr: String!\n  $reflectionExpr: String!\n) {\n  repository(owner: $owner, name: $name) {\n    intentFile: object(expression: $intentExpr) {\n      __typename\n      ... on Blob {\n        text\n      }\n      id\n    }\n    intentTree: object(expression: $intentTreeExpr) {\n      __typename\n      ... on Tree {\n        entries {\n          name\n          type\n          object {\n            __typename\n            ... on Tree {\n              entries {\n                name\n                type\n              }\n            }\n            id\n          }\n        }\n      }\n      id\n    }\n    stagesTree: object(expression: $stagesExpr) {\n      __typename\n      ... on Tree {\n        entries {\n          name\n          type\n          object {\n            __typename\n            ... on Tree {\n              entries {\n                name\n                type\n                object {\n                  __typename\n                  ... on Blob {\n                    text\n                  }\n                  ... on Tree {\n                    entries {\n                      name\n                      type\n                      object {\n                        __typename\n                        ... on Blob {\n                          text\n                        }\n                        id\n                      }\n                    }\n                  }\n                  id\n                }\n              }\n            }\n            id\n          }\n        }\n      }\n      id\n    }\n    knowledgeTree: object(expression: $knowledgeExpr) {\n      __typename\n      ... on Tree {\n        entries {\n          name\n          type\n          object {\n            __typename\n            ... on Blob {\n              text\n            }\n            id\n          }\n        }\n      }\n      id\n    }\n    operationsTree: object(expression: $operationsExpr) {\n      __typename\n      ... on Tree {\n        entries {\n          name\n          type\n          object {\n            __typename\n            ... on Blob {\n              text\n            }\n            id\n          }\n        }\n      }\n      id\n    }\n    reflectionFile: object(expression: $reflectionExpr) {\n      __typename\n      ... on Blob {\n        text\n      }\n      id\n    }\n    id\n  }\n}\n"
   }
 };
 })();
 
-(node as any).hash = "fb0c04dabc5c91ff77cab0bf1ce73c50";
+(node as any).hash = "ff6d12efcb37ced85bf2e910479ad6d4";
 
 export default node;

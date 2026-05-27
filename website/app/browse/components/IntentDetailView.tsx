@@ -1505,9 +1505,16 @@ function StageDetail({
 	onSelectUnit: (u: HaikuUnit) => void
 	assets?: HaikuAsset[]
 }) {
-	// Repo-root-relative dir stage artifacts live in; relative refs inside an
-	// HTML output (./styles.css, ./img/x.png) resolve against it.
-	const artifactBaseDir = `.haiku/intents/${slug}/stages/${stage.name}/artifacts/`
+	// Repo-root-relative dir a given artifact lives in; relative refs inside an
+	// HTML output (./styles.css, ./img/x.png) resolve against it. Artifact
+	// names are stage-relative paths (`artifacts/foo.html`, `proof/x.png`), so
+	// derive the base from the name's own directory rather than assuming
+	// `artifacts/` — a proof/ HTML or a nested artifact resolves correctly.
+	const stageRoot = `.haiku/intents/${slug}/stages/${stage.name}`
+	const artifactBaseDir = (name: string): string => {
+		const slash = name.lastIndexOf("/")
+		return slash >= 0 ? `${stageRoot}/${name.slice(0, slash + 1)}` : `${stageRoot}/`
+	}
 	const hasUnits = stage.units.length > 0
 	const hasArtifacts = (stage.artifacts?.length ?? 0) > 0
 	const hasFeedback = (stage.feedback?.length ?? 0) > 0
@@ -1768,7 +1775,7 @@ function StageDetail({
 									artifact={artifact}
 									host={host}
 									provider={provider}
-									baseDir={artifactBaseDir}
+									baseDir={artifactBaseDir(artifact.name)}
 									onClick={() => setFullscreenArtifact(artifact)}
 								/>
 							))}
@@ -1816,7 +1823,7 @@ function StageDetail({
 					assets={assets}
 					host={host}
 					provider={provider}
-					baseDir={artifactBaseDir}
+					baseDir={artifactBaseDir(fullscreenArtifact.name)}
 					onClose={() => setFullscreenArtifact(null)}
 				/>
 			)}

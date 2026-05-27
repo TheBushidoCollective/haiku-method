@@ -1,19 +1,26 @@
 import { blobToDataUrl, mimeFromPath } from "./html-render"
 import {
+	artifactNeedsUrl,
+	classifyArtifact,
 	deriveActiveStageFromStageTree,
 	deriveStageStateFromUnits,
 	deriveV4ActiveStage,
+	INTENT_STRUCTURED_ENTRIES,
+	isCollectibleIntentAsset,
+	isCollectibleStageFile,
 	isV4Intent,
 	parseElaborationVerified,
 	parseFeedback,
 	parseIntentApprovals,
 	parseIntentFromRaw,
 	parseStageStateJson,
+	STAGE_STRUCTURED_ENTRIES,
 } from "./intent-parsing"
 import { parseSettingsYaml } from "./resolve-links"
 import type {
 	BrowseProvider,
 	HaikuArtifact,
+	HaikuAsset,
 	HaikuFeedback,
 	HaikuIntent,
 	HaikuIntentDetail,
@@ -136,6 +143,46 @@ export class LocalProvider implements BrowseProvider {
 			const name = (err as Error).name ?? "Error"
 			if (name !== "NotFoundError") {
 				console.warn(`[browse] listDirs("${dir}") failed:`, err)
+			}
+			return []
+		}
+	}
+
+	/** List every file under `dir`, recursively, returning paths RELATIVE to
+	 *  `dir`. Top-level directories whose name is in `skipTop` are not
+	 *  descended into (used to avoid re-walking structured subtrees like
+	 *  `stages/` or `units/` that are surfaced by their own parsers).
+	 *  Recurses via `getDirectoryHandle` so it needs no extra handle types. */
+	private async listFilesRecursive(
+		dir: string,
+		skipTop?: ReadonlySet<string>,
+	): Promise<string[]> {
+		try {
+			const parts = dir.split("/").filter(Boolean)
+			let handle: FSDirectoryHandle = this.root
+			for (const part of parts) handle = await handle.getDirectoryHandle(part)
+			const out: string[] = []
+			const walk = async (
+				h: FSDirectoryHandle,
+				prefix: string,
+			): Promise<void> => {
+				for await (const [name, entry] of h.entries()) {
+					const rel = prefix ? `${prefix}/${name}` : name
+					if (entry.kind === "file") {
+						out.push(rel)
+					} else {
+						if (!prefix && skipTop?.has(name)) continue
+						const child = await h.getDirectoryHandle(name)
+						await walk(child, rel)
+					}
+				}
+			}
+			await walk(handle, "")
+			return out.sort()
+		} catch (err) {
+			const name = (err as Error).name ?? "Error"
+			if (name !== "NotFoundError") {
+				console.warn(`[browse] listFilesRecursive("${dir}") failed:`, err)
 			}
 			return []
 		}
@@ -284,47 +331,39 @@ export class LocalProvider implements BrowseProvider {
 			else if (stageNames.indexOf(stageName) < stageNames.indexOf(activeStage))
 				status = "complete"
 
-			// Read stage artifacts
-			const artifactFiles = await this.listFiles(
-				`.haiku/intents/${slug}/stages/${stageName}/artifacts`,
+			// Stage artifacts: walk the WHOLE stage dir, surface every file
+			// that isn't a structured entry (units/feedback/state.json/brief/
+			// observations) or engine bookkeeping — `artifacts/**`, `proof/**`
+			// (runtime-verifier screenshots), and any stray working file. The
+			// artifact `name` is the path RELATIVE to the stage dir so
+			// provenance (`proof/`, `artifacts/`) stays visible in the UI.
+			const stageDir = `.haiku/intents/${slug}/stages/${stageName}`
+			const stageFiles = await this.listFilesRecursive(
+				stageDir,
+				STAGE_STRUCTURED_ENTRIES,
 			)
 			const stageArtifacts: HaikuArtifact[] = []
-			for (const af of artifactFiles) {
-				const lower = af.toLowerCase()
-				const artType: HaikuArtifact["type"] = lower.endsWith(".md")
-					? "markdown"
-					: lower.endsWith(".html") || lower.endsWith(".htm")
-						? "html"
-						: /\.(png|jpe?g|gif|svg|webp|avif|bmp|ico)$/.test(lower)
-							? "image"
-							: "other"
-				// For images / 3D models / PDFs / engineering binaries, the
-				// browse viewers need a URL, not raw text. Resolve those via
-				// `URL.createObjectURL` and stash in `rawUrl` so the
-				// dispatch in IntentDetailView's StageDetail can hand them
-				// to the right specialized viewer.
-				const needsObjectUrl =
-					artType === "image" ||
-					/\.(glb|gltf|pdf|kicad_sch|kicad_pcb|kicad_pro|gbr|drl)$/i.test(af)
-				const artifactPath = `.haiku/intents/${slug}/stages/${stageName}/artifacts/${af}`
-				if (needsObjectUrl) {
+			for (const rel of stageFiles) {
+				if (!isCollectibleStageFile(rel)) continue
+				const artType = classifyArtifact(rel)
+				const artifactPath = `${stageDir}/${rel}`
+				// Images / 3D models / PDFs / engineering binaries need a URL,
+				// not raw text — resolve via `URL.createObjectURL` so the
+				// specialized viewers can consume it. Text inlines as content.
+				if (artifactNeedsUrl(rel)) {
 					const url = await this.getObjectUrl(artifactPath)
 					stageArtifacts.push({
-						name: af,
+						name: rel,
 						type: artType,
 						rawUrl: url ?? undefined,
 					})
 				} else {
 					const artContent = await this.readFile(artifactPath)
-					if (artContent != null) {
-						stageArtifacts.push({
-							name: af,
-							content: artContent,
-							type: artType,
-						})
-					} else {
-						stageArtifacts.push({ name: af, type: artType })
-					}
+					stageArtifacts.push(
+						artContent != null
+							? { name: rel, content: artContent, type: artType }
+							: { name: rel, type: artType },
+					)
 				}
 			}
 
@@ -420,6 +459,25 @@ export class LocalProvider implements BrowseProvider {
 			intentFeedback.push(parseFeedback("local", slug, null, fb, fbRaw, fbPath))
 		}
 
+		// Intent-level loose assets: walk the intent root (skipping the
+		// structured subtrees — stages/knowledge/operations/feedback) and
+		// surface every remaining file — intent-level `proof/**` (the
+		// intent-review runtime-verifier's journey screenshots), mockups, and
+		// strays. HaikuAsset is URL-based; hand an object URL so the asset
+		// grid can render images and link the rest.
+		const intentDir = `.haiku/intents/${slug}`
+		const intentFiles = await this.listFilesRecursive(
+			intentDir,
+			INTENT_STRUCTURED_ENTRIES,
+		)
+		const assets: HaikuAsset[] = []
+		for (const rel of intentFiles) {
+			if (!isCollectibleIntentAsset(rel)) continue
+			const url = await this.getObjectUrl(`${intentDir}/${rel}`)
+			if (!url) continue
+			assets.push({ path: rel, name: rel.split("/").pop() ?? rel, rawUrl: url })
+		}
+
 		return {
 			slug,
 			title: (data.title as string) || slug,
@@ -448,7 +506,7 @@ export class LocalProvider implements BrowseProvider {
 			operations,
 			reflection: await this.readFile(`.haiku/intents/${slug}/reflection.md`),
 			content,
-			assets: [],
+			assets,
 			intentFeedback,
 			intentApprovals: parseIntentApprovals(data),
 		}

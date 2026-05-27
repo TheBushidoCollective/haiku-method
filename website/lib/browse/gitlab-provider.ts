@@ -17,6 +17,7 @@ import {
 	deriveActiveStageFromStageTree,
 	deriveStageStateFromUnits,
 	deriveV4ActiveStage,
+	isCollectibleStageFile,
 	isV4Intent,
 	mergeKnowledge as mergeKnowledgeShared,
 	parseElaborationVerified,
@@ -666,21 +667,26 @@ export class GitLabProvider implements BrowseProvider {
 			)
 		}
 
-		// Parse artifacts
+		// Parse artifacts: surface every file under the stage dir that isn't a
+		// structured entry (units/feedback/state.json/brief/observations) or
+		// engine bookkeeping — `artifacts/**`, `proof/**` (runtime-verifier
+		// screenshots), and strays. The artifact `name` is the stage-relative
+		// path so provenance (`proof/`, `artifacts/`) stays visible. Binary
+		// blobs aren't in `blobByPath` (text only) → build a raw download URL.
 		const artifacts: HaikuArtifact[] = []
-		const artifactsPrefix = `${stagePath}/artifacts/`
+		const stagePrefix = `${stagePath}/`
 		for (const blob of data.allBlobs) {
-			if (!blob.path.startsWith(artifactsPrefix)) continue
-			const fileName = blob.path.slice(artifactsPrefix.length)
-			if (fileName.includes("/")) continue
-			const artType = classifyArtifact(fileName)
+			if (!blob.path.startsWith(stagePrefix)) continue
+			const rel = blob.path.slice(stagePrefix.length)
+			if (!isCollectibleStageFile(rel)) continue
+			const artType = classifyArtifact(rel)
 			const textContent = data.blobByPath.get(blob.path)
 			if (textContent != null) {
-				artifacts.push({ name: fileName, content: textContent, type: artType })
+				artifacts.push({ name: rel, content: textContent, type: artType })
 			} else {
 				const encodedFilePath = encodeURIComponent(blob.path)
 				const rawUrl = `https://${this.host}/api/v4/projects/${this.encodedProject}/repository/files/${encodedFilePath}/raw?ref=${encodeURIComponent(ref)}`
-				artifacts.push({ name: fileName, rawUrl, type: artType })
+				artifacts.push({ name: rel, rawUrl, type: artType })
 			}
 		}
 

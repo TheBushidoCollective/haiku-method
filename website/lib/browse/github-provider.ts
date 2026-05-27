@@ -15,6 +15,8 @@ import {
 	deriveActiveStageFromStageTree,
 	deriveStageStateFromUnits,
 	deriveV4ActiveStage,
+	isCollectibleIntentAsset,
+	isCollectibleStageFile,
 	isV4Intent,
 	mergeKnowledge as mergeKnowledgeShared,
 	parseElaborationVerified,
@@ -27,6 +29,7 @@ import { parseSettingsYaml } from "./resolve-links"
 import type {
 	BrowseProvider,
 	HaikuArtifact,
+	HaikuAsset,
 	HaikuFeedback,
 	HaikuIntent,
 	HaikuIntentDetail,
@@ -230,6 +233,7 @@ export class GitHubProvider implements BrowseProvider {
 				owner: this.owner,
 				name: this.repo,
 				intentExpr: `${ref}:.haiku/intents/${slug}/intent.md`,
+				intentTreeExpr: `${ref}:.haiku/intents/${slug}`,
 				stagesExpr,
 				knowledgeExpr: `${ref}:.haiku/intents/${slug}/knowledge`,
 				operationsExpr: `${ref}:.haiku/intents/${slug}/operations`,
@@ -506,6 +510,7 @@ export class GitHubProvider implements BrowseProvider {
 					owner: this.owner,
 					name: this.repo,
 					intentExpr: `${effectiveRef}:${basePath}/intent.md`,
+					intentTreeExpr: `${effectiveRef}:${basePath}`,
 					stagesExpr: `${effectiveRef}:${basePath}/stages`,
 					knowledgeExpr: `${effectiveRef}:${basePath}/knowledge`,
 					operationsExpr: `${effectiveRef}:${basePath}/operations`,
@@ -560,25 +565,38 @@ export class GitHubProvider implements BrowseProvider {
 			)
 		}
 
-		// Artifacts
+		// Artifacts: surface every file under the stage dir that isn't a
+		// structured entry (units/feedback/state.json/brief/observations) or
+		// engine bookkeeping — `artifacts/**`, `proof/**` (runtime-verifier
+		// screenshots), and strays. The query fetches each stage subdir's files
+		// one level deep, so `proof/<shot>.png` is already in `stageChildren`
+		// (binary blobs return null `text` → a raw download URL). The artifact
+		// `name` is the stage-relative path so provenance stays visible.
 		const artifacts: HaikuArtifact[] = []
-		const artifactsEntry = stageChildren.find(
-			(e) => e.name === "artifacts" && e.type === "tree",
-		)
-		for (const ae of artifactsEntry?.object?.entries ?? []) {
-			if (ae.type !== "blob") continue
-			const artType = classifyArtifact(ae.name)
-			if (ae.object?.text != null) {
-				artifacts.push({
-					name: ae.name,
-					content: ae.object.text,
-					type: artType,
-				})
+		const stageBase = `.haiku/intents/${slug}/stages/${stageName}`
+		const pushArtifact = (rel: string, text: string | null | undefined) => {
+			if (!isCollectibleStageFile(rel)) return
+			const artType = classifyArtifact(rel)
+			if (text != null) {
+				artifacts.push({ name: rel, content: text, type: artType })
 			} else {
-				const basePath = `.haiku/intents/${slug}`
-				const filePath = `${basePath}/stages/${stageName}/artifacts/${ae.name}`
-				const rawUrl = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${encodeURIComponent(ref)}/${filePath}`
-				artifacts.push({ name: ae.name, rawUrl, type: artType })
+				const rawUrl = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${encodeURIComponent(ref)}/${stageBase}/${rel}`
+				artifacts.push({ name: rel, rawUrl, type: artType })
+			}
+		}
+		for (const child of stageChildren) {
+			if (child.type === "tree") {
+				// A subdir (artifacts/, proof/, …). Skip the structured ones
+				// cheaply; iterate the rest's files (one level — the query's
+				// depth). Per-file `isCollectibleStageFile` is the final say.
+				for (const f of child.object?.entries ?? []) {
+					if (f.type !== "blob") continue
+					pushArtifact(`${child.name}/${f.name}`, f.object?.text)
+				}
+			} else if (child.type === "blob") {
+				// A stray file at the stage root (structured blobs like
+				// state.json / elaboration.md are filtered out downstream).
+				pushArtifact(child.name, child.object?.text)
 			}
 		}
 
@@ -734,6 +752,37 @@ export class GitHubProvider implements BrowseProvider {
 		return (data?.repository?.knowledgeTree?.entries ?? [])
 			.filter((e) => e.type === "blob" && e.name.endsWith(".md"))
 			.map((e) => ({ name: e.name, content: e.object?.text || "" }))
+	}
+
+	/** Intent-level loose assets from the intentTree — every file under the
+	 *  intent root that isn't a structured dir/file or bookkeeping. Surfaces
+	 *  intent-level `proof/**` (the intent-review runtime-verifier's journey
+	 *  screenshots), mockups, and strays as URL-based assets. The query
+	 *  fetches one level into each intent-root subdir (so `proof/<shot>.png`
+	 *  is present); deeper nesting isn't fetched (matches the stage depth). */
+	private parseIntentAssets(
+		slug: string,
+		ref: string,
+		data: operationsGetIntentQuery$data | null,
+	): HaikuAsset[] {
+		const base = `.haiku/intents/${slug}`
+		const out: HaikuAsset[] = []
+		const push = (rel: string) => {
+			if (!isCollectibleIntentAsset(rel)) return
+			const rawUrl = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${encodeURIComponent(ref)}/${base}/${rel}`
+			out.push({ path: rel, name: rel.split("/").pop() ?? rel, rawUrl })
+		}
+		for (const e of data?.repository?.intentTree?.entries ?? []) {
+			if (e.type === "tree") {
+				for (const f of e.object?.entries ?? []) {
+					if (f.type !== "blob") continue
+					push(`${e.name}/${f.name}`)
+				}
+			} else if (e.type === "blob") {
+				push(e.name)
+			}
+		}
+		return out
 	}
 
 	/** Merge knowledge files — overlay wins on filename collision.
@@ -989,6 +1038,20 @@ export class GitHubProvider implements BrowseProvider {
 			intentFeedbackRef,
 		)
 
+		// Intent-level loose assets (intent-level proof/**, mockups, strays).
+		// Intent branch wins over default on path collision; default uses HEAD
+		// (multi-branch mode leaves `this.branch` empty → effective ref HEAD).
+		const intentAssetsByPath = new Map<string, HaikuAsset>()
+		for (const a of this.parseIntentAssets(slug, "HEAD", defaultData)) {
+			intentAssetsByPath.set(a.path, a)
+		}
+		if (intentData && intentBranch) {
+			for (const a of this.parseIntentAssets(slug, intentBranch, intentData)) {
+				intentAssetsByPath.set(a.path, a)
+			}
+		}
+		const assets = Array.from(intentAssetsByPath.values())
+
 		// Volatile fields read off the current stage's branch (cursor's
 		// trust source); structural fields (studio, stages list, mode,
 		// created_at) come from the intent-branch parse since they're
@@ -1043,7 +1106,7 @@ export class GitHubProvider implements BrowseProvider {
 			operations,
 			reflection,
 			content,
-			assets: [],
+			assets,
 			intentFeedback,
 			intentApprovals: parseIntentApprovals(currentStageFrontmatter),
 			...(this.intentMetaMap.get(slug) || {}),
@@ -1180,6 +1243,7 @@ export class GitHubProvider implements BrowseProvider {
 			slug,
 			this.branch || "HEAD",
 		)
+		const assets = this.parseIntentAssets(slug, this.branch || "HEAD", data)
 
 		return {
 			slug,
@@ -1214,7 +1278,7 @@ export class GitHubProvider implements BrowseProvider {
 			operations,
 			reflection,
 			content,
-			assets: [],
+			assets,
 			intentFeedback,
 			intentApprovals: parseIntentApprovals(frontmatter),
 			branch: this.branch,

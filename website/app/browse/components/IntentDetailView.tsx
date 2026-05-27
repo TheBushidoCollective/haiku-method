@@ -1425,7 +1425,10 @@ function LazyOutputPreview({
 						loading: false,
 						content: text,
 						rawUrl: null,
-						error: text == null ? "Couldn't load this file." : null,
+						error:
+							text == null
+								? "Declared in the unit's outputs, but no file is on disk yet — it may not have been produced, or lives on a branch this view can't reach."
+								: null,
 					})
 				} else {
 					let url: string | null = null
@@ -1439,7 +1442,10 @@ function LazyOutputPreview({
 						loading: false,
 						content: null,
 						rawUrl: url,
-						error: url == null ? "Couldn't load this file." : null,
+						error:
+							url == null
+								? "Declared in the unit's outputs, but no file is on disk yet — it may not have been produced, or lives on a branch this view can't reach."
+								: null,
 					})
 				}
 			} catch (e) {

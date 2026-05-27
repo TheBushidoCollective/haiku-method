@@ -37,6 +37,7 @@ import {
 	SINGLE_ACTOR_ROLES,
 	snapshotMilestoneIndex,
 } from "../orchestrator/workflow/progress-track.js"
+
 // Re-exported for callers/tests that have always imported these from the
 // statusline module; the canonical home is now progress-track (shared with
 // the SPA's phase strip so they can't drift).

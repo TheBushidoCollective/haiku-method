@@ -405,7 +405,10 @@ function actionWaitsOnExternalInput(
 	// The intent-completion HUMAN gate rides `intent_review` with role
 	// "user" (the engine reviewers are `spec`/`continuity`/… and DO make
 	// progress; only the terminal user role waits on the human).
-	if (kind === "intent_review" && (action as Record<string, unknown>).role === "user") {
+	if (
+		kind === "intent_review" &&
+		(action as Record<string, unknown>).role === "user"
+	) {
 		return true
 	}
 	return false

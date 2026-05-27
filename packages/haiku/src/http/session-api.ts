@@ -16,11 +16,11 @@ import {
 	resolveIntentStages,
 	resolveStudioStages,
 } from "../orchestrator/studio.js"
+import { derivePosition } from "../orchestrator/workflow/cursor.js"
 import {
 	type DriftEvent,
 	runDriftSweep,
 } from "../orchestrator/workflow/drift-sweep.js"
-import { derivePosition } from "../orchestrator/workflow/cursor.js"
 import {
 	deriveProgressTrack,
 	deriveStageMilestones,

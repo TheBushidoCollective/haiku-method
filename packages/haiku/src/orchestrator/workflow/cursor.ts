@@ -2351,7 +2351,7 @@ export function derivePosition(args: {
  *  truth for both the intent-level cursor walk and the progress track.
  *  Done-ness is read from intent.md `approvals.<role>` (NOT reviews.*). */
 export function intentReviewRoles(
-	mode: string,
+	_mode: string,
 	studioAgents: ReadonlyArray<string> = [],
 ): string[] {
 	const base = ["spec", "continuity", "cross-stage-consistency"]

@@ -85,8 +85,6 @@ function buildRoleBlock(
 	const engineBodyTpl = ENGINE_REVIEW_BODIES[role]
 	let mandateRef = ""
 	let mandateModel: string | undefined
-	let promptBody: string
-
 	if (engineBodyTpl) {
 		// Engine role — rendered, not a studio file. Snapshot directly.
 		const engineBody = eta.renderString(engineBodyTpl, { slug }).trim()
@@ -117,7 +115,7 @@ function buildRoleBlock(
 		}
 	}
 
-	promptBody = mandateRef
+	const promptBody = mandateRef
 		? eta.renderString(SUBAGENT_TEMPLATE, {
 				slug,
 				role,

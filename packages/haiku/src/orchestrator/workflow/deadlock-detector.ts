@@ -346,10 +346,12 @@ export function recordTickResult(
 		}
 
 		// Churn detection: take the LAST CHURN_MIN_TICKS entries from
-		// recent. If they cycle through ≤ CHURN_MAX_DISTINCT signatures,
-		// it's an alternating wedge.
-		if (!entry.churn_fired && recent.length >= CHURN_MIN_TICKS) {
-			const tail = recent.slice(-CHURN_MIN_TICKS)
+		// recent (minus any wait-for-human signatures a legacy window may
+		// hold — same filter the halt check uses). If they cycle through
+		// ≤ CHURN_MAX_DISTINCT signatures, it's an alternating wedge.
+		const progression = progressionSignatures(recent)
+		if (!entry.churn_fired && progression.length >= CHURN_MIN_TICKS) {
+			const tail = progression.slice(-CHURN_MIN_TICKS)
 			const distinct = new Set(tail)
 			if (distinct.size <= CHURN_MAX_DISTINCT && distinct.size > 1) {
 				emitTelemetry("haiku.deadlock.churn_suspected", {
@@ -436,6 +438,35 @@ function actionWaitsOnExternalInput(
 	return false
 }
 
+/** A signature string (as stored in `recent[]`) is a wait-for-human /
+ *  block-on-external marker. Used to keep those signatures out of the
+ *  churn computation even when they already sit in a persisted window —
+ *  e.g. a pre-fix `.deadlock-history.json` whose window filled with
+ *  `user_gate` before `recordTickResult` exempted them. The signature is
+ *  the JSON produced by `actionSignatureForDeadlock`, so parse it back
+ *  and reuse the same predicate. */
+function signatureWaitsOnExternalInput(signature: string): boolean {
+	try {
+		return actionWaitsOnExternalInput(
+			JSON.parse(signature) as Record<string, unknown>,
+		)
+	} catch {
+		return false
+	}
+}
+
+/** Drop wait-for-human signatures from a window before any churn test.
+ *  Churn is an ENGINE wedge (the same workflow actions cycling with no
+ *  on-disk progress); idle human-waits interleaved in the window are not
+ *  part of a wedge and must not count toward distinct-signature cycling.
+ *  Going forward these never enter the window (`recordTickResult` exempts
+ *  them); this also HEALS a legacy window persisted before that exemption
+ *  shipped — the next genuine progress action sees a clean progression
+ *  history and is not false-halted. */
+function progressionSignatures(window: string[]): string[] {
+	return window.filter((s) => !signatureWaitsOnExternalInput(s))
+}
+
 export function wouldDeadlock(
 	slug: string,
 	action: Record<string, unknown> | null | undefined,
@@ -464,9 +495,13 @@ export function wouldDeadlock(
 		return { kind: "repeat", count: prev.count + 1, signature }
 	}
 	// Churn-halt check: simulate appending the new signature to the
-	// window, then see if the resulting tail of the last
-	// CHURN_HALT_MIN_TICKS signatures cycles through ≤ 2 distinct values.
-	const projected = [...prev.recent, signature].slice(-CHURN_WINDOW)
+	// window, drop any wait-for-human signatures (they're not part of an
+	// engine wedge — and a legacy persisted window may still hold them),
+	// then see if the resulting tail of the last CHURN_HALT_MIN_TICKS
+	// signatures cycles through ≤ 2 distinct values.
+	const projected = progressionSignatures(
+		[...prev.recent, signature].slice(-CHURN_WINDOW),
+	)
 	if (projected.length >= CHURN_HALT_MIN_TICKS) {
 		const tail = projected.slice(-CHURN_HALT_MIN_TICKS)
 		const distinct = new Set(tail)
@@ -537,6 +572,15 @@ export function buildLoopHaltAction(
 		message,
 		loop: verdict.kind,
 	}
+}
+
+/** Test-only: seed the in-memory entry for a slug, standing in for a
+ *  rehydrated-from-disk history — e.g. a pre-fix `.deadlock-history.json`
+ *  whose `recent[]` window filled with `user_gate` signatures before they
+ *  were exempted. `loadEntry` reads the in-memory map first, so both
+ *  `wouldDeadlock` and `recordTickResult` see this entry. */
+export function __seedEntryForTests(slug: string, entry: TickEntry): void {
+	tickHistory.set(slug, entry)
 }
 
 /** Test-only: reset detector state between test runs. Clears both the

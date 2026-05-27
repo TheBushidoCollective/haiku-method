@@ -25,6 +25,7 @@ const {
 	__resetDeadlockDetector,
 	__simulateRestartForTests,
 	__getTickHistoryForTests,
+	__seedEntryForTests,
 	actionSignatureForDeadlock,
 } = await import("../src/orchestrator/workflow/deadlock-detector.ts")
 
@@ -662,5 +663,78 @@ test("user_gate exemption does NOT mask a genuine engine wedge that follows", ()
 	for (const x of [A, B, A, B, A, B, A]) recordTickResult("slug-mix", x)
 	const verdict = wouldDeadlock("slug-mix", B)
 	assert.ok(verdict, "an interleaved gate must not disarm a genuine A↔B wedge")
+	assert.strictEqual(verdict.kind, "churn")
+})
+
+// ─ Recovery: a window persisted BEFORE the user_gate exemption shipped
+// still holds user_gate signatures on disk. After an MCP restart it
+// rehydrates (if not yet stale), so the next genuine progress action
+// would re-trip churn unless the churn computation excludes the
+// wait-for-human signatures. This reproduces the EXACT worker-new-badge
+// .deadlock-history.json (recent[] = 9× user_gate, signature =
+// loop_halted, churn_fired = false) and asserts the engine self-heals —
+// no manual file deletion required.
+test("worker-new-badge: a rehydrated pre-fix user_gate window self-heals on the next progress tick", () => {
+	__resetDeadlockDetector()
+	const gateSig = actionSignatureForDeadlock({
+		action: "user_gate",
+		stage: "development",
+		unit_batch: "unit-001-render-new-tag-in-worker-dates",
+	})
+	const haltSig = actionSignatureForDeadlock({ action: "loop_halted" })
+	const now = new Date().toISOString()
+	__seedEntryForTests("slug-rehydrate", {
+		signature: haltSig,
+		count: 1,
+		first_seen: now,
+		updated_at: now,
+		recent: Array(9).fill(gateSig),
+		churn_fired: false,
+	})
+	const progress = {
+		action: "start_unit_hat",
+		stage: "development",
+		hat: "planner",
+		units: ["unit-001-render-new-tag-in-worker-dates"],
+	}
+	const verdict = wouldDeadlock("slug-rehydrate", progress)
+	assert.strictEqual(
+		verdict,
+		null,
+		"a pre-fix poisoned user_gate window must not re-halt the next progress action",
+	)
+	// And recording that progress tick must not (falsely) latch churn.
+	recordTickResult("slug-rehydrate", progress)
+	assert.strictEqual(
+		__getTickHistoryForTests("slug-rehydrate").churn_fired,
+		false,
+		"progress after a poisoned gate window does not latch churn telemetry",
+	)
+})
+
+test("a genuine A↔B wedge with gate signatures interleaved in the window still halts", () => {
+	// The filter removes ONLY wait-for-human signatures. A real engine
+	// wedge whose window happens to contain a stray gate signature must
+	// still reach the distinct-count threshold and halt.
+	__resetDeadlockDetector()
+	// recent[] holds signature STRINGS; wouldDeadlock takes the action OBJECT.
+	const Aobj = { action: "dispatch_review", role: "spec" }
+	const Bobj = { action: "complete_stage", stage: "design" }
+	const A = actionSignatureForDeadlock(Aobj)
+	const B = actionSignatureForDeadlock(Bobj)
+	const gateSig = actionSignatureForDeadlock({ action: "user_gate", stage: "design" })
+	const now = new Date().toISOString()
+	// 8 real alternating ticks with one gate signature mixed in — the
+	// gate drops out, leaving a clean A↔B wedge of length ≥ 8.
+	__seedEntryForTests("slug-wedge", {
+		signature: A,
+		count: 1,
+		first_seen: now,
+		updated_at: now,
+		recent: [A, B, A, B, gateSig, A, B, A, B],
+		churn_fired: false,
+	})
+	const verdict = wouldDeadlock("slug-wedge", Bobj)
+	assert.ok(verdict, "a real A↔B wedge must still halt despite an interleaved gate")
 	assert.strictEqual(verdict.kind, "churn")
 })

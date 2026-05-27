@@ -533,3 +533,145 @@ html.dark,
 html.dark * {
 	scrollbar-color: oklch(0.5 0.005 90 / 0.4) transparent;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Code artifact syntax highlighting (highlight.js).
+
+   `type: "code"` outputs render via `codeHighlight.ts`
+   (`highlightCodeToHtml`) into `<pre class="hljs-block"><code class="hljs">…`
+   with `hljs-*` token spans. We ship a compact in-house theme (rather than a
+   prebuilt highlight.js stylesheet) so it tracks the SPA's stone palette and
+   the class-based dark toggle, and adds nothing the single-blob bundle
+   doesn't need. Token set covers the common-build grammars; anything not
+   listed inherits the base code color, so an unmapped token is never
+   invisible.
+   ───────────────────────────────────────────────────────────────────────── */
+.hljs-block {
+	margin: 0;
+	padding: 1rem;
+	border-radius: 0.5rem;
+	background: oklch(98% 0.003 90); /* stone-50 */
+	border: 1px solid oklch(92% 0.004 90); /* stone-200 */
+	overflow-x: auto;
+	max-height: 70vh;
+}
+.dark .hljs-block {
+	background: oklch(20% 0.004 90); /* ~stone-950 */
+	border-color: oklch(30% 0.004 90); /* ~stone-800 */
+}
+.hljs-block code.hljs {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 0.8125rem;
+	line-height: 1.6;
+	color: oklch(30% 0.01 260); /* base — stone-700-ish */
+	white-space: pre;
+}
+.dark .hljs-block code.hljs {
+	color: oklch(86% 0.01 260); /* stone-200-ish */
+}
+
+/* Light token palette (GitHub-light-ish, oklch). */
+.hljs-comment,
+.hljs-quote {
+	color: oklch(55% 0.02 150);
+	font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-meta .hljs-keyword {
+	color: oklch(48% 0.18 16); /* red/keyword */
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta .hljs-string {
+	color: oklch(48% 0.13 250); /* blue/string */
+}
+.hljs-number,
+.hljs-literal,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag .hljs-attr {
+	color: oklch(50% 0.13 40); /* orange/number */
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+	color: oklch(50% 0.15 295); /* violet/title */
+}
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-built_in,
+.hljs-builtin-name {
+	color: oklch(45% 0.12 200); /* teal/type */
+}
+/* biome-ignore lint/style/noDescendingSpecificity: `.hljs-attr` also appears in the higher-specificity `.hljs-tag .hljs-attr` rule above; that contextual rule SHOULD win when an attr is nested in a tag — the order is intentional, not a cascade bug. */
+.hljs-attr,
+.hljs-property,
+.hljs-params {
+	color: oklch(45% 0.1 60);
+}
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-meta,
+.hljs-deletion {
+	color: oklch(50% 0.08 30);
+}
+.hljs-emphasis {
+	font-style: italic;
+}
+.hljs-strong {
+	font-weight: 700;
+}
+
+/* Dark token palette (GitHub-dark-ish, oklch) — brighter for contrast. */
+.dark .hljs-comment,
+.dark .hljs-quote {
+	color: oklch(62% 0.02 150);
+}
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-literal,
+.dark .hljs-doctag,
+.dark .hljs-meta .hljs-keyword {
+	color: oklch(74% 0.16 16);
+}
+.dark .hljs-string,
+.dark .hljs-regexp,
+.dark .hljs-addition,
+.dark .hljs-attribute,
+.dark .hljs-meta .hljs-string {
+	color: oklch(76% 0.12 235);
+}
+.dark .hljs-number,
+.dark .hljs-variable,
+.dark .hljs-template-variable,
+.dark .hljs-tag .hljs-attr {
+	color: oklch(78% 0.13 55);
+}
+.dark .hljs-title,
+.dark .hljs-title.function_,
+.dark .hljs-section,
+.dark .hljs-name,
+.dark .hljs-selector-id,
+.dark .hljs-selector-class {
+	color: oklch(78% 0.14 300);
+}
+.dark .hljs-type,
+.dark .hljs-class .hljs-title,
+.dark .hljs-built_in,
+.dark .hljs-builtin-name {
+	color: oklch(80% 0.12 195);
+}
+.dark .hljs-attr,
+.dark .hljs-property,
+.dark .hljs-params {
+	color: oklch(82% 0.09 65);
+}

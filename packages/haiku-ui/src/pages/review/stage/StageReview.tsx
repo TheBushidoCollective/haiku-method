@@ -43,6 +43,7 @@ import {
 import type { ParsedUnit } from "../../../parsed"
 import type { FeedbackItemData } from "../../../types"
 import { authedAssetUrl } from "../shared/asset-url"
+import { highlightCodeToHtml } from "../shared/codeHighlight"
 import { DeclaringUnitsBanner } from "../shared/DeclaringUnitsBanner"
 import { resolveEmbeddedAssetUrls } from "../shared/inline-asset-urls"
 import {
@@ -313,6 +314,9 @@ interface ArtifactViewModel {
 	summary: string
 	body: string
 	mime: string
+	/** For `mime === "code"` — the highlight.js language id. Undefined for
+	 *  text with no known grammar (renders as a plain escaped `<pre>`). */
+	language?: string
 	/** Intent-dir-relative path. Set for outputs that came through
 	 *  parseOutputArtifacts (used to look the artifact up in
 	 *  `output_declared_by` for the "Declared by" banner). Optional
@@ -412,6 +416,7 @@ export function StageReview({
 	const toArtifactVM = (a: {
 		name: string
 		type: string
+		language?: string
 		content?: string
 		relativePath?: string
 		intentRelativePath?: string
@@ -421,6 +426,7 @@ export function StageReview({
 		summary: summaryFor(a.name, a.content ?? "", a.type),
 		body: a.content ?? "",
 		mime: a.type,
+		language: a.language,
 		intentRelativePath: a.intentRelativePath,
 		// Server rewrote `relativePath` to a tunnel URL (see
 		// `buildStageArtifactUrl` in server/tool-call.ts). Carry it
@@ -2309,6 +2315,56 @@ function ArtifactBody({
 		}
 		return img
 	}
+	if (artifact.mime === "video") {
+		// Binary media — play from the tunnel URL the server prepared.
+		const src = artifact.assetUrl
+			? authedAssetUrl(artifact.assetUrl)
+			: artifact.body
+		if (!src) {
+			return (
+				<p className="text-xs italic text-stone-500">
+					No preview available for {artifact.name}.
+				</p>
+			)
+		}
+		return (
+			<video
+				src={src}
+				controls
+				className="w-full max-h-[70vh] rounded-md bg-black"
+			>
+				<track kind="captions" />
+			</video>
+		)
+	}
+	if (artifact.mime === "code") {
+		// Syntax-highlighted + escaped. Wrapped in InlineComments so a
+		// reviewer can select a span of code and attach a comment — same
+		// annotation contract as markdown.
+		const html = highlightCodeToHtml(artifact.body, artifact.language)
+		if (onInlineCommentsChange) {
+			return (
+				<InlineComments
+					htmlContent={html}
+					rawContent={artifact.body}
+					location={`${kind}: ${artifact.name}`}
+					filePath={filePath}
+					existingAnchors={existingAnchors}
+					onCommentsChange={onInlineCommentsChange}
+					onSaveInline={onSaveInline}
+					flashAnchor={flashAnchor}
+					onFlashCommentConsumed={onFlashCommentConsumed}
+				/>
+			)
+		}
+		return (
+			<div
+				// biome-ignore lint/security/noDangerouslySetInnerHtml: highlight.js output, DOMPurify-sanitized in highlightCodeToHtml // audit-allow: sanitized highlight.js code render
+				dangerouslySetInnerHTML={{ __html: html }}
+			/>
+		)
+	}
+	// Unknown / plain text — escaped <pre> ASCII floor (never an empty box).
 	return (
 		<pre className="text-xs font-mono text-stone-700 dark:text-stone-300 whitespace-pre-wrap bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-md p-3 max-h-[60vh] overflow-auto">
 			{artifact.body}

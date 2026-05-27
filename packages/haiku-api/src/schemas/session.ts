@@ -88,7 +88,11 @@ export type StageArtifact = z.infer<typeof StageArtifactSchema>
 export const OutputArtifactSchema = z.object({
 	stage: z.string(),
 	name: z.string(),
-	type: z.enum(["markdown", "html", "image", "file"]),
+	type: z.enum(["markdown", "html", "image", "video", "code", "file"]),
+	/** For `type: "code"` — the highlight.js language id (`tsx`, `python`,
+	 *  …). Undefined when the text has no known grammar (renders as a plain
+	 *  `<pre>`). */
+	language: z.string().optional(),
 	content: z.string().optional(),
 	/** URL the SPA fetches via the `/stage-artifacts/:sessionId/*`
 	 *  route — already includes the route prefix and session id. */

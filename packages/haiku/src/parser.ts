@@ -483,6 +483,50 @@ export async function parseStageArtifacts(
 
 const OUTPUT_IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"]
 const OUTPUT_HTML_EXTS = [".html", ".htm"]
+const OUTPUT_VIDEO_EXTS = [".mp4", ".webm", ".mov", ".m4v", ".ogv"]
+
+/** Map a file extension to a highlight.js language id. Drives the
+ *  syntax-highlighted code renderer in the review SPA. Extensions in
+ *  OUTPUT_TEXT_EXTS that aren't here still render — as a plain `<pre>`
+ *  (language undefined). */
+const EXT_TO_HLJS_LANG: Record<string, string> = {
+	".ts": "typescript",
+	".tsx": "tsx",
+	".js": "javascript",
+	".jsx": "jsx",
+	".mjs": "javascript",
+	".cjs": "javascript",
+	".py": "python",
+	".rb": "ruby",
+	".go": "go",
+	".rs": "rust",
+	".java": "java",
+	".kt": "kotlin",
+	".swift": "swift",
+	".c": "c",
+	".h": "c",
+	".cpp": "cpp",
+	".cs": "csharp",
+	".css": "css",
+	".scss": "scss",
+	".sh": "bash",
+	".bash": "bash",
+	".zsh": "bash",
+	".sql": "sql",
+	".graphql": "graphql",
+	".gql": "graphql",
+	".yaml": "yaml",
+	".yml": "yaml",
+	".json": "json",
+	".toml": "ini",
+	".ini": "ini",
+	".env": "bash",
+	".tf": "terraform",
+	".hcl": "terraform",
+	".cue": "go",
+	".feature": "gherkin",
+	".gherkin": "gherkin",
+}
 // ASCII / text-shaped outputs that the review pane should be able to
 // render inline (read, not download). Gherkin `.feature` files for
 // Cucumber are the canonical case — reviewers reported they couldn't
@@ -535,8 +579,14 @@ const OUTPUT_TEXT_EXTS = [
 export interface OutputArtifact {
 	stage: string
 	name: string
-	type: "markdown" | "html" | "image" | "file"
-	/** Markdown and HTML content is inlined; images and unknown files use relativePath */
+	type: "markdown" | "html" | "image" | "video" | "code" | "file"
+	/** For `type: "code"` — the highlight.js language id (e.g. `tsx`,
+	 *  `python`, `yaml`). Undefined when the extension is text-shaped but
+	 *  has no known grammar — the renderer falls through to a plain
+	 *  `<pre>`. */
+	language?: string
+	/** Markdown, code, and HTML content is inlined; images, video, and
+	 *  unknown binary files use relativePath */
 	content?: string
 	/** Relative path within the stage artifacts dir (for serving via HTTP) */
 	relativePath?: string
@@ -613,20 +663,25 @@ async function buildArtifactEntry(
 	if (OUTPUT_IMAGE_EXTS.includes(ext)) {
 		return { stage, name, type: "image", relativePath }
 	}
+	if (OUTPUT_VIDEO_EXTS.includes(ext)) {
+		// Binary media — served via the tunnel URL, played in a <video>.
+		return { stage, name, type: "video", relativePath }
+	}
 	if (OUTPUT_TEXT_EXTS.includes(ext)) {
 		try {
 			const content = await readFile(fullPath, "utf-8")
-			// Surface text-shaped outputs (.feature, .yaml, .ts, etc.) as
-			// markdown so the renderer's existing markdown viewer renders
-			// them as readable text rather than offering a download. The
-			// content isn't actually markdown — but the renderer's
-			// markdown path tolerates plain text gracefully (no markdown
-			// syntax = renders as paragraphs), and the alternative
-			// (binary file download) is the bug we're fixing.
+			// Text-shaped outputs (.tsx, .py, .yaml, .feature, …) render as
+			// CODE, not markdown. The old behavior typed them `markdown` and
+			// fed them through remark — which parsed embedded JSX/HTML
+			// (`<div>`, `<Component>`) as inline HTML and DOMPurify stripped
+			// it, leaving an empty box (reported 2026-05-27 on a `.tsx`
+			// output). As `code` the renderer escapes + syntax-highlights the
+			// source and the inline-comment layer can anchor to it.
 			return {
 				stage,
 				name,
-				type: "markdown",
+				type: "code",
+				language: EXT_TO_HLJS_LANG[ext],
 				content,
 				relativePath,
 			}
@@ -635,11 +690,41 @@ async function buildArtifactEntry(
 			// reviewer at least sees the entry.
 		}
 	}
-	// Unknown extension — surface as a download link rather than silently
-	// dropping the file. A stage's artifact set should be visible in the
-	// review screen regardless of whether the renderer has a specialized
-	// view for the format.
+	// Unknown extension: sniff for text. Readable text → `code` with no
+	// language (renders as a plain escaped `<pre>`). Binary → a download
+	// link. Either way the entry stays visible in the review screen rather
+	// than being silently dropped.
+	try {
+		const buf = await readFile(fullPath)
+		if (isProbablyTextBuffer(buf)) {
+			return {
+				stage,
+				name,
+				type: "code",
+				content: buf.toString("utf-8"),
+				relativePath,
+			}
+		}
+	} catch {
+		// Unreadable — fall through to the download entry.
+	}
 	return { stage, name, type: "file", relativePath }
+}
+
+/** Heuristic: is this buffer textual? A NUL byte in the first 8KB is the
+ *  classic binary signal; we also bail if a large share of the sample is
+ *  non-printable control bytes. Good enough to decide `<pre>` vs download
+ *  for an unknown extension. */
+function isProbablyTextBuffer(buf: Buffer): boolean {
+	const sample = buf.subarray(0, 8192)
+	if (sample.length === 0) return true // empty file → render as empty <pre>
+	let suspicious = 0
+	for (const byte of sample) {
+		if (byte === 0) return false // NUL → binary
+		// Allow tab(9), LF(10), CR(13); flag other C0 control bytes.
+		if (byte < 9 || (byte > 13 && byte < 32)) suspicious += 1
+	}
+	return suspicious / sample.length < 0.1
 }
 
 /**

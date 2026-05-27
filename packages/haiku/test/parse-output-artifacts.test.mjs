@@ -91,19 +91,22 @@ await test("preserves directory hierarchy in artifact name", async () => {
 	assert.ok(wireframe.content?.includes("upload"), "html content inlined")
 })
 
-await test("text-shaped unknown extensions surface as type:markdown with content (so the renderer's markdown path picks them up)", async () => {
+await test("text-shaped outputs surface as type:code with content + language (renderer syntax-highlights them)", async () => {
 	const intentDir = setupIntent()
 	const artifacts = await parseOutputArtifacts(intentDir)
 	const tokens = artifacts.find((a) => a.name === "tokens.json")
 	assert.ok(tokens, "tokens.json should surface")
-	// Contract change 2026-05-12: text-shaped outputs (.json, .yaml,
-	// .feature, source code, etc.) are inlined as type:"markdown" so
-	// reviewers can READ them in the review pane instead of getting a
-	// download link they have to open in a different editor. The OLD
-	// behavior (type:"file" for everything non-{md,html,image}) made
-	// Gherkin .feature files unreviewable. See OUTPUT_TEXT_EXTS in
+	// Contract change 2026-05-27: text-shaped outputs (.json, .yaml,
+	// .feature, source code, etc.) are inlined as type:"code" (with a
+	// highlight.js `language` id) so reviewers READ them syntax-highlighted
+	// in the review pane. The PRIOR behavior typed them "markdown" and fed
+	// them through remark, which parsed embedded JSX/HTML as inline HTML and
+	// DOMPurify stripped it — code outputs rendered as an empty box. The
+	// behavior BEFORE that (type:"file" for everything non-{md,html,image})
+	// made them unreviewable. See OUTPUT_TEXT_EXTS / EXT_TO_HLJS_LANG in
 	// packages/haiku/src/parser.ts.
-	assert.strictEqual(tokens.type, "markdown")
+	assert.strictEqual(tokens.type, "code")
+	assert.strictEqual(tokens.language, "json", ".json → json grammar")
 	assert.ok(
 		typeof tokens.content === "string" && tokens.content.length > 0,
 		"text-shaped output must inline its content for the renderer",
@@ -224,17 +227,19 @@ await test("unit-declared markdown is rendered with stripped frontmatter", async
 	assert.ok(!ac.content?.includes("title: Acceptance"), "frontmatter stripped")
 })
 
-await test("unit-declared .feature file surfaces as type:markdown so it renders in the review pane", async () => {
+await test("unit-declared .feature file surfaces as type:code so it renders in the review pane", async () => {
 	const intentDir = setupIntentWithUnitOutputs()
 	const artifacts = await parseOutputArtifacts(intentDir)
 	const feat = artifacts.find(
 		(a) => a.name === "features/drift-detection.feature",
 	)
-	// .feature files are Gherkin (text-shaped). Pre-2026-05-12 they
-	// surfaced as type:"file" → reviewers got a download link instead
-	// of the readable spec. Now treated as markdown so the renderer
-	// inlines them.
-	assert.strictEqual(feat.type, "markdown")
+	// .feature files are Gherkin (text-shaped). They surface as type:"code"
+	// with language "gherkin" so the renderer inlines + highlights them
+	// (falling back to a plain escaped <pre> if the SPA's highlight.js build
+	// lacks the gherkin grammar). Earlier history: type:"file" (download
+	// link, unreviewable) → type:"markdown" (remark ate embedded markup).
+	assert.strictEqual(feat.type, "code")
+	assert.strictEqual(feat.language, "gherkin")
 	assert.ok(
 		typeof feat.content === "string" && feat.content.length > 0,
 		"text-shaped output must inline its content",
@@ -353,8 +358,11 @@ await test("catch-all: ad-hoc top-level files inside the stage dir surface", asy
 	assert.strictEqual(readme.type, "markdown")
 	assert.ok(readme.content?.includes("stage readme body"))
 	assert.ok(notes, "expected notes.txt to surface")
-	// .txt is text-shaped → type:markdown (renderable) post-2026-05-12.
-	assert.strictEqual(notes.type, "markdown")
+	// .txt is text-shaped → type:code (renderable). No EXT_TO_HLJS_LANG
+	// mapping for .txt, so `language` is undefined → the renderer shows a
+	// plain escaped <pre> (the ASCII floor) rather than tokenized colors.
+	assert.strictEqual(notes.type, "code")
+	assert.strictEqual(notes.language, undefined)
 	assert.ok(
 		typeof notes.content === "string" && notes.content.length > 0,
 		"text-shaped output must inline its content",

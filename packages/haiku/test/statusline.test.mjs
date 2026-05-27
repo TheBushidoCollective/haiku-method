@@ -1197,6 +1197,85 @@ test("resolveStatuslineState: discovery agents surface as chips during elaborate
 	}
 })
 
+test("resolveStatuslineState: decompose/verify chips fill the elaborate loop's TAIL (no empty line during decomposing — 2026-05-27 bug)", async () => {
+	if (!HAS_GIT) return
+	// The reported bug: in an elaborate loop with the decompose-verifier
+	// running, the second line was EMPTY — the discovery-chip block hides once
+	// every discovery artifact lands, and decompose/verify_decompose had no
+	// chip source. Here discovery is DONE (artifacts seeded) and conversation
+	// is done (`verified_at`); decompose itself is still unmet (no units / not
+	// verified), so the pipeline reads `decompose ▸ verify ○` — decompose
+	// active, verify pending (NOT done: a downstream step isn't listed in
+	// signals_unmet until its predecessor is met).
+	const repoRoot = mkdtempSync(join(tmpdir(), "haiku-sl-decompose-"))
+	const orig = process.cwd()
+	try {
+		const slug = "sl-decompose"
+		const stage = "development"
+		const AT = "2026-05-27T00:00:00Z"
+		const intentDir = join(repoRoot, ".haiku", "intents", slug)
+		const stageDir = join(intentDir, "stages", stage)
+		mkdirSync(join(stageDir, "units"), { recursive: true })
+		mkdirSync(join(stageDir, "feedback"), { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("body\n", {
+				title: "decompose",
+				studio: "software",
+				mode: "autopilot",
+				stages: [stage],
+			}),
+		)
+		// Conversation verified; decompose written; verify_decompose NOT yet.
+		writeFileSync(
+			join(stageDir, "elaboration.md"),
+			matter.stringify("e\n", { verified_at: AT }),
+		)
+		process.chdir(repoRoot)
+		// Seed every required discovery artifact for the stage so the discovery
+		// block reports them all DONE and yields the row to the tail chips.
+		const { readStageArtifactDefs } = await import(`${SRC}studio-reader.ts`)
+		for (const def of readStageArtifactDefs("software", stage).filter(
+			(d) => d.kind === "discovery" && d.required,
+		)) {
+			const loc = (def.location ?? "").replace(/\{intent-slug\}/g, slug)
+			if (!loc) continue
+			const abs = join(repoRoot, loc)
+			if (loc.endsWith("/")) {
+				mkdirSync(abs, { recursive: true })
+				writeFileSync(join(abs, "seed.md"), "x\n")
+			} else {
+				mkdirSync(dirname(abs), { recursive: true })
+				writeFileSync(abs, "x\n")
+			}
+		}
+		const { resolveStatuslineState } = await import(`${SRC}statusline/state.ts`)
+		const state = resolveStatuslineState()
+		assert.ok(state, "expected a state")
+		assert.equal(state.phaseKind, "elaborate")
+		assert.ok(
+			Array.isArray(state.agentChips) && state.agentChips.length > 0,
+			`expected tail chips during decompose; got ${JSON.stringify(state.agentChips)}`,
+		)
+		const byId = Object.fromEntries(
+			(state.agentChips ?? []).map((c) => [c.id, c.status]),
+		)
+		assert.equal(
+			byId.decompose,
+			"active",
+			`decompose should be active; got ${JSON.stringify(byId)}`,
+		)
+		assert.equal(
+			byId.verify,
+			"pending",
+			`verify should be pending (not done) until decompose is met; got ${JSON.stringify(byId)}`,
+		)
+	} finally {
+		process.chdir(orig)
+		rmSync(repoRoot, { recursive: true, force: true })
+	}
+})
+
 test("resolveStatuslineState: discovery chips are ACTIVE before units exist — running agents must NOT show done (2026-05-26 bug)", async () => {
 	if (!HAS_GIT) return
 	// The reported bug: entering the design stage kicked off the discovery

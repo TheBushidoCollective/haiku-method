@@ -942,6 +942,45 @@ export function resolveStatuslineState(): StatuslineState | null {
 		}
 	}
 
+	// Decompose / verify chips — the elaborate loop's tail sub-phases. The
+	// discovery block above hides once every discovery artifact lands, so the
+	// second line went EMPTY during `decompose` / `verify_decompose` even
+	// though the agent (+ its decompose-verifier) was actively running
+	// (reported 2026-05-27: "in an elab loop with running agents, and no agent
+	// chips"). These two signals, unlike the non-tool discovery ones, are
+	// reliable in `signals_unmet` (never skipped). Canonical order: the FIRST
+	// unmet step is active, a later unmet step is pending, a met step is done —
+	// so `decompose ▸ verify ○` becomes `decompose ✓ verify ▸` as the loop
+	// advances. Shown only while ≥1 step is still incomplete.
+	if (
+		!agentChips &&
+		action &&
+		(action as { kind?: string }).kind === "elaborate_loop" &&
+		!conversationPending
+	) {
+		const unmet = new Set(
+			elabSignals.map((s) => s.signal).filter((s): s is string => !!s),
+		)
+		const ELAB_TAIL_STEPS: Array<{ signal: string; label: string }> = [
+			{ signal: "decompose", label: "decompose" },
+			{ signal: "verify_decompose", label: "verify" },
+		]
+		// Sequential pipeline: the cursor only lists the CURRENTLY-relevant
+		// unmet signal — a downstream step (verify) isn't in `signals_unmet`
+		// until its predecessor (decompose) is met, so "absent" means "done"
+		// ONLY for steps before the first unmet; a step AFTER it is pending,
+		// not done. Walk in canonical order: before first-unmet → done, first
+		// unmet → active, after → pending.
+		const firstUnmet = ELAB_TAIL_STEPS.findIndex((s) => unmet.has(s.signal))
+		if (firstUnmet !== -1) {
+			agentChips = ELAB_TAIL_STEPS.map((step, i) => ({
+				id: step.label,
+				status:
+					i < firstUnmet ? "done" : i === firstUnmet ? "active" : "pending",
+			})) as AgentChip[]
+		}
+	}
+
 	return {
 		intent: slug,
 		studio,

@@ -8,15 +8,17 @@
  * constant tables with no React dependency — independently unit-testable.
  */
 
-export type DecisionKind = "approved" | "external"
+export type DecisionKind = "approved" | "changes_requested" | "external"
 
 export const DECISION_LABELS: Record<DecisionKind, string> = {
 	approved: "Approve",
+	changes_requested: "Request Changes",
 	external: "External",
 }
 
 export const DECISION_ANNOUNCE: Record<DecisionKind, string> = {
 	approved: "Review approved",
+	changes_requested: "Changes requested",
 	external: "External review submitted",
 }
 

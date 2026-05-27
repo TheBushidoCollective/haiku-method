@@ -309,7 +309,7 @@ export function GateDecisionBar({
 					{mode === "request" && adHoc && (
 						<button
 							type="button"
-							onClick={() => void submit("changes_requested" as DecisionKind)}
+							onClick={() => void submit("changes_requested")}
 							disabled={submitting !== null}
 							data-decision="ad_hoc_request_changes"
 							className={`${touchTargetClass} ${focusRingClass} ${focusRingVariantClasses.requestChanges} flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-md bg-amber-600 hover:bg-amber-700 px-3 py-2 text-xs font-semibold text-white transition-colors`}

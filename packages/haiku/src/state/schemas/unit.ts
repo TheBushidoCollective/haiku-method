@@ -64,6 +64,7 @@ const FSM_DRIVEN_UNIT_FIELDS_LIST = [
 	"iterations",
 	"reviews",
 	"approvals",
+	"quality_gates_env_blocked",
 ] as const
 
 // Path-shape check: must be a non-empty string with no embedded

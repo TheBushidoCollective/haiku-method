@@ -233,6 +233,17 @@ export class LocalProvider implements BrowseProvider {
 					intent.studioStages,
 					stagesWithUnits,
 				)
+				// Recompute progress to match the refined active stage. v4 dropped
+				// `active_stage` from intent.md, so parseIntentFromRaw computed
+				// stagesComplete against an empty/first-stage default — leaving it
+				// at 0 and hiding the list-view progress bar (which gates on
+				// stagesComplete > 0) for intents well into their stages. Stages
+				// before the active one are done; a completed intent keeps its
+				// normalized full count.
+				if (intent.status !== "completed") {
+					const idx = intent.studioStages.indexOf(intent.activeStage)
+					if (idx >= 0) intent.stagesComplete = idx
+				}
 			}
 			intents.push(intent)
 			// Streaming callback contract — PortfolioView relies on this

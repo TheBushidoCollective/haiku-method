@@ -429,6 +429,14 @@ export class GitHubProvider implements BrowseProvider {
 					intent.studioStages,
 					stagesWithUnits,
 				)
+				// Recompute progress to match the refined active stage — v4
+				// intent.md has no active_stage, so the initial parse left
+				// stagesComplete at 0 and the list-view progress bar (gated on
+				// stagesComplete > 0) stayed hidden for in-flight intents.
+				if (intent.status !== "completed") {
+					const idx = intent.studioStages.indexOf(intent.activeStage)
+					if (idx >= 0) intent.stagesComplete = idx
+				}
 			}
 			intentsBySlug.set(slug, intent)
 			this.intentBranchMap.set(slug, branchName)

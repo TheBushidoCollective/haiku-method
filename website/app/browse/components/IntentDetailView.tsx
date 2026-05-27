@@ -1320,10 +1320,12 @@ function UnitOutputsSection({
 	units,
 	host,
 	provider,
+	slug,
 }: {
 	units: HaikuUnit[]
 	host?: string
 	provider?: BrowseProvider
+	slug: string
 }) {
 	// path → set of unit names that declare it
 	const byOutput = new Map<string, string[]>()
@@ -1360,6 +1362,7 @@ function UnitOutputsSection({
 					unitNames={unitNames}
 					host={host}
 					provider={provider}
+					slug={slug}
 				/>
 			))}
 		</div>
@@ -1376,11 +1379,13 @@ function LazyOutputPreview({
 	unitNames,
 	host,
 	provider,
+	slug,
 }: {
 	path: string
 	unitNames: string[]
 	host?: string
 	provider?: BrowseProvider
+	slug: string
 }) {
 	const [open, setOpen] = useState(false)
 	const [state, setState] = useState<{
@@ -1401,10 +1406,21 @@ function LazyOutputPreview({
 		if (!open || startedRef.current || !provider) return
 		startedRef.current = true
 		setState((s) => ({ ...s, loading: true }))
+		// An `outputs:` path is either a project-tree path (repo-root-relative,
+		// e.g. `web/apps/.../WorkerDates.tsx`) or intent-relative (resolved
+		// against the intent dir, e.g. `stages/<stage>/artifacts/plan.md`,
+		// `action-log.jsonl`). Try it as-is first, then under the intent dir.
+		const candidates = path.startsWith(".haiku/")
+			? [path]
+			: [path, `.haiku/intents/${slug}/${path}`]
 		;(async () => {
 			try {
 				if (isTextFile(path)) {
-					const text = await provider.readFile(path)
+					let text: string | null = null
+					for (const c of candidates) {
+						text = await provider.readFile(c)
+						if (text != null) break
+					}
 					setState({
 						loading: false,
 						content: text,
@@ -1412,9 +1428,13 @@ function LazyOutputPreview({
 						error: text == null ? "Couldn't load this file." : null,
 					})
 				} else {
-					const url = provider.resolveAssetUrl
-						? await provider.resolveAssetUrl(path)
-						: null
+					let url: string | null = null
+					if (provider.resolveAssetUrl) {
+						for (const c of candidates) {
+							url = await provider.resolveAssetUrl(c)
+							if (url != null) break
+						}
+					}
 					setState({
 						loading: false,
 						content: null,
@@ -1431,7 +1451,7 @@ function LazyOutputPreview({
 				})
 			}
 		})()
-	}, [open, provider, path])
+	}, [open, provider, path, slug])
 
 	return (
 		<div className="rounded-lg border border-stone-200 dark:border-stone-700">
@@ -1898,7 +1918,12 @@ function StageDetail({
 			{/* Unit outputs — every path the stage's units declare in their
 			    `outputs:` frontmatter, previewed by type and linked to the
 			    unit(s) that produced them. */}
-			<UnitOutputsSection units={stage.units} host={host} provider={provider} />
+			<UnitOutputsSection
+				units={stage.units}
+				host={host}
+				provider={provider}
+				slug={slug}
+			/>
 			{/* Per-stage OBSERVATIONS — the agent's free-form reflection
 			    written at stage close. Shown last; it's a retrospective. */}
 			{stage.observations && (

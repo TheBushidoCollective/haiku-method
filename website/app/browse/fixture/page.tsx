@@ -153,10 +153,21 @@ const provider: BrowseProvider = {
 		// the harness reproduces async-timing bugs (e.g. an effect that
 		// cancels its own in-flight read). A zero-delay fake hides them.
 		await new Promise((r) => setTimeout(r, 60))
-		if (path.endsWith(".tsx")) return SAMPLE_TS
-		if (path.endsWith(".feature")) return SAMPLE_FEATURE
-		if (path.endsWith(".jsonl"))
+		// Project-tree outputs resolve at the path AS-IS (repo-root-relative).
+		if (path === "web/apps/admin/src/views/Workers/WorkerDates.tsx")
+			return SAMPLE_TS
+		if (path === "web/apps/admin/src/views/Workers/WorkerDates.feature")
+			return SAMPLE_FEATURE
+		// Intent-relative outputs resolve ONLY under the intent dir — exercises
+		// the LazyOutputPreview fallback candidate. (action-log.jsonl and the
+		// plan-*.md were declared relative to the intent root.)
+		if (path === ".haiku/intents/fixture-intent/action-log.jsonl")
 			return '{"event":"unit_start","at":"2026-05-27T00:00:00Z"}\n{"event":"unit_done"}\n'
+		if (
+			path ===
+			".haiku/intents/fixture-intent/stages/development/artifacts/plan-unit-001.md"
+		)
+			return "# Plan\n\nRender the **NEW** badge when a worker joined within the threshold.\n"
 		return null
 	},
 	async resolveAssetUrl() {

@@ -26,10 +26,13 @@ const AUDIO_RE = /\.(mp3|wav|ogg|m4a|flac|aac)$/i
 /** Map a file extension to a highlight.js language hint. Anything not listed
  *  falls back to highlight.js auto-detection (still renders, just unhinted). */
 const CODE_LANG: Record<string, string> = {
+	// rehype-highlight's `common` set has no separate `tsx`/`jsx` grammar —
+	// the typescript/javascript grammars handle them. Mapping to a registered
+	// language id is what makes tokens (and thus colors) appear at all.
 	ts: "typescript",
-	tsx: "tsx",
+	tsx: "typescript",
 	js: "javascript",
-	jsx: "jsx",
+	jsx: "javascript",
 	mjs: "javascript",
 	cjs: "javascript",
 	py: "python",

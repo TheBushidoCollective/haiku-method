@@ -258,6 +258,24 @@ function deriveExistingAnchorsForUnit(
 	return deriveExistingAnchors(items)
 }
 
+/** Re-paint anchors for a file-backed artifact that has NO per-target
+ *  feedback bucket (the stage brief, observations, etc.). Those findings
+ *  land in the general stage feedback pool — the only thing tying a
+ *  comment to its surface is `inline_anchor.file_path`. Filter the full
+ *  pool by that path, then run the same open-only projection
+ *  `deriveExistingAnchors` applies. */
+export function deriveExistingAnchorsForFile(
+	filePath: string,
+	items: readonly FeedbackItemData[],
+): ReturnType<typeof deriveExistingAnchors> {
+	const matching = items.filter((f) => {
+		const a = (f as unknown as { inline_anchor?: { file_path?: string } })
+			.inline_anchor
+		return a?.file_path === filePath
+	})
+	return deriveExistingAnchors(matching)
+}
+
 function feedbackBadgeColor(status: string): string {
 	switch (status) {
 		case "pending":
@@ -624,13 +642,19 @@ export function StageReview({
 					units={units}
 					knowledge={knowledgeVMs}
 					outputs={outputVMs}
+					feedback={feedback}
 					feedbackByUnit={feedbackByUnit}
 					feedbackByKnowledge={feedbackByKnowledge}
 					feedbackByOutput={feedbackByOutput}
 					seen={seen}
 					stageId={stageName}
+					intentSlug={intentSlug}
 					onNavigate={openDetail}
 					onStartWalkthrough={startWalkthrough}
+					onInlineCommentsChange={onInlineCommentsChange}
+					onSaveInline={onSaveInline}
+					flashAnchor={flashAnchor ?? null}
+					onFlashCommentConsumed={onFlashCommentConsumed}
 				/>
 			),
 		},
@@ -873,13 +897,19 @@ function OverviewTab({
 	units,
 	knowledge,
 	outputs,
+	feedback,
 	feedbackByUnit,
 	feedbackByKnowledge,
 	feedbackByOutput,
 	seen,
 	stageId,
+	intentSlug,
 	onNavigate,
 	onStartWalkthrough,
+	onInlineCommentsChange,
+	onSaveInline,
+	flashAnchor,
+	onFlashCommentConsumed,
 }: {
 	stageName: string
 	stageSummary: string | null
@@ -888,13 +918,31 @@ function OverviewTab({
 	units: ParsedUnit[]
 	knowledge: ArtifactViewModel[]
 	outputs: ArtifactViewModel[]
+	feedback: FeedbackItemData[]
 	feedbackByUnit: Map<string, FeedbackItemData[]>
 	feedbackByKnowledge: Map<string, FeedbackItemData[]>
 	feedbackByOutput: Map<string, FeedbackItemData[]>
 	seen: ReturnType<typeof useSeenTracker>
 	stageId: string
+	intentSlug: string | null
 	onNavigate: (tab: "units" | "knowledge" | "outputs", name: string) => void
 	onStartWalkthrough: () => void
+	onInlineCommentsChange?: (comments: InlineCommentEntry[]) => void
+	onSaveInline?: (entry: {
+		selectedText: string
+		comment: string
+		paragraph: number
+		location: string
+		filePath?: string
+		commentId: string
+		contentSha?: string
+	}) => Promise<void>
+	flashAnchor?: {
+		commentId?: string
+		selectedText: string
+		paragraph?: number
+	} | null
+	onFlashCommentConsumed?: () => void
 }) {
 	return (
 		<div className="space-y-4">
@@ -908,31 +956,83 @@ function OverviewTab({
 				</button>
 			</div>
 
-			{stageBrief && (
-				<Card as="article" ariaLabelledBy="stage-brief-heading">
-					<SectionHeading id="stage-brief-heading" variant="eyebrow">
-						Brief{" "}
-						<span className="font-normal normal-case text-stone-500">
-							(what this stage delivers)
-						</span>
-					</SectionHeading>
-					<MarkdownViewer id={`brief-${stageName}`}>{stageBrief}</MarkdownViewer>
-				</Card>
-			)}
+			{stageBrief &&
+				(() => {
+					const briefBody = stripFrontmatter(stageBrief)
+					const briefPath = intentSlug
+						? `.haiku/intents/${intentSlug}/stages/${stageId}/BRIEF.md`
+						: undefined
+					return (
+						<Card as="article" ariaLabelledBy="stage-brief-heading">
+							<SectionHeading id="stage-brief-heading" variant="eyebrow">
+								Brief{" "}
+								<span className="font-normal normal-case text-stone-500">
+									(what this stage delivers)
+								</span>
+							</SectionHeading>
+							{onInlineCommentsChange ? (
+								<InlineComments
+									htmlContent={markdownToSimpleHtml(briefBody)}
+									rawContent={briefBody}
+									location="Brief"
+									filePath={briefPath}
+									existingAnchors={
+										briefPath
+											? deriveExistingAnchorsForFile(briefPath, feedback)
+											: []
+									}
+									onCommentsChange={onInlineCommentsChange}
+									onSaveInline={onSaveInline}
+									flashAnchor={flashAnchor ?? null}
+									onFlashCommentConsumed={onFlashCommentConsumed}
+								/>
+							) : (
+								<MarkdownViewer id={`brief-${stageName}`}>
+									{stageBrief}
+								</MarkdownViewer>
+							)}
+						</Card>
+					)
+				})()}
 
-			{stageObservations && (
-				<Card as="article" ariaLabelledBy="stage-observations-heading">
-					<SectionHeading id="stage-observations-heading" variant="eyebrow">
-						Observations{" "}
-						<span className="font-normal normal-case text-stone-500">
-							(what the agent saw building this stage)
-						</span>
-					</SectionHeading>
-					<MarkdownViewer id={`observations-${stageName}`}>
-						{stageObservations}
-					</MarkdownViewer>
-				</Card>
-			)}
+			{stageObservations &&
+				(() => {
+					const obsBody = stripFrontmatter(stageObservations)
+					const obsPath = intentSlug
+						? `.haiku/intents/${intentSlug}/stages/${stageId}/observations.md`
+						: undefined
+					return (
+						<Card as="article" ariaLabelledBy="stage-observations-heading">
+							<SectionHeading id="stage-observations-heading" variant="eyebrow">
+								Observations{" "}
+								<span className="font-normal normal-case text-stone-500">
+									(what the agent saw building this stage)
+								</span>
+							</SectionHeading>
+							{onInlineCommentsChange ? (
+								<InlineComments
+									htmlContent={markdownToSimpleHtml(obsBody)}
+									rawContent={obsBody}
+									location="Observations"
+									filePath={obsPath}
+									existingAnchors={
+										obsPath
+											? deriveExistingAnchorsForFile(obsPath, feedback)
+											: []
+									}
+									onCommentsChange={onInlineCommentsChange}
+									onSaveInline={onSaveInline}
+									flashAnchor={flashAnchor ?? null}
+									onFlashCommentConsumed={onFlashCommentConsumed}
+								/>
+							) : (
+								<MarkdownViewer id={`observations-${stageName}`}>
+									{stageObservations}
+								</MarkdownViewer>
+							)}
+						</Card>
+					)
+				})()}
 
 			<Card as="article" ariaLabelledBy="stage-summary-heading">
 				<SectionHeading id="stage-summary-heading" variant="eyebrow">

@@ -45,7 +45,9 @@ Drive the smallest path that makes the changed code execute (changed a flag? run
 
 ## Capture evidence
 
-Screenshots, response bodies, pane dumps, computed-style reads. Save them under `.haiku/intents/<intent>/stages/<stage>/proof/` with the `Write` tool so a human can audit the chain after the fact, and attach them to any feedback you file — the capture *is* the proof of what the user would have seen. Captured output is evidence; your memory isn't. Close any `haiku_view` session with `haiku_view_close` when done so the tunnel slot releases.
+Screenshots, response bodies, pane dumps, computed-style reads. Save them under `.haiku/intents/<intent>/stages/<stage>/proof/` with the `Write` tool so a human can audit the chain after the fact, and attach them to any feedback you file — the capture *is* the proof of what the user would have seen. Captured output is evidence; your memory isn't.
+
+**Release the browser when you're done.** Call `browser_close` (the `haiku-playwright` MCP) to shut the Chrome instance — leaving it open strands a headless Chrome process after the review ends. Then close any `haiku_view` session with `haiku_view_close` so the dev server + tunnel slot release. Two distinct closes: `browser_close` kills the browser, `haiku_view_close` kills the booted app — do both.
 
 ## The verdict
 

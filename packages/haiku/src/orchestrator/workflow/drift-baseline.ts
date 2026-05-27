@@ -812,8 +812,8 @@ export function getCurrentTickCounter(
 /** Return true when `drift_detection: false` is set in `.haiku/settings.yml`.
  *  Default is enabled (returns false). Never throws.
  *
- *  Extracted here so `drift-detection-gate.ts`, `haiku_human_write.ts`, and
- *  `haiku_baseline_init.ts` all share one implementation. */
+ *  Extracted here so `drift-sweep.ts` (the per-tick sweep) and
+ *  `haiku_human_write.ts` both share one implementation. */
 export function isDriftDetectionDisabled(haikuRoot: string): boolean {
 	const settingsPath = join(haikuRoot, "settings.yml")
 	if (!existsSync(settingsPath)) return false
@@ -867,10 +867,13 @@ export interface ActionLogEntrySync {
  *
  *  V-05 split: previously this returned every entry matching the tick
  *  number, which let intent-scope SPA-upload entries collide with
- *  per-stage entries that happened to share a counter value. The drift
- *  gate now calls this for the per-stage half and `readIntentScopeActionLogSync`
- *  for the intent-scope half, then unions the two for path-based
- *  classification.
+ *  per-stage entries that happened to share a counter value. The
+ *  attribution-read contract is: union this (per-stage half) with
+ *  `readIntentScopeActionLogSync` (intent-scope half) for path-based
+ *  author classification. NOTE: this read path fed the pre-v9 drift
+ *  consumer (the former `drift-detection-gate.ts` + `manual_change_assessment`,
+ *  both removed); v9 drift is witness/SHA-based and doesn't consult
+ *  attribution, so these readers currently have no production caller.
  *
  *  Returns an empty array when the file doesn't exist.
  *
@@ -891,11 +894,11 @@ export function readActionLogSync(
 
 /** FB-28 fail-closed-friendly variant of `readActionLogSync`. Returns
  *  the parsed entries AND the count of malformed lines (and a
- *  byte-clipped sample of up to 5 of them for diagnostics). The
- *  drift-detection gate calls the bare `readActionLogSync` for legacy
- *  callsite simplicity, but security-sensitive callers SHOULD prefer
- *  this variant so they can refuse to advance when `malformedCount > 0`
- *  (a malformed line is a tampering signal, not "skip and continue"). */
+ *  byte-clipped sample of up to 5 of them for diagnostics). The bare
+ *  `readActionLogSync` exists for legacy callsite simplicity, but
+ *  security-sensitive callers SHOULD prefer this variant so they can refuse
+ *  to advance when `malformedCount > 0` (a malformed line is a tampering
+ *  signal, not "skip and continue"). */
 export interface ActionLogSyncReadResult {
 	entries: ActionLogEntrySync[]
 	malformedCount: number

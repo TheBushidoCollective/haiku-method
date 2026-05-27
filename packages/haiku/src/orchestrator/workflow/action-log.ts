@@ -14,10 +14,21 @@
 // Storage: a single intent-scope JSONL file at
 //   `.haiku/intents/{slug}/action-log.jsonl`
 // Each line is a complete `ActionLogEntry` JSON object. The entry carries
-// its own `tick_counter` so the file is a unified append-only log that
-// can be filtered by tick. The drift-detection gate calls
-// `readActionLogForTick` to distinguish `human-via-mcp` from
-// `human-implicit` writes (ARCHITECTURE.md §6.2).
+// its own `tick_counter` so the file is a unified append-only log that can be
+// filtered by tick. It is the write-ATTRIBUTION journal: writers
+// (`haiku_human_write`, the SPA upload routes, `stamp-agent-write`) stamp
+// `author_class` (`human-via-mcp` | `agent`) per entry.
+//
+// HISTORY: the per-tick attribution reader (`readActionLogForTick` here; the
+// sync variants `readActionLogSync` / `readIntentScopeActionLogSync` in
+// `drift-baseline.ts`) fed the pre-v9 drift consumer that distinguished
+// `human-via-mcp` from `human-implicit` writes to drive
+// `manual_change_assessment`. That consumer (the former
+// `drift-detection-gate.ts`) AND `manual_change_assessment` were removed in
+// the v4→v9 drift rewrite — drift is now witness/SHA-based (`drift-sweep.ts`)
+// and does not consult attribution. The writers + these readers are retained
+// as the audit/attribution trail; the read path currently has no production
+// consumer (candidate for a follow-up dead-code sweep).
 //
 // FB-28 atomicity model: appends share the per-file mutex defined in
 // `write-audit.ts` (`appendJsonlLineGuarded`) so concurrent SPA upload,

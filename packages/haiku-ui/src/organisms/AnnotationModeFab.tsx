@@ -41,47 +41,65 @@ export function AnnotationModeFab({
 		: "Enter annotation mode"
 
 	return (
-		<button
-			type="button"
-			data-annotation-fab
-			onClick={toggle}
-			aria-pressed={pinned}
-			aria-label={label}
-			title="Annotate — click to toggle, or hold ⌥ Option for a quick pass"
-			className={`fixed ${bottomClass ?? (stacked ? "bottom-20" : "bottom-4")} right-4 z-40 inline-flex items-center justify-center rounded-full shadow-lg w-12 h-12 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 ${
-				active
-					? pinned
-						? "bg-teal-700 hover:bg-teal-800 border-teal-800 text-white"
-						: // transient-only: dashed ring marks it as a momentary,
-							// not-yet-pinned activation.
-							"bg-teal-700/90 hover:bg-teal-800 border-teal-300 border-dashed text-white"
-					: "bg-white dark:bg-stone-900 border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800"
-			}`}
+		<div
+			className={`fixed ${bottomClass ?? (stacked ? "bottom-20" : "bottom-4")} right-4 z-40 flex items-center gap-2`}
 		>
-			{/* Pencil glyph — single SVG path, no external dep. */}
-			<svg
+			{/* Hotkey hint — the ⌥ Option shortcut for a momentary annotation
+			    pass, shown beside the pencil so the reviewer doesn't have to
+			    hover for the tooltip to discover it. Lights up while held. */}
+			<kbd
 				aria-hidden="true"
-				viewBox="0 0 24 24"
-				width="22"
-				height="22"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
+				title="Hold ⌥ Option to annotate momentarily, or click the pencil to keep it on"
+				className={`select-none rounded-md border px-1.5 py-0.5 text-xs font-semibold leading-none shadow-sm transition-colors ${
+					transient
+						? "border-teal-400 bg-teal-50 text-teal-700 dark:border-teal-500 dark:bg-teal-900/40 dark:text-teal-200"
+						: "border-stone-300 bg-white/90 text-stone-600 dark:border-stone-600 dark:bg-stone-900/90 dark:text-stone-300"
+				}`}
 			>
-				<title>{active ? "Annotation mode on" : "Annotation mode off"}</title>
-				<path d="M12 20h9" />
-				<path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-			</svg>
-			{/* Transient-only pulse dot so the held-Option state reads at a
-			    glance even before the reviewer hovers for the label. */}
-			{transient && !pinned && (
-				<span
+				⌥
+			</kbd>
+			<button
+				type="button"
+				data-annotation-fab
+				onClick={toggle}
+				aria-pressed={pinned}
+				aria-label={label}
+				title="Annotate — click to toggle, or hold ⌥ Option for a quick pass"
+				className={`relative inline-flex items-center justify-center rounded-full shadow-lg w-12 h-12 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 ${
+					active
+						? pinned
+							? "bg-teal-700 hover:bg-teal-800 border-teal-800 text-white"
+							: // transient-only: dashed ring marks it as a momentary,
+								// not-yet-pinned activation.
+								"bg-teal-700/90 hover:bg-teal-800 border-teal-300 border-dashed text-white"
+						: "bg-white dark:bg-stone-900 border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800"
+				}`}
+			>
+				{/* Pencil glyph — single SVG path, no external dep. */}
+				<svg
 					aria-hidden="true"
-					className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-amber-400 border-2 border-white dark:border-stone-900"
-				/>
-			)}
-		</button>
+					viewBox="0 0 24 24"
+					width="22"
+					height="22"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				>
+					<title>{active ? "Annotation mode on" : "Annotation mode off"}</title>
+					<path d="M12 20h9" />
+					<path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+				</svg>
+				{/* Transient-only pulse dot so the held-Option state reads at a
+			    glance even before the reviewer hovers for the label. */}
+				{transient && !pinned && (
+					<span
+						aria-hidden="true"
+						className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-amber-400 border-2 border-white dark:border-stone-900"
+					/>
+				)}
+			</button>
+		</div>
 	)
 }

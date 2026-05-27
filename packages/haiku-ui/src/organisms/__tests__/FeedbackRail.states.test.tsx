@@ -152,22 +152,24 @@ describe("FeedbackRail — canonical a11y classes", () => {
 })
 
 describe("FeedbackRail — full-height left-edge column geometry", () => {
-	it("is a full-height column pinned to the left edge below the header (left-0 + top-[var(--review-header-h)] + bottom-0 + fixed width), not a bottom FAB nor a floating centered tab", () => {
+	it("is a column pinned to the left edge BETWEEN the header and the gate bar (left-0 + top-[var(--review-header-h)] + bottom-[var(--review-gatebar-h)] + fixed width, square edges), not a bottom FAB nor a floating centered tab", () => {
 		render(<FeedbackRail open={false} onToggle={() => {}} />)
 		const btn = screen.getByRole("button")
 		const cls = btn.className
 		expect(cls).toMatch(/\bleft-0\b/)
-		// Top is pinned to the header's bottom edge via the CSS var (the rail
-		// sits BELOW the app header, aligned with the drawer), not top-0.
+		// Top pinned to the header bottom, bottom pinned to the gate-bar top —
+		// the rail sits in the band BETWEEN them, over neither. Not top-0/bottom-0.
 		expect(cls).toMatch(/top-\[var\(--review-header-h/)
+		expect(cls).toMatch(/bottom-\[calc\(var\(--review-gatebar-h/)
 		expect(cls).not.toMatch(/\btop-0\b/)
-		expect(cls).toMatch(/\bbottom-0\b/)
+		expect(cls).not.toMatch(/\bbottom-0\b/)
 		expect(cls).toMatch(/\bfixed\b/)
 		// Reserved width — matches RAIL_WIDTH_CLASS / RAIL_GUTTER_CLASS.
 		expect(cls).toMatch(/\bw-9\b/)
-		// Only the RIGHT corners round (left edge flush with the viewport).
-		expect(cls).toMatch(/rounded-r-lg/)
+		// Square edges — no rounding.
+		expect(cls).not.toMatch(/rounded-r-lg/)
 		expect(cls).not.toMatch(/rounded-l-lg/)
+		expect(cls).not.toMatch(/\brounded-/)
 		// Docked left, NOT right.
 		expect(cls).not.toMatch(/\bright-0\b/)
 		// Not the old bottom-right circular FAB.

@@ -69,7 +69,7 @@ function panelClass(open: boolean, prefersReducedMotion: boolean): string {
 		// ResizeObserver on the header (the header is dynamic — two rows, the
 		// H·AI·K·U bar + the stage-progress strip). Falls back to `0px` (full
 		// height) when the var is unset, so the drawer never collapses.
-		"fixed top-[var(--review-header-h,0px)] left-0 bottom-0 z-50",
+		"fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50",
 		"w-[min(85vw,360px)] max-w-full",
 		"flex flex-col",
 		// Surface — explicit on the element (no dependency on a CSS selector).

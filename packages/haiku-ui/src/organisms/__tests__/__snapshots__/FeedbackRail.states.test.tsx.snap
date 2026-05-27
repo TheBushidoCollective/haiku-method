@@ -10,7 +10,7 @@ exports[`FeedbackRail — state matrix > renders every documented state cell (sn
       aria-expanded="false"
       aria-haspopup="dialog"
       aria-label="Open feedback panel"
-      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-0 z-30 w-9 rounded-r-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
+      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-30 w-9 bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
       data-testid="feedback-fab"
       type="button"
     >
@@ -30,7 +30,7 @@ exports[`FeedbackRail — state matrix > renders every documented state cell (sn
       aria-expanded="false"
       aria-haspopup="dialog"
       aria-label="Open feedback panel, 1 pending"
-      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-0 z-30 w-9 rounded-r-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
+      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-30 w-9 bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
       data-testid="feedback-fab"
       type="button"
     >
@@ -56,7 +56,7 @@ exports[`FeedbackRail — state matrix > renders every documented state cell (sn
       aria-expanded="false"
       aria-haspopup="dialog"
       aria-label="Open feedback panel, 5 pending"
-      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-0 z-30 w-9 rounded-r-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
+      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-30 w-9 bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
       data-testid="feedback-fab"
       type="button"
     >
@@ -82,7 +82,7 @@ exports[`FeedbackRail — state matrix > renders every documented state cell (sn
       aria-expanded="true"
       aria-haspopup="dialog"
       aria-label="Open feedback panel"
-      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-0 z-30 w-9 rounded-r-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
+      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-30 w-9 bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
       data-testid="feedback-fab"
       type="button"
     >
@@ -102,7 +102,7 @@ exports[`FeedbackRail — state matrix > renders every documented state cell (sn
       aria-expanded="true"
       aria-haspopup="dialog"
       aria-label="Open feedback panel, 2 pending"
-      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-0 z-30 w-9 rounded-r-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
+      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-30 w-9 bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
       data-testid="feedback-fab"
       type="button"
     >
@@ -128,7 +128,7 @@ exports[`FeedbackRail — state matrix > renders every documented state cell (sn
       aria-expanded="false"
       aria-haspopup="dialog"
       aria-label="Open feedback panel"
-      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-0 z-30 w-9 rounded-r-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
+      class="fixed left-0 top-[var(--review-header-h,0px)] bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-30 w-9 bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 text-white shadow-lg inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
       data-testid="feedback-fab"
       type="button"
     >

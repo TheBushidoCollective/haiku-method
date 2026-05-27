@@ -23,15 +23,3 @@
  */
 export const RAIL_WIDTH_CLASS = "w-9"
 export const RAIL_GUTTER_CLASS = "pl-9"
-/**
- * Margin variant of the gutter (`ml-9`, same `9` scale step as the
- * width/padding above). Used by the sticky bottom gate bar: a PADDING
- * gutter (`pl-9`) only insets the bar's CONTENT — the bar's `w-full` dark
- * background still paints the full width, including the 36px the rail
- * occupies, painting a black box over the rail's bottom edge (the rail is
- * z-30, the bar z-[60], so the bar wins). A MARGIN (`ml-9`) instead pushes
- * the bar's whole box — background included — to start AFTER the rail, so
- * the rail stays visible to the very bottom and the bar sits beside it. A
- * flex child with `ml-9` (no `w-full`) fills the remaining width on its own.
- */
-export const RAIL_GUTTER_MARGIN_CLASS = "ml-9"

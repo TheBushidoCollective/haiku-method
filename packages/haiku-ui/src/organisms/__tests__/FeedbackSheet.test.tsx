@@ -145,17 +145,20 @@ describe("FeedbackSheet — dialog semantics when open (CC1)", () => {
 	// edge, transform-driven (`translate-x-0` when open). Pin the drawer-shape
 	// utilities so a regression back to a bottom drawer or a full-viewport
 	// modal fails loudly.
-	it("is a left-edge slide-out drawer below the header (left-0 + top-[var(--review-header-h)] + bottom-0 + translate + border-r), not full-screen or bottom drawer", () => {
+	it("is a left-edge slide-out drawer in the band between header and gate bar (left-0 + top-[var(--review-header-h)] + bottom-[var(--review-gatebar-h)] + translate + border-r), not full-screen or bottom drawer", () => {
 		render(<Harness initialOpen />)
 		const sheet = screen.getByRole("dialog", { name: /feedback/i })
 		const cls = sheet.className
 		expect(cls).toMatch(/\bfixed\b/)
 		expect(cls).toMatch(/\bleft-0\b/)
-		// Top pinned to the header's bottom edge (slides out UNDER the header),
-		// not top-0 (which would cover the app header).
+		// Top pinned to the header bottom, bottom pinned to the gate-bar top —
+		// slides out in the band between them, over neither. Not top-0/bottom-0.
 		expect(cls).toMatch(/top-\[var\(--review-header-h/)
+		// bottom anchors to the gate-bar var, wrapped in calc(... - 2px) so the
+		// drawer overlaps the gate bar by a hair (no hairline rounding gap below).
+		expect(cls).toMatch(/bottom-\[calc\(var\(--review-gatebar-h/)
 		expect(cls).not.toMatch(/\btop-0\b/)
-		expect(cls).toMatch(/\bbottom-0\b/)
+		expect(cls).not.toMatch(/\bbottom-0\b/)
 		expect(cls).toMatch(/w-\[min\(85vw,360px\)\]/)
 		// Open → slid into place.
 		expect(cls).toMatch(/\btranslate-x-0\b/)

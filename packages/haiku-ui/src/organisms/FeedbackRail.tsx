@@ -78,9 +78,16 @@ const RAIL_CLASSES = [
 	// via the `--review-header-h` CSS var the review page writes (same anchor
 	// as the drawer, so rail + drawer top-align below the header). Falls back
 	// to `0px` when the var is unset.
-	`fixed left-0 top-[var(--review-header-h,0px)] bottom-0 z-30 ${RAIL_WIDTH_CLASS}`,
-	// Only the RIGHT corners round (left edge is flush with the viewport).
-	"rounded-r-lg",
+	// Sits in the band BETWEEN the header and the gate bar — top at
+	// `--review-header-h`, bottom at `--review-gatebar-h` — over NEITHER. Both
+	// vars default to 0px when unset.
+	// bottom = gate-bar height MINUS 2px: the var is a rounded pixel measure
+	// and can land ~1px short of the gate bar's actual top, leaving a hairline
+	// gap. Overlapping by 2px closes it — the overlap tucks behind the gate
+	// bar (z-30 < z-[60]), so it's invisible.
+	`fixed left-0 top-[var(--review-header-h,0px)] bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-30 ${RAIL_WIDTH_CLASS}`,
+	// Square edges (no rounding) — flush left with the viewport, butting the
+	// content gutter on the right.
 	"bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800",
 	"text-white",
 	"shadow-lg",

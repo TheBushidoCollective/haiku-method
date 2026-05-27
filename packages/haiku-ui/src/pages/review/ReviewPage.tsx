@@ -29,10 +29,7 @@ import { SubmitSuccess } from "../../molecules/SubmitSuccess"
 import type { AnnotationPin } from "../../organisms/AnnotationCanvas"
 import { FeedbackRail } from "../../organisms/FeedbackRail"
 import { FeedbackSheet } from "../../organisms/FeedbackSheet"
-import {
-	RAIL_GUTTER_CLASS,
-	RAIL_GUTTER_MARGIN_CLASS,
-} from "../../organisms/feedbackRailLayout"
+import { RAIL_GUTTER_CLASS } from "../../organisms/feedbackRailLayout"
 import type { InlineCommentEntry } from "../../organisms/InlineComments"
 import type { ReviewAnnotations } from "../../types"
 import { ArtifactsPane } from "./ArtifactsPane"
@@ -44,7 +41,7 @@ import { IntentDriftAssessmentsSection } from "./IntentDriftAssessmentsSection"
 import { RereviewBanner } from "./shared/RereviewBanner"
 import type { ReviewPageSessionData } from "./shared/session-data"
 import type { ReviewDetailKind, ReviewTab } from "./shared/stage-tabs"
-import { useHeaderHeightVar } from "./shared/useHeaderHeightVar"
+import { useReviewChromeHeightVars } from "./shared/useReviewChromeHeightVars"
 import { StageReview } from "./stage/StageReview"
 import { useFeedbackSidebarController } from "./useFeedbackSidebarController"
 import { useIsMobile } from "./useIsMobile"
@@ -408,7 +405,7 @@ function MobileFeedbackSection(): React.ReactElement {
 				    sticky gate bar. The gate DECISION is separate — the sticky
 				    bottom bar (GateDecisionBar composer={false}). */}
 				<FeedbackComposer className="border-t-0 border-b" />
-				<div className="flex-1 min-h-0 overflow-y-auto pb-28">
+				<div className="flex-1 min-h-0 overflow-y-auto pb-3">
 					<FeedbackPanelBody
 						items={controller.items}
 						loading={controller.loading}
@@ -442,7 +439,7 @@ export function ReviewPage({
 	const isMobile = useIsMobile()
 	// Keep `--review-header-h` on the page root in sync with the dynamic
 	// header height so the left rail + slide-out drawer anchor below it.
-	const { rootRef, headerRef } = useHeaderHeightVar()
+	const { rootRef, headerRef, gateBarRef } = useReviewChromeHeightVars()
 
 	// Stepper navigation — which stage's content the main pane is showing.
 	// Defaults to the active stage (what the intent is currently on).
@@ -790,7 +787,8 @@ export function ReviewPage({
 				    post-submit screens, which have no stage gate to drive. */}
 				{isMobile && !viewingIntent && !submittedDecision && (
 					<div
-						className={`sticky bottom-0 z-[60] border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 ${RAIL_GUTTER_MARGIN_CLASS}`}
+						ref={gateBarRef}
+						className="sticky bottom-0 z-[60] w-full border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950"
 					>
 						<GateDecisionBar
 							stage={selectedStage ?? activeStage}

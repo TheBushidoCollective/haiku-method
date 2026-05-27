@@ -44,10 +44,7 @@ import type { AnnotationPin } from "../../../organisms/AnnotationCanvas"
 import { AnnotationModeFab } from "../../../organisms/AnnotationModeFab"
 import { FeedbackRail } from "../../../organisms/FeedbackRail"
 import { FeedbackSheet } from "../../../organisms/FeedbackSheet"
-import {
-	RAIL_GUTTER_CLASS,
-	RAIL_GUTTER_MARGIN_CLASS,
-} from "../../../organisms/feedbackRailLayout"
+import { RAIL_GUTTER_CLASS } from "../../../organisms/feedbackRailLayout"
 import type { InlineCommentEntry } from "../../../organisms/InlineComments"
 import { FeedbackComposer } from "../../../pages/review/FeedbackComposer"
 import { FeedbackPanelBody } from "../../../pages/review/FeedbackPanelBody"
@@ -55,7 +52,7 @@ import { FeedbackSidebar } from "../../../pages/review/FeedbackSidebar"
 import { GateDecisionBar } from "../../../pages/review/GateDecisionBar"
 import { IntentCompleteView } from "../../../pages/review/IntentCompleteView"
 import type { ReviewPageSessionData } from "../../../pages/review/shared/session-data"
-import { useHeaderHeightVar } from "../../../pages/review/shared/useHeaderHeightVar"
+import { useReviewChromeHeightVars } from "../../../pages/review/shared/useReviewChromeHeightVars"
 import { useFeedbackSidebarController } from "../../../pages/review/useFeedbackSidebarController"
 import { useIsMobile } from "../../../pages/review/useIsMobile"
 import { usePageTitle } from "../../../shell/PageTitleContext"
@@ -125,7 +122,7 @@ function MobileFeedbackSection(): React.ReactElement {
 				    sticky gate bar. The gate DECISION is separate — the sticky
 				    bottom bar (GateDecisionBar composer={false}). */}
 				<FeedbackComposer className="border-t-0 border-b" />
-				<div className="flex-1 min-h-0 overflow-y-auto pb-28">
+				<div className="flex-1 min-h-0 overflow-y-auto pb-3">
 					<FeedbackPanelBody
 						items={controller.items}
 						loading={controller.loading}
@@ -247,7 +244,7 @@ function ReviewLayoutLoaded({
 	const routerState = useRouterState()
 	// Keep `--review-header-h` on the page root in sync with the dynamic
 	// header height so the left rail + slide-out drawer anchor below it.
-	const { rootRef, headerRef } = useHeaderHeightVar()
+	const { rootRef, headerRef, gateBarRef } = useReviewChromeHeightVars()
 
 	// After a successful Approve / External decision render the terminal
 	// success card + try to close the tab. MCP review usually opens via
@@ -640,7 +637,8 @@ function ReviewLayoutLoaded({
 					    sidebar, so it owns its own decision state. */}
 					{isMobile && !isIntentTerminal && (
 						<div
-							className={`sticky bottom-0 z-[60] border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 ${RAIL_GUTTER_MARGIN_CLASS}`}
+							ref={gateBarRef}
+							className="sticky bottom-0 z-[60] w-full border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950"
 						>
 							<GateDecisionBar
 								stage={chromeSelectedStage}

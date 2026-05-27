@@ -8,7 +8,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
     <aside
       aria-hidden="true"
       aria-labelledby="feedback-sheet-title"
-      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-0 z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl -translate-x-full transition-transform duration-300 ease-out pointer-events-none"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl -translate-x-full transition-transform duration-300 ease-out pointer-events-none"
       data-testid="feedback-sheet"
       id="feedback-sheet"
       role="dialog"
@@ -45,7 +45,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   >
     <aside
       aria-labelledby="feedback-sheet-title"
-      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-0 z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
       data-testid="feedback-sheet"
       id="feedback-sheet"
       role="dialog"
@@ -82,7 +82,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   >
     <aside
       aria-labelledby="feedback-sheet-title"
-      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-0 z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
       data-testid="feedback-sheet"
       id="feedback-sheet"
       role="dialog"
@@ -123,7 +123,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   >
     <aside
       aria-labelledby="feedback-sheet-title"
-      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-0 z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
       data-testid="feedback-sheet"
       id="feedback-sheet"
       role="dialog"
@@ -160,7 +160,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   >
     <aside
       aria-labelledby="feedback-sheet-title"
-      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-0 z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
       data-testid="feedback-sheet"
       id="feedback-sheet-alt"
       role="dialog"
@@ -197,7 +197,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   >
     <aside
       aria-labelledby="feedback-sheet-title-alt"
-      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-0 z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
       data-testid="feedback-sheet"
       id="feedback-sheet"
       role="dialog"

@@ -2201,12 +2201,11 @@ export function readClaimedAuthorId(
 // per-stage and intent-scope action-log entries when classifying tracked
 // files, so the two counters never need to share a key space.
 //
-// The drift gate's per-tick action-log lookup
-// (`drift-detection-gate.ts`) reads BOTH the firing stage's tick AND
-// every intent-scope tick observed for the file via the
-// `intentScopeActionLog` union. That's why the producer-side counter
-// being deterministic is necessary but not sufficient — the consumer
-// fix lives in `drift-detection-gate.ts`.
+// The drift-detection per-tick action-log lookup (in `drift-baseline.ts`:
+// `readActionLogSync` for the firing stage's tick + `readIntentScopeActionLogSync`
+// for every intent-scope tick observed for the file) reads BOTH and unions
+// them. That's why the producer-side counter being deterministic is necessary
+// but not sufficient — the consumer fix lives in `drift-baseline.ts`.
 //
 // Concurrency: this implementation is a best-effort single-process
 // counter. Two concurrent SPA uploads from the same MCP process see
@@ -2228,7 +2227,7 @@ function intentScopeTickPath(intentDirAbsPath: string): string {
  *  incremented value. Callers MUST fail their request rather than swallow
  *  this — silently returning a non-persisted value would re-issue the same
  *  counter on the next call and collide entry IDs in the V-05 producer
- *  contract (see drift-detection-gate.ts consumer-side fix). */
+ *  contract (see the consumer-side reads in `drift-baseline.ts`). */
 export class IntentScopeTickPersistError extends Error {
 	constructor(message: string) {
 		super(message)

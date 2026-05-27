@@ -25,6 +25,7 @@ import {
 } from "haiku-api"
 import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
 import { broadcastIntent } from "../intent-broadcaster.js"
+import { closeMicroApp } from "../micro-app.js"
 import {
 	buildApprovalRecord,
 	buildReviewRecord,
@@ -181,6 +182,18 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			})
 		}
 		reply.send(payload)
+		// Close the micro-app window NOW. The decision is durably queued in
+		// `pending_decision` — the agent's `haiku_await_gate` drains it from
+		// session state on its next wake regardless of whether the window is
+		// open. Previously the window only closed when that await later
+		// resolved and ran `closeSessionConnection`, so Approve felt like it
+		// did nothing (the window lingered until the agent happened to wake).
+		// We close ONLY the window (not the session/WS) so the awaiter still
+		// finds the queued decision; the later `closeSessionConnection` →
+		// `closeMicroApp` is then an idempotent no-op. Applies to both
+		// approved and changes_requested — either way the review round is
+		// submitted and this window's job is done.
+		closeMicroApp(req.params.sessionId)
 	})
 
 	instance.post<{

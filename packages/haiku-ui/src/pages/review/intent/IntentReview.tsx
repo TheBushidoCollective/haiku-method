@@ -60,6 +60,7 @@ export function IntentReview({
 	const knowledgeFiles = session.knowledge_files ?? []
 	const stageArtifacts = session.stage_artifacts ?? []
 	const outputArtifacts = session.output_artifacts ?? []
+	const intentOtherFiles = session.intent_other_files ?? []
 	const unitOutputs = session.unit_outputs ?? {}
 	const [dagMaximized, setDagMaximized] = useState(false)
 
@@ -108,6 +109,7 @@ export function IntentReview({
 	const hasUnits = units.length > 0
 	const hasKnowledge = knowledgeFiles.length > 0 || stageArtifacts.length > 0
 	const hasOutputs = outputArtifacts.length > 0
+	const hasOther = intentOtherFiles.length > 0
 	const hasDomain = !!domainSection
 
 	const tabs: TabDef[] = [
@@ -414,6 +416,22 @@ export function IntentReview({
 						// duplicate state about which row is expanded.
 						unitsTableRef.current?.expandAndScrollTo(unitSlug)
 					}}
+				/>
+			),
+		},
+		{
+			id: "other",
+			// Intent-ROOT stray files (intent-scope). Anything at
+			// `.haiku/intents/<slug>/` that isn't a known category, the intent
+			// spec, or a system journal (action-log/write-audit are excluded
+			// server-side — never shown). These belong to no stage, so they
+			// live here on the intent review, not in any per-stage Other tab.
+			label: `Other (${intentOtherFiles.length})`,
+			disabled: !hasOther,
+			content: (
+				<OutputArtifactsTab
+					artifacts={intentOtherFiles}
+					onInlineCommentsChange={onInlineCommentsChange}
 				/>
 			),
 		},

@@ -528,6 +528,8 @@ export function respondSessionApi(
 		if (session.stageArtifacts) data.stage_artifacts = session.stageArtifacts
 		if (session.outputArtifacts) data.output_artifacts = session.outputArtifacts
 		if (session.otherFiles) data.other_files = session.otherFiles
+		if (session.intentOtherFiles)
+			data.intent_other_files = session.intentOtherFiles
 		if (session.unitOutputs) data.unit_outputs = session.unitOutputs
 		if (session.outputDeclaredBy)
 			data.output_declared_by = session.outputDeclaredBy

@@ -10,7 +10,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { parseOutputArtifacts, parseStageFiles } from "../src/parser.ts"
+import {
+	parseIntentRootFiles,
+	parseOutputArtifacts,
+	parseStageFiles,
+} from "../src/parser.ts"
 
 const tmp = mkdtempSync(join(tmpdir(), "haiku-parse-output-"))
 let passed = 0
@@ -660,6 +664,45 @@ await test("parseStageFiles: BRIEF/elaboration/observations excluded from 'other
 		undefined,
 		"stage-root loose file has no directory → catch-all Other tab",
 	)
+})
+
+await test("parseIntentRootFiles: surfaces intent-root strays, HIDES system journals (action-log/write-audit) + known categories", async () => {
+	const intentDir = mkdtempSync(join(tmp, "intent-root-other-"))
+	mkdirSync(join(intentDir, "stages", "development"), { recursive: true })
+	mkdirSync(join(intentDir, "knowledge"), { recursive: true })
+	mkdirSync(join(intentDir, "feedback"), { recursive: true })
+	mkdirSync(join(intentDir, "scratch"), { recursive: true })
+	// Known / system entries — must NOT surface.
+	writeFileSync(join(intentDir, "intent.md"), "# intent")
+	writeFileSync(join(intentDir, "reflection.md"), "# reflection")
+	writeFileSync(join(intentDir, "intent-tick.json"), "{}")
+	writeFileSync(join(intentDir, "action-log.jsonl"), '{"x":1}\n')
+	writeFileSync(join(intentDir, "write-audit.jsonl"), '{"y":2}\n')
+	// Genuine intent-root strays — must surface.
+	writeFileSync(join(intentDir, "NOTES.md"), "# loose notes")
+	writeFileSync(join(intentDir, "scratch", "diagram.py"), "print('x')\n")
+
+	const entries = await parseIntentRootFiles(intentDir)
+	const names = entries.map((a) => a.name)
+
+	// System journals are hidden from the SPA by design.
+	assert.ok(
+		!names.includes("action-log.jsonl"),
+		`action-log.jsonl must NEVER surface; got ${JSON.stringify(names)}`,
+	)
+	assert.ok(!names.includes("write-audit.jsonl"), "write-audit.jsonl hidden")
+	// Known categories + spec + bookkeeping excluded.
+	for (const hidden of ["intent.md", "reflection.md", "intent-tick.json"]) {
+		assert.ok(!names.includes(hidden), `${hidden} must not surface`)
+	}
+	// Strays surface, intent-scoped (stage ""), with directory tagging.
+	const notes = entries.find((a) => a.name === "NOTES.md")
+	assert.ok(notes, "stray NOTES.md should surface")
+	assert.strictEqual(notes.stage, "", "intent-scope marker is empty stage")
+	const diagram = entries.find((a) => a.name === "scratch/diagram.py")
+	assert.ok(diagram, "stray subdir file should surface")
+	assert.strictEqual(diagram.directory, "scratch", "tagged with top-level dir")
+	assert.strictEqual(diagram.type, "code", ".py → code")
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)

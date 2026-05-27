@@ -80,3 +80,45 @@ export const STAGE_INTERNAL_ENTRIES: ReadonlySet<string> = new Set([
 	"upstream-reconciliation.json",
 	"gate-session.json",
 ])
+
+/**
+ * Engine-internal entries at the INTENT-root level
+ * (`.haiku/intents/{slug}/`). A walker that surfaces intent-root files as
+ * the catch-all "Other" tab (intent scope) MUST skip these at depth 0 so
+ * the intent spec, the category dirs that have their own renderers, and —
+ * critically — SYSTEM bookkeeping files (`action-log.jsonl`,
+ * `write-audit.jsonl`, the drift baseline/tick journals) never leak into a
+ * reviewer-facing surface. The action/audit logs are append-only system
+ * journals, not user artifacts; they are hidden from the SPA by design.
+ *
+ * Notes per entry:
+ * - `intent.md` — the intent spec (rendered on the intent Overview tab).
+ * - `stages/` — per-stage trees (rendered by the stage views).
+ * - `knowledge/` — intent-scope knowledge (the Knowledge tab).
+ * - `feedback/` — intent-scope feedback (the Feedback surface).
+ * - `reflection.md` — the synthesized intent reflection (surfaced
+ *   separately, not an unknown stray).
+ * - `intent-tick.json` — the intent-scope tick counter (bookkeeping).
+ * - `action-log.jsonl` / `write-audit.jsonl` — append-only system journals
+ *   (write attribution + audit). NEVER shown in the SPA.
+ * - baseline / drift sidecars — drift bookkeeping, mirrors the stage set.
+ * - `.gitattributes` / `.gitkeep` — VCS plumbing.
+ */
+export const INTENT_ROOT_INTERNAL_ENTRIES: ReadonlySet<string> = new Set([
+	"intent.md",
+	"stages",
+	"knowledge",
+	"feedback",
+	"reflection.md",
+	"intent-tick.json",
+	"action-log.jsonl",
+	"write-audit.jsonl",
+	"baseline.json",
+	"baseline-content",
+	".baseline-ack",
+	"baseline-thrash.json",
+	"drift-markers.json",
+	"drift-assessments",
+	".gitattributes",
+	".gitkeep",
+])

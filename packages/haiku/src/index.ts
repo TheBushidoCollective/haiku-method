@@ -17,6 +17,7 @@ export {
 	parseAllUnits,
 	parseDiscovery,
 	parseIntent,
+	parseIntentRootFiles,
 	parseKnowledgeFiles,
 	parseOutputArtifacts,
 	parseStageArtifacts,

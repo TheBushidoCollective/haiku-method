@@ -8,7 +8,10 @@ import {
 import matter from "gray-matter"
 import { inlineAdjacentStylesheets, intentDirOf } from "./html-inline.js"
 import { extractSections } from "./markdown.js"
-import { STAGE_INTERNAL_ENTRIES } from "./stage-internal-entries.js"
+import {
+	INTENT_ROOT_INTERNAL_ENTRIES,
+	STAGE_INTERNAL_ENTRIES,
+} from "./stage-internal-entries.js"
 import type {
 	DiscoveryFrontmatter,
 	IntentFrontmatter,
@@ -1085,3 +1088,66 @@ const STAGE_ROOT_DEDICATED_FILES = new Set([
 	"elaboration.md",
 	"observations.md",
 ])
+
+/**
+ * Intent-scope "other" files: anything at the intent ROOT
+ * (`.haiku/intents/{slug}/`) that ISN'T a known category dir, the intent
+ * spec, or a system bookkeeping/journal file (see
+ * `INTENT_ROOT_INTERNAL_ENTRIES` — `action-log.jsonl` / `write-audit.jsonl`
+ * et al. are excluded by design; they're system journals, never shown in
+ * the SPA). These surface in the intent-completion review's "Other" tab,
+ * NOT in any per-stage view (they belong to no stage). Returned as
+ * `OutputArtifact`s with `stage: ""` (the intent-scope marker) so the SPA
+ * can tell them apart from stage-scoped entries. Subdirectory files carry
+ * `directory` for the same per-directory grouping the stage Other tab uses.
+ */
+export async function parseIntentRootFiles(
+	intentDir: string,
+): Promise<OutputArtifact[]> {
+	const out: OutputArtifact[] = []
+	const files = await walkIntentRootRecursive(intentDir)
+	files.sort((a, b) => a.relFromRoot.localeCompare(b.relFromRoot))
+	for (const { absPath, relFromRoot } of files) {
+		const entry = await buildArtifactEntry(
+			absPath,
+			"", // intent-scope: no stage
+			relFromRoot,
+			relFromRoot, // httpPath is intent-dir-relative (no stages/ prefix)
+		)
+		if (!entry) continue
+		const slash = relFromRoot.indexOf("/")
+		if (slash > 0) entry.directory = relFromRoot.slice(0, slash)
+		out.push(entry)
+	}
+	return out
+}
+
+/**
+ * Walk the intent ROOT for files that aren't engine-internal. Skips
+ * `INTENT_ROOT_INTERNAL_ENTRIES` at depth 0 only (category dirs + the
+ * intent spec + system journals); once descended into a non-internal
+ * subdir, every file under it is fair game — same rule as the stage walk.
+ */
+async function walkIntentRootRecursive(
+	rootDir: string,
+	currentRel: string = "",
+): Promise<Array<{ absPath: string; relFromRoot: string }>> {
+	const out: Array<{ absPath: string; relFromRoot: string }> = []
+	let entries: Dirent<string>[]
+	try {
+		entries = await readdir(rootDir, { withFileTypes: true, encoding: "utf8" })
+	} catch {
+		return out
+	}
+	for (const e of entries) {
+		if (currentRel === "" && INTENT_ROOT_INTERNAL_ENTRIES.has(e.name)) continue
+		const rel = currentRel ? `${currentRel}/${e.name}` : e.name
+		const abs = join(rootDir, e.name)
+		if (e.isDirectory()) {
+			out.push(...(await walkIntentRootRecursive(abs, rel)))
+		} else if (e.isFile()) {
+			out.push({ absPath: abs, relFromRoot: rel })
+		}
+	}
+	return out
+}

@@ -66,7 +66,10 @@ export interface KiCanvasViewerProps {
 
 const KICANVAS_SRC = "https://kicanvas.org/kicanvas/kicanvas.js"
 
-export function KiCanvasViewer({ url, name }: KiCanvasViewerProps): React.ReactElement {
+export function KiCanvasViewer({
+	url,
+	name,
+}: KiCanvasViewerProps): React.ReactElement {
 	useEffect(() => {
 		injectModuleOnce(KICANVAS_SRC)
 	}, [])
@@ -96,7 +99,10 @@ export interface TracespaceViewerProps {
 const TRACESPACE_VIEW_SRC =
 	"https://cdn.jsdelivr.net/npm/@tracespace/view@4/dist/index.mjs"
 
-export function TracespaceViewer({ url, name }: TracespaceViewerProps): React.ReactElement {
+export function TracespaceViewer({
+	url,
+	name,
+}: TracespaceViewerProps): React.ReactElement {
 	const ref = useRef<HTMLDivElement | null>(null)
 	useEffect(() => {
 		injectModuleOnce(TRACESPACE_VIEW_SRC)
@@ -107,11 +113,11 @@ export function TracespaceViewer({ url, name }: TracespaceViewerProps): React.Re
 		let cancelled = false
 		;(async () => {
 			try {
-				const mod = (await import(
-					/* @vite-ignore */ TRACESPACE_VIEW_SRC
-				).catch(() => null)) as
-					| { renderGerber?: (text: string, mount: HTMLElement) => void }
-					| null
+				const mod = (await import(/* @vite-ignore */ TRACESPACE_VIEW_SRC).catch(
+					() => null,
+				)) as {
+					renderGerber?: (text: string, mount: HTMLElement) => void
+				} | null
 				if (!mod || cancelled || !ref.current) return
 				const res = await fetch(url)
 				const text = await res.text()
@@ -134,8 +140,7 @@ export function TracespaceViewer({ url, name }: TracespaceViewerProps): React.Re
 				className="min-h-[60vh] w-full"
 			/>
 			<p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-				{name} · Gerber rendered via Tracespace.
-				{" "}
+				{name} · Gerber rendered via Tracespace.{" "}
 				<a
 					href={url}
 					target="_blank"
@@ -159,7 +164,10 @@ export interface ModelViewerProps {
 const MODEL_VIEWER_SRC =
 	"https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
 
-export function ModelViewer({ url, name }: ModelViewerProps): React.ReactElement {
+export function ModelViewer({
+	url,
+	name,
+}: ModelViewerProps): React.ReactElement {
 	useEffect(() => {
 		injectModuleOnce(MODEL_VIEWER_SRC)
 	}, [])
@@ -185,9 +193,17 @@ export function ModelViewer({ url, name }: ModelViewerProps): React.ReactElement
 }
 
 // ── tscircuit — code-defined circuit (.tsx) rendering ──────────────
-// tscircuit's runner mounts a circuit-as-tsx into a target element.
-// First-cut: fetch the .tsx source, hand it to @tscircuit/runner if
-// loaded, else fall back to syntax-highlighted source view.
+// tscircuit's runframe mounts a circuit-as-tsx into a target element.
+// First-cut: fetch the .tsx source, hand it to the runner if it loads
+// and exposes a mount fn, else fall back to the source-view link below.
+//
+// PINNED, not `@latest`: a floating CDN tag executes whatever the
+// maintainer publishes next inside the review SPA — a supply-chain hole.
+// (The prior `@tscircuit/runner@latest` URL also pointed at a package
+// that doesn't exist on the registry, so it 404'd and always fell back;
+// `@tscircuit/runframe` is the real DOM-mounting runner.) Bump this
+// deliberately. `/+esm` is jsdelivr's resolved ESM bundle (the package
+// ships no top-level `dist/index.mjs`).
 
 export interface TscircuitViewerProps {
 	url: string
@@ -195,9 +211,12 @@ export interface TscircuitViewerProps {
 }
 
 const TSCIRCUIT_RUNNER_SRC =
-	"https://cdn.jsdelivr.net/npm/@tscircuit/runner@latest/dist/index.mjs"
+	"https://cdn.jsdelivr.net/npm/@tscircuit/runframe@0.0.2004/+esm"
 
-export function TscircuitViewer({ url, name }: TscircuitViewerProps): React.ReactElement {
+export function TscircuitViewer({
+	url,
+	name,
+}: TscircuitViewerProps): React.ReactElement {
 	const ref = useRef<HTMLDivElement | null>(null)
 	useEffect(() => {
 		injectModuleOnce(TSCIRCUIT_RUNNER_SRC)
@@ -206,9 +225,9 @@ export function TscircuitViewer({ url, name }: TscircuitViewerProps): React.Reac
 			try {
 				const mod = (await import(
 					/* @vite-ignore */ TSCIRCUIT_RUNNER_SRC
-				).catch(() => null)) as
-					| { runCircuit?: (source: string, mount: HTMLElement) => void }
-					| null
+				).catch(() => null)) as {
+					runCircuit?: (source: string, mount: HTMLElement) => void
+				} | null
 				if (!mod || cancelled || !ref.current) return
 				const res = await fetch(url)
 				const source = await res.text()
@@ -231,8 +250,7 @@ export function TscircuitViewer({ url, name }: TscircuitViewerProps): React.Reac
 				className="min-h-[60vh] w-full"
 			/>
 			<p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-				{name} · Circuit rendered via @tscircuit/runner.
-				{" "}
+				{name} · Circuit rendered via @tscircuit/runframe (best-effort).{" "}
 				<a
 					href={url}
 					target="_blank"

@@ -34,6 +34,20 @@ export function useReviewChromeHeightVars(): {
 	const headerRef = useRef<HTMLElement | null>(null)
 	const gateBarRef = useRef<HTMLDivElement | null>(null)
 
+	// Runs ONCE (`[]`). The observers below are created once and live for the
+	// mount; nothing here depends on a re-render, so re-running the effect each
+	// render (the old no-deps form) only churned a fresh ResizeObserver per
+	// render for no benefit.
+	//
+	// The subtlety the plain `[]` form misses: the gate bar is CONDITIONALLY
+	// mounted (the mobile, non-terminal branch), so its element identity changes
+	// over the page's life — a ResizeObserver set up once at mount would never
+	// observe a gate bar that appears later (viewport crosses the mobile
+	// breakpoint, or the intent settles out of its terminal state). A
+	// MutationObserver on the page subtree catches those mount/unmount events
+	// and re-points the ResizeObserver + re-measures, while a same-elements
+	// guard keeps unrelated DOM churn (feedback typing, list updates) from
+	// thrashing layout.
 	useEffect(() => {
 		const root = rootRef.current
 		if (!root) return
@@ -50,13 +64,49 @@ export function useReviewChromeHeightVars(): {
 		}
 		writeAll()
 
-		// ResizeObserver isn't present in jsdom; degrade to the one-shot write.
-		if (typeof ResizeObserver === "undefined") return
-		const ro = new ResizeObserver(writeAll)
-		if (headerRef.current) ro.observe(headerRef.current)
-		if (gateBarRef.current) ro.observe(gateBarRef.current)
-		return () => ro.disconnect()
-	})
+		// ResizeObserver isn't present in jsdom; the one-shot write above covers
+		// that path. Created once — size changes of the observed elements drive
+		// it via its own callback.
+		const ro =
+			typeof ResizeObserver === "undefined"
+				? null
+				: new ResizeObserver(writeAll)
+
+		// Re-point the RO + re-measure ONLY when the set of chrome elements
+		// actually changes (e.g. the gate bar mounts/unmounts). Tracked so the
+		// MutationObserver can fire on any subtree mutation cheaply.
+		let lastHeader: Element | null = null
+		let lastGateBar: Element | null = null
+		const syncObservations = () => {
+			if (
+				headerRef.current === lastHeader &&
+				gateBarRef.current === lastGateBar
+			) {
+				return
+			}
+			lastHeader = headerRef.current
+			lastGateBar = gateBarRef.current
+			writeAll()
+			if (!ro) return
+			ro.disconnect()
+			if (headerRef.current) ro.observe(headerRef.current)
+			if (gateBarRef.current) ro.observe(gateBarRef.current)
+		}
+		syncObservations()
+
+		// Watch the page subtree so a late-mounting gate bar gets observed +
+		// measured without re-running this effect on every render.
+		const mo =
+			typeof MutationObserver === "undefined"
+				? null
+				: new MutationObserver(syncObservations)
+		mo?.observe(root, { childList: true, subtree: true })
+
+		return () => {
+			ro?.disconnect()
+			mo?.disconnect()
+		}
+	}, [])
 
 	return { rootRef, headerRef, gateBarRef }
 }

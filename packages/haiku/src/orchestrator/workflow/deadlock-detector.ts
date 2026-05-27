@@ -411,12 +411,16 @@ export function recordTickResult(
 const EXTERNAL_INPUT_ACTIONS = new Set<string>([
 	"user_gate", // per-stage + intent-completion human review gate
 	"feedback_question", // surfaces a discovery question, waits for the answer
-	"await_gate", // external-review wait
-	"await_design_direction",
-	"await_visual_answer",
 	"select_studio", // pre-cursor human pickers (also inline-intercepted)
 	"select_mode",
 	"select_stage",
+	// NOTE: external-review, design-direction, and visual-answer waits are NOT
+	// listed. Those block INLINE inside their MCP tools (`haiku_await_gate`,
+	// `pick_design_direction`, `ask_user_visual_question`) — the cursor never
+	// surfaces them as a `haiku_run_next` action kind, so the no-progress
+	// detector (which reads `action.action`) never sees them. The old
+	// `"await_gate"` / `"await_design_direction"` / `"await_visual_answer"`
+	// entries were MCP tool names, not action kinds — dead, never matched.
 ])
 
 function actionWaitsOnExternalInput(

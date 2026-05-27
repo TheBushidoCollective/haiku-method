@@ -42,6 +42,27 @@ const IMAGE_EXTS: ReadonlySet<string> = new Set([
 ])
 const HTML_EXTS: ReadonlySet<string> = new Set([".html", ".htm"])
 
+/** Engine-internal bookkeeping files. A unit's `outputs:` frontmatter
+ *  sometimes lists these (e.g. the per-intent `action-log.jsonl` author-
+ *  tracking log), but they are machine state, not user-facing deliverables —
+ *  the review UI and the website browse interface both hide them. Mirrors the
+ *  browse-side `isBookkeepingArtifact` so the two surfaces agree. Matched on
+ *  basename so it applies at any depth. */
+const BOOKKEEPING_OUTPUT_BASENAMES: ReadonlySet<string> = new Set([
+	"action-log.jsonl",
+	"write-audit.jsonl",
+	"decisions.jsonl",
+	"coverage-decisions.json",
+])
+
+export function isHiddenOutputPath(path: string): boolean {
+	const base = basename(path)
+	if (base.startsWith(".")) return true
+	if (BOOKKEEPING_OUTPUT_BASENAMES.has(base)) return true
+	if (base.endsWith(".manifest") || base.includes("fs-manifest")) return true
+	return false
+}
+
 export type UnitOutputPreviewType = "markdown" | "html" | "image" | "file"
 
 export interface UnitOutputPreview {
@@ -95,6 +116,9 @@ export async function buildUnitOutputPreviews(
 	const out: UnitOutputPreview[] = []
 	for (const declared of declaredOutputs) {
 		if (typeof declared !== "string") continue
+		// Engine bookkeeping (action-log.jsonl, write-audit.jsonl, …) is not a
+		// user-facing deliverable — keep it out of the review UI's outputs.
+		if (isHiddenOutputPath(declared)) continue
 		const intentRel = intentRelativeOutputPath(declared, intentDir)
 		const absPath = resolve(intentDirAbs, intentRel)
 		if (absPath !== intentDirAbs && !absPath.startsWith(intentDirAbsSlash)) {

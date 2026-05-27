@@ -174,6 +174,25 @@ await test("sizeBytes is populated for files that exist on disk", async () => {
 	assert.ok(typeof out[0].sizeBytes === "number" && out[0].sizeBytes > 0)
 })
 
+await test("hides engine bookkeeping outputs (action-log.jsonl etc.)", async () => {
+	const intentDir = setupIntent()
+	// A unit that declares its real deliverable AND the engine's per-intent
+	// action log (which leaks into `outputs:` but is not user-facing).
+	writeFileSync(join(intentDir, "action-log.jsonl"), '{"event":"x"}\n')
+	writeFileSync(join(intentDir, "write-audit.jsonl"), '{"event":"y"}\n')
+	const out = await buildUnitOutputPreviews(intentDir, SESSION, [
+		"product/ACCEPTANCE-CRITERIA.md",
+		"action-log.jsonl",
+		"write-audit.jsonl",
+	])
+	assert.strictEqual(out.length, 1, "only the real deliverable surfaces")
+	assert.strictEqual(out[0].path, "product/ACCEPTANCE-CRITERIA.md")
+	assert.ok(
+		!out.some((o) => o.path.includes("action-log")),
+		"action log is hidden from unit outputs",
+	)
+})
+
 console.log(`\n${passed} passed, ${failed} failed\n`)
 rmSync(tmp, { recursive: true, force: true })
 process.exit(failed > 0 ? 1 : 0)

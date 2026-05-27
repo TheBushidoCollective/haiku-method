@@ -19,6 +19,7 @@ import { readdir, readFile } from "node:fs/promises"
 import { basename, join, relative, resolve } from "node:path"
 import matter from "gray-matter"
 import { intentRelativeOutputPath } from "./parser.js"
+import { isHiddenOutputPath } from "./unit-output-preview.js"
 
 /** Match the unit-file naming convention. Mirrored from parser.ts so
  *  scratch READMEs / drafts in `units/` don't get scanned. */
@@ -83,6 +84,9 @@ export async function buildOutputDeclaredBy(
 				continue
 			}
 			for (const declared of outputs) {
+				// Engine bookkeeping (action-log.jsonl, …) is not a deliverable —
+				// keep it out of the review UI's declared-by map.
+				if (isHiddenOutputPath(declared)) continue
 				const intentRel = intentRelativeOutputPath(declared, intentDir)
 				const absPath = resolve(intentDirAbs, intentRel)
 				if (

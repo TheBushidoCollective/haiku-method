@@ -3,7 +3,7 @@
 import type { ProgressStep } from "@haiku/shared/progress-milestones"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { isV4Intent } from "@/lib/browse/intent-parsing"
+import { isBookkeepingArtifact, isV4Intent } from "@/lib/browse/intent-parsing"
 import type { ProviderLink } from "@/lib/browse/resolve-links"
 import { resolveLinks } from "@/lib/browse/resolve-links"
 import type {
@@ -1332,6 +1332,9 @@ function UnitOutputsSection({
 	for (const u of units) {
 		for (const out of u.outputs ?? []) {
 			if (typeof out !== "string" || !out.trim()) continue
+			// Engine bookkeeping (action-log.jsonl, decisions.jsonl, …) is not a
+			// user-facing deliverable — hide it from the outputs list.
+			if (isBookkeepingArtifact(out)) continue
 			const list = byOutput.get(out)
 			if (list) {
 				if (!list.includes(u.name)) list.push(u.name)

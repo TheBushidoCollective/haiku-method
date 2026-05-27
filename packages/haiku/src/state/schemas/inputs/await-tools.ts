@@ -51,14 +51,22 @@ export const HAIKU_AWAIT_GATE_INPUT_SCHEMA = Type.Object(
 					"What this gate advances on approval — intent_completion | intent_review | elaborate_to_execute | stage_gate. Passed by haiku_run_next on the inline path so post-decision routing needs no repo-persisted pointer. Defaults to stage_gate when omitted.",
 			}),
 		),
+		// string-or-null: use the JSONSchema `type: [...]` array form (via
+		// Type.Unsafe) rather than `Type.Union([String, Null])`. A union emits
+		// `anyOf: [...]` with NO top-level `type`, which trips the server-tools
+		// assertion that every inputSchema property carries a `type` (and is the
+		// multi-type pattern the schema rule mandates). Static<> still resolves
+		// to `string | null`.
 		next_stage: Type.Optional(
-			Type.Union([Type.String(), Type.Null()], {
+			Type.Unsafe<string | null>({
+				type: ["string", "null"],
 				description:
 					"Stage to advance to on approval (non-final stage gate), or null. Passed by haiku_run_next on the inline path.",
 			}),
 		),
 		next_phase: Type.Optional(
-			Type.Union([Type.String(), Type.Null()], {
+			Type.Unsafe<string | null>({
+				type: ["string", "null"],
 				description:
 					"Phase to advance to on approval (spec / intent_review gates), or null. Passed by haiku_run_next on the inline path.",
 			}),

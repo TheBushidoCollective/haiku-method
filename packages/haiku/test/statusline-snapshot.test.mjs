@@ -8,9 +8,15 @@
 
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import matter from "gray-matter"
@@ -88,6 +94,41 @@ test("snapshot round-trips the dispatched action; mismatched/absent → null", a
 		assert.deepEqual(got.action, action)
 		// a different intent's read does not see this snapshot
 		assert.equal(readStatuslineSnapshot("other-intent"), null)
+	})
+	rmSync(repoRoot, { recursive: true, force: true })
+})
+
+test("snapshot write is atomic — no temp residue, dest always parseable (partial-read race fix)", async () => {
+	// Regression for the 2026-05-26 status-line race: the snapshot used a
+	// non-atomic writeFileSync, so a reader firing mid-write (Claude Code
+	// refreshes out-of-band, concurrently with the tick) caught a half-written
+	// file, JSON.parse threw, readStatuslineSnapshot returned null, and the
+	// caller fell back to a LIVE cursor derive — which jumps the position ahead
+	// of the agent. The fix writes to a sibling temp file then renames (atomic
+	// on POSIX), so a concurrent reader only ever sees a complete file. This
+	// pins the new code path: rapid successive writes (the tick cadence) always
+	// round-trip, and the rename leaves NO `.tmp-*` residue behind.
+	const repoRoot = seedRepo("snap-atomic", "development")
+	await withRepoHome(repoRoot, async () => {
+		const { writeStatuslineSnapshot, readStatuslineSnapshot } = await import(
+			`${SRC}statusline/snapshot.ts`
+		)
+		const { intentRuntimeStatePath } = await import(
+			`${SRC}subagent-prompt-file.ts`
+		)
+		const dir = dirname(intentRuntimeStatePath("snap-atomic", "statusline.json"))
+		for (let i = 0; i < 50; i++) {
+			writeStatuslineSnapshot("snap-atomic", {
+				kind: "start_unit_hat",
+				stage: "development",
+				units: [`unit-${i}`],
+			})
+			const got = readStatuslineSnapshot("snap-atomic")
+			assert.ok(got, `read ${i} must see a complete snapshot, never a partial`)
+			assert.equal(got.action.units[0], `unit-${i}`)
+		}
+		const residue = readdirSync(dir).filter((f) => f.includes(".tmp-"))
+		assert.deepEqual(residue, [], `atomic rename must leave no temp file; got ${residue}`)
 	})
 	rmSync(repoRoot, { recursive: true, force: true })
 })

@@ -23,7 +23,13 @@
 // helper resolves all of them back to one project key, so writer and reader
 // agree, and it never touches git. Tests redirect it with HAIKU_PROJECTS_ROOT.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import {
+	existsSync,
+	readFileSync,
+	renameSync,
+	unlinkSync,
+	writeFileSync,
+} from "node:fs"
 import { intentRuntimeStatePath } from "../subagent-prompt-file.js"
 
 const SNAPSHOT_FILE = "statusline.json"
@@ -40,18 +46,38 @@ export interface StatuslineSnapshot {
 }
 
 /** Persist the dispatched action for an intent. Best-effort: any failure
- *  is swallowed — the status line just falls back to a live derive. */
+ *  is swallowed — the status line just falls back to a live derive.
+ *
+ *  ATOMIC write (stage to a sibling temp file, then `rename`). The status
+ *  line reader runs out-of-band — Claude Code fires it on every refresh,
+ *  concurrently with the tick that writes this file. A plain `writeFileSync`
+ *  let the reader catch the file mid-write: `JSON.parse` threw,
+ *  `readStatuslineSnapshot` returned null, and the caller fell back to a LIVE
+ *  cursor derive — which jumps the position AHEAD of what the agent is doing
+ *  (the exact bug the snapshot exists to prevent; reported 2026-05-26). POSIX
+ *  `rename` is a single syscall, so a concurrent reader always sees either the
+ *  complete previous snapshot or the complete new one — never a partial file.
+ *  The temp file is a sibling (same dir `intentRuntimeStatePath` already
+ *  created), so the rename never crosses filesystems. */
 export function writeStatuslineSnapshot(slug: string, action: unknown): void {
+	const path = intentRuntimeStatePath(slug, SNAPSHOT_FILE)
+	const tmp = `${path}.tmp-${process.pid}-${Date.now()}`
 	try {
-		const path = intentRuntimeStatePath(slug, SNAPSHOT_FILE)
 		const snapshot: StatuslineSnapshot = {
 			intent: slug,
 			action: action ?? null,
 			at: new Date().toISOString(),
 		}
-		writeFileSync(path, JSON.stringify(snapshot))
+		writeFileSync(tmp, JSON.stringify(snapshot))
+		renameSync(tmp, path)
 	} catch {
-		/* best-effort — never let snapshotting break a tick */
+		// best-effort — never let snapshotting break a tick. Clean up the
+		// temp file if the rename never happened so we don't leak it.
+		try {
+			if (existsSync(tmp)) unlinkSync(tmp)
+		} catch {
+			/* ignore */
+		}
 	}
 }
 

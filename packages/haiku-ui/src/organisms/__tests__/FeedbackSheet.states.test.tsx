@@ -1,10 +1,10 @@
 /**
  * State-matrix snapshot for FeedbackSheet (state-coverage-grid.md §7.8, §3).
  *
- * FeedbackSheet is a <dialog>; we force-open the component in jsdom by
- * rendering with `open={true}`. jsdom's <dialog> element no-ops
- * `showModal()`, but the component still renders its descendants, which is
- * what the state matrix exercises.
+ * FeedbackSheet is a controlled `<aside role="dialog">`; we force-open the
+ * component in jsdom by rendering with `open={true}`. The aside stays mounted
+ * regardless of `open`, rendering its descendants either way, which is what
+ * the state matrix exercises.
  */
 
 import { cleanup, render } from "@testing-library/react"

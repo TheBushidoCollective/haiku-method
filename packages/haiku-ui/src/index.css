@@ -62,9 +62,6 @@
 	/* Drop shadow tint (pin box-shadow). 30% black. */
 	--color-shadow-soft: oklch(0% 0 0 / 0.3);
 
-	/* Dark-mode sheet surface — matches Tailwind stone-900. */
-	--color-sheet-surface-dark: oklch(21.47% 0.006 56.04); /* stone-900 */
-
 	/* ─── Upload-affordance accent (DESIGN-TOKENS §1.3.4 — out-of-band-human-file-modifications) ───
 	   Aliases the existing teal "review accent" so a future accent swap
 	   propagates to upload UI in lockstep with the rest of the
@@ -416,44 +413,29 @@ pre {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   FeedbackSheet — native <dialog> styling (unit-10, non-modal right-edge
-   slide-out drawer).
+   FeedbackSheet — non-modal right-edge slide-out drawer (unit-10).
 
-   Reshaped from a full-viewport modal → bottom drawer → RIGHT-EDGE slide-out
-   drawer: opened with `dialog.show()` so the page (header, content, sticky
-   GateDecisionBar) stays visible + interactive behind it. The drawer's
-   geometry AND its slide animation now live entirely in Tailwind utilities on
-   the component root (`fixed top-0 right-0 bottom-0 w-[min(85vw,360px)]
-   translate-x-full|translate-x-0 transition-transform`); this block only
-   carries what utilities can't express cleanly — the surface background. The
-   old full-viewport sizing, the bottom-up `sheet-up` keyframe, and the
-   `::backdrop` rules are GONE: the slide is a transform transition, a
-   non-modal dialog renders no backdrop, and sizing is utility-driven. The
-   global `@media (prefers-reduced-motion: reduce)` guard already clamps
-   `transition-duration` to ~0.01ms, and the component drops the
-   `transition-transform` class entirely under reduced motion, so the drawer
-   snaps into place instead of sliding.
+   The drawer root is now a PLAIN CONTROLLED `<aside class="feedback-sheet">`
+   (NOT a native `<dialog>`): a non-modal `<dialog>` carried UA-default
+   positioning/margins that fought the Tailwind `fixed top-0 right-0 bottom-0`
+   classes, and its imperative `show()`/`close()` lifecycle desynced from the
+   controlled `open` prop. The component
+   (`packages/haiku-ui/src/organisms/FeedbackSheet.tsx`) renders an
+   `<aside role="dialog" aria-labelledby>` whose geometry, slide, AND surface
+   background all live in Tailwind utilities on the element itself
+   (`fixed top-0 right-0 bottom-0 w-[min(85vw,360px)]
+   translate-x-full|translate-x-0 transition-transform bg-white
+   dark:bg-stone-900`). An `<aside>` has no UA padding/margin and no
+   `::backdrop`, so there are no resets to apply here and nothing for this
+   block to carry — the styling is fully self-contained on the element.
 
-   FB-34 alignment: the `dialog.feedback-sheet` selector below is tightly
-   coupled to the React component root rendered by
-   `packages/haiku-ui/src/organisms/FeedbackSheet.tsx`, which is a native
-   `<dialog className="feedback-sheet">` — NOT a `<div role="dialog">`.
-   Regression coverage lives in `FeedbackSheet.test.tsx` ("renders as a native
-   <dialog ...> root (FB-34 alignment)"). Do NOT change the selector here
-   without also updating the component root and vice versa; the two MUST move
-   together or the styles silently become dead CSS.
+   FB-34 alignment: the regression guard in `FeedbackSheet.test.tsx`
+   ("renders as an <aside class='feedback-sheet'> root (FB-34 alignment)")
+   pins the root tagName to `ASIDE` + the `feedback-sheet` class so it can't
+   silently regress to a `<div>` or back to a `<dialog>`. There is intentionally
+   no `dialog.feedback-sheet` CSS rule anymore — the surface bg moved onto the
+   element's Tailwind classes when the root became a class-matched `<aside>`.
    ───────────────────────────────────────────────────────────────────────── */
-dialog.feedback-sheet {
-	padding: 0;
-	margin: 0;
-	background: white;
-	color: inherit;
-}
-
-/* dark mode — match DESIGN-TOKENS §2.5 bg-stone-900 */
-:where(.dark) dialog.feedback-sheet {
-	background: var(--color-sheet-surface-dark);
-}
 
 /* ─────────────────────────────────────────────────────────────────────────
    Drift-detected one-shot pulse (DESIGN-TOKENS §6.3 / §6.4 —

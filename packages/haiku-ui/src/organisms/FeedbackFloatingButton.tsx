@@ -28,7 +28,8 @@
  *
  * The FAB itself does not own the sheet state — the parent review page does,
  * so the same `open` boolean can drive the FAB's `aria-expanded` and the
- * dialog's `showModal()`/`close()` imperative lifecycle.
+ * drawer's `show()`/`close()` imperative lifecycle (the sheet is a non-modal
+ * bottom drawer, not a full-screen modal).
  */
 
 import { forwardRef } from "react"
@@ -54,9 +55,12 @@ export interface FeedbackFloatingButtonProps {
 	ariaControlsId?: string
 	/** Optional className passthrough; appended to the canonical classes. */
 	className?: string
-	/** Explicit bottom-offset utility class. Defaults to `bottom-4`;
-	 *  the review route's mobile branch overrides it to lift the FAB
-	 *  clear of the sticky GateDecisionBar docked at the very bottom. */
+	/** Explicit bottom-offset utility class. Defaults to `bottom-4`; the
+	 *  review route's mobile branch overrides it to the shared
+	 *  `MOBILE_FEEDBACK_BOTTOM_OFFSET` (`organisms/mobileFeedbackLayout.ts`)
+	 *  to lift the FAB clear of the sticky GateDecisionBar docked at the very
+	 *  bottom — the SAME offset the FeedbackSheet drawer uses, so the two
+	 *  bottom-band affordances stay aligned with each other and the gate. */
 	bottomClass?: string
 }
 

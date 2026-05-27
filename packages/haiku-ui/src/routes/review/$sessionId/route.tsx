@@ -45,6 +45,7 @@ import { AnnotationModeFab } from "../../../organisms/AnnotationModeFab"
 import { FeedbackFloatingButton } from "../../../organisms/FeedbackFloatingButton"
 import { FeedbackSheet } from "../../../organisms/FeedbackSheet"
 import type { InlineCommentEntry } from "../../../organisms/InlineComments"
+import { MOBILE_FEEDBACK_BOTTOM_OFFSET } from "../../../organisms/mobileFeedbackLayout"
 import { FeedbackPanelBody } from "../../../pages/review/FeedbackPanelBody"
 import { FeedbackSidebar } from "../../../pages/review/FeedbackSidebar"
 import { GateDecisionBar } from "../../../pages/review/GateDecisionBar"
@@ -109,12 +110,16 @@ function MobileFeedbackSection(): React.ReactElement {
 				count={pendingCount}
 				// Lift clear of the sticky GateDecisionBar docked full-width
 				// at the very bottom on mobile so the FAB isn't occluded.
-				bottomClass="bottom-44"
+				// Shared constant keeps the FAB + drawer + gate in sync.
+				bottomClass={MOBILE_FEEDBACK_BOTTOM_OFFSET}
 			/>
 			<FeedbackSheet
 				open={sheetOpen}
 				onClose={() => setSheetOpen(false)}
 				triggerRef={fabRef}
+				// Non-modal drawer anchored at the SAME offset as the FAB so
+				// its bottom edge clears the sticky GateDecisionBar.
+				bottomClass={MOBILE_FEEDBACK_BOTTOM_OFFSET}
 			>
 				<FeedbackPanelBody
 					items={controller.items}

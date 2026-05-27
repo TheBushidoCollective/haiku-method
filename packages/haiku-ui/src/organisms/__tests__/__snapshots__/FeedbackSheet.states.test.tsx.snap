@@ -7,8 +7,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   >
     <dialog
       aria-labelledby="feedback-sheet-title"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100"
+      class="feedback-sheet fixed inset-x-0 bottom-44 z-30 max-h-[55vh] flex flex-col rounded-t-2xl border-t border-stone-200 dark:border-stone-700 shadow-2xl text-stone-900 dark:text-stone-100"
       data-testid="feedback-sheet"
       id="feedback-sheet"
       role="dialog"
@@ -45,8 +44,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   >
     <dialog
       aria-labelledby="feedback-sheet-title"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100 sheet-enter"
+      class="feedback-sheet fixed inset-x-0 bottom-44 z-30 max-h-[55vh] flex flex-col rounded-t-2xl border-t border-stone-200 dark:border-stone-700 shadow-2xl text-stone-900 dark:text-stone-100 sheet-enter"
       data-testid="feedback-sheet"
       id="feedback-sheet"
       open=""
@@ -84,8 +82,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   >
     <dialog
       aria-labelledby="feedback-sheet-title"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100 sheet-enter"
+      class="feedback-sheet fixed inset-x-0 bottom-44 z-30 max-h-[55vh] flex flex-col rounded-t-2xl border-t border-stone-200 dark:border-stone-700 shadow-2xl text-stone-900 dark:text-stone-100 sheet-enter"
       data-testid="feedback-sheet"
       id="feedback-sheet"
       open=""
@@ -127,8 +124,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   >
     <dialog
       aria-labelledby="feedback-sheet-title"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100 sheet-enter"
+      class="feedback-sheet fixed inset-x-0 bottom-44 z-30 max-h-[55vh] flex flex-col rounded-t-2xl border-t border-stone-200 dark:border-stone-700 shadow-2xl text-stone-900 dark:text-stone-100 sheet-enter"
       data-testid="feedback-sheet"
       id="feedback-sheet"
       open=""
@@ -166,8 +162,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   >
     <dialog
       aria-labelledby="feedback-sheet-title"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100 sheet-enter"
+      class="feedback-sheet fixed inset-x-0 bottom-44 z-30 max-h-[55vh] flex flex-col rounded-t-2xl border-t border-stone-200 dark:border-stone-700 shadow-2xl text-stone-900 dark:text-stone-100 sheet-enter"
       data-testid="feedback-sheet"
       id="feedback-sheet-alt"
       open=""
@@ -205,8 +200,7 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   >
     <dialog
       aria-labelledby="feedback-sheet-title-alt"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100 sheet-enter"
+      class="feedback-sheet fixed inset-x-0 bottom-44 z-30 max-h-[55vh] flex flex-col rounded-t-2xl border-t border-stone-200 dark:border-stone-700 shadow-2xl text-stone-900 dark:text-stone-100 sheet-enter"
       data-testid="feedback-sheet"
       id="feedback-sheet"
       open=""

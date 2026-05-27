@@ -258,6 +258,28 @@ export function recordTickResult(
 	slug: string,
 	action: Record<string, unknown> | null | undefined,
 ): void {
+	// Wait-for-human / block-on-external actions are NOT engine
+	// progression. By design they re-emit the IDENTICAL signature every
+	// tick while idle, until the human (or external event) acts. They are
+	// already exempt from being the halt TARGET in `wouldDeadlock`, but
+	// they must ALSO stay out of the progression history entirely — a
+	// human-wait is not a tick of work, so it can neither advance the
+	// consecutive counter nor enter the churn `recent[]` window.
+	//
+	// Skipping the count is obvious; skipping the window is the
+	// load-bearing half. If a window fills with `user_gate` waits and is
+	// then followed by a single genuine progress action, the churn
+	// detector reads `[user_gate ×7, progress]` as a 2-distinct A↔B wedge
+	// and false-halts the LEGITIMATE progress action — even though
+	// `wouldDeadlock` correctly never halted any of the `user_gate` ticks
+	// themselves. (worker-new-badge, 2026-05-27: the user re-ran
+	// /haiku:haiku-pickup at a parked development-stage gate ~9× across
+	// session restarts; the persisted `recent[]` filled with `user_gate`,
+	// the next tick resolved `start_unit_hat`, and `wouldDeadlock` swapped
+	// it for `loop_halted`/churn. The gate that was asking the user to act
+	// got masked by the halt.) The detector tracks ENGINE wedges; an idle
+	// human-wait is not one, so it is a complete no-op here.
+	if (actionWaitsOnExternalInput(action)) return
 	const signature = actionSignatureForDeadlock(action)
 	const now = new Date().toISOString()
 	const prev = loadEntry(slug)

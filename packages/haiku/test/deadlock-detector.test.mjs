@@ -602,3 +602,65 @@ test("recordTickResult: loop_halted action does NOT pollute the recent window", 
 		"loop_halted signature must not appear in recent window",
 	)
 })
+
+// ─ Regression: worker-new-badge (2026-05-27). A wait-for-human action
+// (`user_gate`) re-emitted across many pickup ticks must NEVER poison the
+// churn window. The user re-ran /haiku:haiku-pickup ~9× at a parked
+// development-stage gate (across session restarts, so the persisted
+// recent[] accumulated); the next tick resolved a genuine progress action
+// (start_unit_hat) and the churn detector swapped it for loop_halted —
+// masking the very gate that was asking the user to act.
+test("recordTickResult: a repeated user_gate is a no-op — never enters the window", () => {
+	__resetDeadlockDetector()
+	const gate = {
+		action: "user_gate",
+		stage: "development",
+		unit_batch: "unit-001-render-new-tag-in-worker-dates",
+	}
+	// Nine pickups at the same parked gate (the worker-new-badge window).
+	for (let i = 0; i < 9; i++) recordTickResult("slug-gate", gate)
+	const h = __getTickHistoryForTests("slug-gate")
+	assert.strictEqual(
+		h,
+		null,
+		"a stream of user_gate waits records nothing — the gate is not engine progression",
+	)
+})
+
+test("worker-new-badge: a user_gate window does NOT false-halt the next progress action", () => {
+	__resetDeadlockDetector()
+	const gate = {
+		action: "user_gate",
+		stage: "development",
+		unit_batch: "unit-001-render-new-tag-in-worker-dates",
+	}
+	// Repeated pickups while parked at the gate — exactly the incident.
+	for (let i = 0; i < 9; i++) recordTickResult("slug-wnb", gate)
+	// The gate is satisfied; the cursor resolves the planner hat.
+	const progress = {
+		action: "start_unit_hat",
+		stage: "development",
+		hat: "planner",
+		units: ["unit-001-render-new-tag-in-worker-dates"],
+	}
+	const verdict = wouldDeadlock("slug-wnb", progress)
+	assert.strictEqual(
+		verdict,
+		null,
+		"genuine progress after a user_gate wait must not be halted as churn",
+	)
+})
+
+test("user_gate exemption does NOT mask a genuine engine wedge that follows", () => {
+	// The exemption is scoped to wait-for-human actions only. A real A↔B
+	// engine churn that happens to be interleaved with no gates still halts.
+	__resetDeadlockDetector()
+	const A = { action: "dispatch_review", role: "spec" }
+	const B = { action: "complete_stage", stage: "design" }
+	// A few idle gate ticks first (no-ops), then a real wedge.
+	recordTickResult("slug-mix", { action: "user_gate", stage: "design" })
+	for (const x of [A, B, A, B, A, B, A]) recordTickResult("slug-mix", x)
+	const verdict = wouldDeadlock("slug-mix", B)
+	assert.ok(verdict, "an interleaved gate must not disarm a genuine A↔B wedge")
+	assert.strictEqual(verdict.kind, "churn")
+})

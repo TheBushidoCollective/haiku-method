@@ -56,9 +56,6 @@
 	   border" — blue-500). */
 	--color-comment-active: oklch(62.3% 0.214 259.81); /* blue-500 */
 
-	/* Pulse ring — FeedbackFloatingButton keyframe (teal-600). */
-	--color-pulse-ring: oklch(60.05% 0.118 184.7); /* teal-600 */
-
 	/* Scrim used by <dialog>::backdrop. 50% black by design. */
 	--color-scrim: oklch(0% 0 0 / 0.5);
 
@@ -419,19 +416,23 @@ pre {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   FeedbackSheet — native <dialog> styling (unit-10, non-modal bottom drawer).
-   See stages/development/artifacts/unit-10-tactical-plan.md §C.
+   FeedbackSheet — native <dialog> styling (unit-10, non-modal right-edge
+   slide-out drawer).
 
-   Reshaped from a full-viewport modal to a NON-MODAL bottom drawer: opened
-   with `dialog.show()` so the page (header, content, sticky GateDecisionBar)
-   stays visible + interactive behind it. The drawer's geometry (partial
-   height, bottom anchor ABOVE the decision bar) lives in Tailwind utilities
-   on the component root (`fixed inset-x-0 bottom-44 max-h-[55vh] rounded-t-2xl
-   border-t shadow-2xl`); this block only carries what utilities can't express
-   cleanly — the surface background + the decorative slide-up animation. The
-   old full-viewport sizing (`width: 100vw; height: 100dvh`) and the
-   `::backdrop` rules are GONE: a non-modal dialog renders no backdrop, and
-   sizing is now utility-driven.
+   Reshaped from a full-viewport modal → bottom drawer → RIGHT-EDGE slide-out
+   drawer: opened with `dialog.show()` so the page (header, content, sticky
+   GateDecisionBar) stays visible + interactive behind it. The drawer's
+   geometry AND its slide animation now live entirely in Tailwind utilities on
+   the component root (`fixed top-0 right-0 bottom-0 w-[min(85vw,360px)]
+   translate-x-full|translate-x-0 transition-transform`); this block only
+   carries what utilities can't express cleanly — the surface background. The
+   old full-viewport sizing, the bottom-up `sheet-up` keyframe, and the
+   `::backdrop` rules are GONE: the slide is a transform transition, a
+   non-modal dialog renders no backdrop, and sizing is utility-driven. The
+   global `@media (prefers-reduced-motion: reduce)` guard already clamps
+   `transition-duration` to ~0.01ms, and the component drops the
+   `transition-transform` class entirely under reduced motion, so the drawer
+   snaps into place instead of sliding.
 
    FB-34 alignment: the `dialog.feedback-sheet` selector below is tightly
    coupled to the React component root rendered by
@@ -454,60 +455,12 @@ dialog.feedback-sheet {
 	background: var(--color-sheet-surface-dark);
 }
 
-@keyframes sheet-up {
-	from {
-		transform: translateY(100%);
-	}
-	to {
-		transform: translateY(0);
-	}
-}
-dialog.feedback-sheet.sheet-enter {
-	animation: sheet-up 0.3s ease-out;
-}
-
-/* Global stage-wide guard at @media (prefers-reduced-motion: reduce) above
-   already clamps animation-duration to 0.01ms. Explicitly null the decorative
-   sheet-up slide — the drawer still paints in its final position via the
-   0.01ms clamp; the explicit `animation: none` is the spec-recommended
-   belt-and-suspenders override for purely decorative slide motion
-   (motion-and-reduced-motion-spec.md §10). The `.sheet-enter--reduced`
-   sentinel class is applied by the React component and has no CSS body — it
-   is a pure marker the test harness asserts on. */
-@media (prefers-reduced-motion: reduce) {
-	dialog.feedback-sheet.sheet-enter {
-		/* Kill the sheet-up decorative slide under reduced-motion. */
-		animation: none;
-	}
-}
-
-/* FeedbackFloatingButton — decorative pulse animation gated by reduced-motion. */
-@keyframes feedback-fab-pulse {
-	0%,
-	100% {
-		box-shadow: 0 0 0 0
-			color-mix(in oklch, var(--color-pulse-ring), transparent 60%);
-	}
-	50% {
-		box-shadow: 0 0 0 8px transparent;
-	}
-}
-.feedback-fab-pulse {
-	animation: feedback-fab-pulse 2s ease-in-out 3;
-}
-@media (prefers-reduced-motion: reduce) {
-	.feedback-fab-pulse {
-		animation: none;
-	}
-}
-
 /* ─────────────────────────────────────────────────────────────────────────
    Drift-detected one-shot pulse (DESIGN-TOKENS §6.3 / §6.4 —
-   out-of-band-human-file-modifications). Structurally identical to
-   feedback-fab-pulse but tinted with the drift-detected amber hue so the
-   pulse on a row that just got flagged is visually distinct from the
-   feedback-FAB pulse. Runs once on mount; reduced-motion override drops
-   the animation per the canonical guard above.
+   out-of-band-human-file-modifications). An expanding box-shadow ring tinted
+   with the drift-detected amber hue so a row that just got flagged reads at a
+   glance. Runs once on mount; the reduced-motion override drops the animation
+   per the canonical guard above.
    ───────────────────────────────────────────────────────────────────────── */
 @keyframes drift-detected-pulse {
 	0%,

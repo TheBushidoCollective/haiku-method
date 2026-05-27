@@ -27,10 +27,10 @@ import { DriftBanner, type DriftEntry } from "../../molecules/DriftBanner"
 import { StageProgressStrip } from "../../molecules/StageProgressStrip"
 import { SubmitSuccess } from "../../molecules/SubmitSuccess"
 import type { AnnotationPin } from "../../organisms/AnnotationCanvas"
-import { FeedbackFloatingButton } from "../../organisms/FeedbackFloatingButton"
+import { FeedbackRail } from "../../organisms/FeedbackRail"
 import { FeedbackSheet } from "../../organisms/FeedbackSheet"
+import { RAIL_GUTTER_CLASS } from "../../organisms/feedbackRailLayout"
 import type { InlineCommentEntry } from "../../organisms/InlineComments"
-import { MOBILE_FEEDBACK_BOTTOM_OFFSET } from "../../organisms/mobileFeedbackLayout"
 import type { ReviewAnnotations } from "../../types"
 import { ArtifactsPane } from "./ArtifactsPane"
 import { FeedbackPanelBody } from "./FeedbackPanelBody"
@@ -386,23 +386,16 @@ function MobileFeedbackSection(): React.ReactElement {
 	).length
 	return (
 		<>
-			<FeedbackFloatingButton
+			<FeedbackRail
 				ref={fabRef}
 				open={sheetOpen}
 				onToggle={() => setSheetOpen((o) => !o)}
 				count={pendingCount}
-				// Lift clear of the sticky GateDecisionBar docked full-width
-				// at the very bottom on mobile so the FAB isn't occluded.
-				// Shared constant keeps the FAB + drawer + gate in sync.
-				bottomClass={MOBILE_FEEDBACK_BOTTOM_OFFSET}
 			/>
 			<FeedbackSheet
 				open={sheetOpen}
 				onClose={() => setSheetOpen(false)}
 				triggerRef={fabRef}
-				// Non-modal drawer anchored at the SAME offset as the FAB so
-				// its bottom edge clears the sticky GateDecisionBar.
-				bottomClass={MOBILE_FEEDBACK_BOTTOM_OFFSET}
 			>
 				<FeedbackPanelBody
 					items={controller.items}
@@ -626,7 +619,16 @@ export function ReviewPage({
 
 				<div
 					data-testid="review-split"
-					className="flex-1 flex flex-col xl:flex-row overflow-hidden"
+					className={[
+						"flex-1 flex flex-col xl:flex-row overflow-hidden",
+						// Reserve the rail's gutter on the mobile branch so page
+						// content is inset by the rail width and never renders
+						// underneath the fixed full-height rail column. Desktop
+						// (sidebar) needs no gutter.
+						isMobile ? RAIL_GUTTER_CLASS : "",
+					]
+						.filter(Boolean)
+						.join(" ")}
 				>
 					{!isMobile && (
 						<FeedbackSidebar
@@ -765,7 +767,9 @@ export function ReviewPage({
 				    state. Suppressed on the intent-overview + post-submit
 				    screens, which have no stage gate to drive. */}
 				{isMobile && !viewingIntent && !submittedDecision && (
-					<div className="sticky bottom-0 z-30 w-full border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950">
+					<div
+						className={`sticky bottom-0 z-[60] w-full border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 ${RAIL_GUTTER_CLASS}`}
+					>
 						<GateDecisionBar
 							stage={selectedStage ?? activeStage}
 							activeStage={activeStage}

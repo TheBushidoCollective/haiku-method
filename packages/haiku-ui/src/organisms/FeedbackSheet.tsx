@@ -1,76 +1,74 @@
 /**
- * FeedbackSheet — mobile NON-MODAL bottom DRAWER backed by native <dialog>
- * (unit-10, reshaped to a non-blocking drawer).
+ * FeedbackSheet — mobile NON-MODAL right-edge SLIDE-OUT DRAWER backed by a
+ * native <dialog> (reshaped from the legacy bottom drawer).
  *
  * Canonical references:
  *   - stages/development/units/unit-10-feedback-sheet-mobile.md — scope +
- *     completion criteria (the a11y close-path + FAB-focus-restore contract
- *     survives; the modal-only pieces do not — see below).
- *   - stages/development/artifacts/unit-10-tactical-plan.md §A — component
- *     tree, effect wiring.
+ *     completion criteria (the a11y close-path + trigger-focus-restore
+ *     contract survives; the modal-only pieces do not — see below).
  *   - packages/haiku-ui/BROWSER-SUPPORT.md — native <dialog> policy, jsdom
  *     caveats.
  *
- * Why a non-modal drawer (the reshape):
- *   The previous implementation opened with `showModal()` and styled the
- *   dialog `fixed inset-0` — a FULL-VIEWPORT modal. On mobile the gate's
- *   decision bar (`GateDecisionBar`) now docks at the bottom of the
- *   viewport; a full-screen modal covered the header, the content, AND the
- *   gate, so opening feedback obliterated the Approve / Request-Changes
- *   controls. The fix: open with `show()` (NON-modal) and position the
- *   dialog as a partial bottom drawer ABOVE the decision bar. The rest of
- *   the page stays visible and INTERACTIVE while the drawer is open — the
- *   user reads the content and clicks Approve / Request-Changes without
- *   closing feedback.
+ * Why a right-edge slide-out drawer (the reshape):
+ *   The trigger is now a vertical FEEDBACK rail pinned to the right edge
+ *   (`FeedbackRail`). The drawer slides in from the SAME edge — a full-height
+ *   panel on the right, transform-based (`translate-x-full` closed →
+ *   `translate-x-0` open). It stays NON-modal so the page behind it —
+ *   header, content, AND the sticky `GateDecisionBar` docked at the bottom —
+ *   stays visible and INTERACTIVE. The user reads the feedback list and clicks
+ *   Approve / Request-Changes without closing feedback.
+ *
+ * Avoiding the gate: the drawer sits at `z-50`; the route docks the
+ * `GateDecisionBar` wrapper at a HIGHER z (`z-[60]`) so the bar paints over
+ * the drawer's bottom edge and stays clickable. Belt-and-suspenders, the
+ * drawer body carries bottom padding (`pb-44`) so the last feedback item
+ * scrolls clear of the bar rather than hiding behind it.
  *
  * What that means for the implementation:
  *   - `dialog.show()` (non-modal), NOT `showModal()`. No top-layer, no
  *     background `inert`, no `::backdrop`.
  *   - NO scroll-lock. The page must scroll behind the drawer.
  *   - NO focus-trap. A non-modal drawer must let the user tab freely between
- *     the drawer and the gate — `useFocusTrap` (which confines tabbing) is
- *     deliberately gone.
+ *     the drawer and the gate — `useFocusTrap` is deliberately absent.
  *   - NO backdrop-click close — there is no backdrop. The explicit close
- *     paths (× button, Escape) remain.
+ *     paths (× button, Escape, clicking the rail again) remain.
  *   - The dialog drops `aria-modal="true"` (it is not modal). It keeps
  *     `role="dialog"` + `aria-labelledby` + the title.
  *
- * What survives (the a11y contract that still makes sense for a drawer):
- *   - Escape closes it (`cancel`/`keydown` → `dialog.close()`).
- *   - The × button calls `dialog.close()` → `onClose`.
- *   - On close, focus returns to the FAB (the unit-spec CC3 "Focus returns
- *     to FAB" contract) — done explicitly here since there is no focus-trap
- *     priorFocus restore anymore.
+ * Controlled-only API: the parent owns `open` and supplies `onClose`. The rail
+ * (`FeedbackRail`) is always the trigger and lives one level up.
+ *
+ * THE CLOSE CONTRACT (FB regression — was broken): this component is
+ * CONTROLLED. The × button and the Escape handler MUST call `onClose()` ONLY —
+ * never `dialog.close()` directly. The parent flips `open` → false in
+ * response, and the open/close effect closes the native dialog. Calling
+ * `dialog.close()` from the button hid the dialog but left the parent's `open`
+ * at `true`, so the effect immediately re-`show()`-ed it — the "× does
+ * nothing" bug. The native `close` event is no longer the close pipeline.
  *
  * CSS selector alignment (FB-34): the rendered root is still a native
  * `<dialog className="feedback-sheet">`, matched by the `dialog.feedback-sheet`
- * block in `packages/haiku-ui/src/index.css`. The block was retuned alongside
- * this reshape (drawer sizing, slide-up retained, `::backdrop` removed). Do
- * NOT regress the root element to a div without rewriting those selectors.
- *
- * Controlled-only API: the parent owns `open` and supplies `onClose`. The FAB
- * (`FeedbackFloatingButton`) is always the trigger and lives one level up.
+ * block in `packages/haiku-ui/src/index.css`. Do NOT regress the root element
+ * to a div without rewriting those selectors.
  */
 
 import type { ReactNode, RefObject } from "react"
 import { useEffect, useRef } from "react"
 import { focusRingClass, touchTargetClass, useReducedMotion } from "../a11y"
-import { MOBILE_FEEDBACK_BOTTOM_OFFSET } from "./mobileFeedbackLayout"
 
 export interface FeedbackSheetProps {
 	/** Current open state. Drives `dialog.show()` / `dialog.close()`. */
 	open: boolean
 	/**
-	 * Fires when the sheet closes through any path (Escape, explicit close
-	 * button). Parent is responsible for flipping `open` to `false` in
-	 * response.
+	 * Fires when the sheet should close (× button, Escape). The parent is
+	 * responsible for flipping `open` to `false` in response — this component
+	 * NEVER closes the native dialog directly from a user gesture.
 	 */
 	onClose: () => void
 	/**
-	 * Ref to the FAB that opened the drawer. On close, focus is returned to
-	 * this element (unit spec CC3 "Focus returns to FAB"). A non-modal drawer
-	 * has no focus-trap to snapshot/restore prior focus, so this restore is
-	 * done explicitly in the open/close effect.
+	 * Ref to the rail that opened the drawer. On close, focus is returned to
+	 * this element. A non-modal drawer has no focus-trap to snapshot/restore
+	 * prior focus, so this restore is done explicitly in the open/close effect.
 	 */
 	triggerRef?: RefObject<HTMLButtonElement | null>
 	/** Accessible-name id override. Defaults to `"feedback-sheet-title"`. */
@@ -79,35 +77,33 @@ export interface FeedbackSheetProps {
 	title?: ReactNode
 	/** Sheet body contents (AgentFeedbackToggle, FeedbackList, footer). */
 	children?: ReactNode
-	/** `id` on the <dialog>; wires with FAB's `aria-controls`. */
+	/** `id` on the <dialog>; wires with the rail's `aria-controls`. */
 	id?: string
 	/** Extra class names appended to the dialog root. */
 	className?: string
-	/**
-	 * Bottom-offset utility class — anchors the drawer's bottom edge ABOVE
-	 * the sticky `GateDecisionBar` so the two never overlap. Defaults to the
-	 * shared `MOBILE_FEEDBACK_BOTTOM_OFFSET` (the same offset the FAB uses),
-	 * keeping the FAB, drawer, and gate in geometric sync.
-	 */
-	bottomClass?: string
 }
 
-function dialogBaseClass(bottomClass: string): string {
+function dialogBaseClass(open: boolean, prefersReducedMotion: boolean): string {
 	return [
 		"feedback-sheet",
-		// Partial bottom drawer: span the viewport width, anchor ABOVE the
-		// sticky decision bar. NOT `inset-0` — the page (header, content,
-		// gate) stays visible and interactive in the band above the drawer.
-		`fixed inset-x-0 ${bottomClass} z-30`,
-		// Cap the height so the header + top of the content stay visible
-		// above the drawer.
-		"max-h-[55vh]",
+		// Full-height panel anchored to the RIGHT edge. NOT `inset-0` (not a
+		// full-viewport modal) — the page (header, content, gate) stays
+		// visible and interactive in the band to the left.
+		"fixed top-0 right-0 bottom-0 z-50",
+		"w-[min(85vw,360px)] max-w-full",
 		"flex flex-col",
-		// Drawer chrome — rounded top, top border + shadow read as a sheet
-		// lifted off the page rather than a full-bleed modal.
-		"rounded-t-2xl border-t border-stone-200 dark:border-stone-700 shadow-2xl",
+		// Drawer chrome — left border + shadow read as a panel lifted off the
+		// page rather than a full-bleed modal.
+		"border-l border-stone-200 dark:border-stone-700 shadow-2xl",
 		"text-stone-900 dark:text-stone-100",
-	].join(" ")
+		// Transform-based slide from the right edge. Closed → off-screen
+		// (`translate-x-full`); open → in place (`translate-x-0`). Under
+		// reduced motion we drop the transition so it snaps into place.
+		open ? "translate-x-0" : "translate-x-full",
+		prefersReducedMotion ? "" : "transition-transform duration-300 ease-out",
+	]
+		.filter(Boolean)
+		.join(" ")
 }
 
 const HEADER_CLASS = [
@@ -125,7 +121,14 @@ const CLOSE_BUTTON_CLASS = [
 	"text-lg",
 ].join(" ")
 
-const BODY_CLASS = ["feedback-sheet__body", "flex-1 overflow-y-auto"].join(" ")
+// `pb-44` (11rem) keeps the last feedback item scrollable clear of the sticky
+// GateDecisionBar that docks full-width at the very bottom — belt-and-
+// suspenders on top of the z-order that already keeps the bar clickable.
+const BODY_CLASS = [
+	"feedback-sheet__body",
+	"flex-1 overflow-y-auto",
+	"pb-44",
+].join(" ")
 
 export function FeedbackSheet({
 	open,
@@ -136,7 +139,6 @@ export function FeedbackSheet({
 	children,
 	id,
 	className,
-	bottomClass,
 }: FeedbackSheetProps): React.ReactElement {
 	const dialogRef = useRef<HTMLDialogElement>(null)
 	const prefersReducedMotion = useReducedMotion()
@@ -144,48 +146,41 @@ export function FeedbackSheet({
 	const resolvedTitleId = titleId ?? "feedback-sheet-title"
 	const resolvedId = id ?? "feedback-sheet"
 	const resolvedTitle: ReactNode = title ?? "Feedback"
-	const resolvedBottomClass = bottomClass ?? MOBILE_FEEDBACK_BOTTOM_OFFSET
 
-	// Imperative open/close + Escape wiring + FAB focus restore.
+	// Imperative open/close + Escape wiring + trigger focus restore.
 	//
 	// Non-modal drawer: NO scroll-lock, NO focus-trap, NO backdrop. The only
-	// close paths are the × button and Escape; on close we explicitly return
-	// focus to the FAB (there is no focus-trap priorFocus snapshot to do it).
+	// close paths are the × button, Escape, and re-clicking the rail; on close
+	// we explicitly return focus to the rail (there is no focus-trap priorFocus
+	// snapshot to do it).
 	useEffect(() => {
 		const dialog = dialogRef.current
 		if (!dialog) return
 
-		function handleClose(): void {
-			onClose()
-		}
-
-		// Escape keydown → close (FB-60).
+		// Escape keydown → request close. CONTROLLED discipline: call
+		// `onClose()` so the parent flips `open` → false; never call
+		// `dialog.close()` directly (the parent owns the lifecycle).
 		//
-		// A non-modal <dialog> does NOT fire `cancel`/`close` on Escape in
-		// real browsers (that behavior is modal-only), and jsdom never fires
-		// it either. So this handler IS the Escape close path in BOTH
-		// environments: it calls `dialog.close()`, which fires the `close`
-		// event → onClose() → FAB focus restore.
+		// A non-modal <dialog> does NOT fire `cancel`/`close` on Escape in real
+		// browsers (that is modal-only), and jsdom never fires it either — so
+		// this handler IS the Escape close path in BOTH environments.
 		function handleKeyDown(event: KeyboardEvent): void {
-			if (!dialog) return
 			if (event.key === "Escape") {
 				event.preventDefault()
-				dialog.close()
+				onClose()
 			}
 		}
 
 		if (open) {
 			// Guard against InvalidStateError when already open.
 			if (!dialog.open) {
-				// Non-modal show(). The test harness polyfills it; production
-				// browsers use the real impl.
 				if (typeof dialog.show === "function") {
 					try {
 						dialog.show()
 					} catch {
-						// Last-resort fallback — force the attribute so tests
-						// + any degraded environment still observe the dialog
-						// as open. Real browsers never hit this path.
+						// Last-resort fallback — force the attribute so tests +
+						// any degraded environment still observe the dialog as
+						// open. Real browsers never hit this path.
 						dialog.setAttribute("open", "")
 					}
 				} else {
@@ -193,19 +188,16 @@ export function FeedbackSheet({
 				}
 			}
 
-			dialog.addEventListener("close", handleClose)
 			dialog.addEventListener("keydown", handleKeyDown)
 
 			return () => {
-				dialog.removeEventListener("close", handleClose)
 				dialog.removeEventListener("keydown", handleKeyDown)
-				// Return focus to the FAB per unit spec CC3 "Focus returns to
-				// FAB". With the focus-trap removed there is no priorFocus
-				// snapshot, so this is the sole focus-restore path.
-				const fab = triggerRef?.current
-				if (fab && document.contains(fab)) {
+				// Return focus to the rail. With the focus-trap removed there is
+				// no priorFocus snapshot, so this is the sole focus-restore path.
+				const trigger = triggerRef?.current
+				if (trigger && document.contains(trigger)) {
 					try {
-						fab.focus()
+						trigger.focus()
 					} catch {
 						// Defensive: some environments throw when focusing a
 						// detached or non-focusable node. Swallow.
@@ -229,18 +221,8 @@ export function FeedbackSheet({
 		return undefined
 	}, [open, onClose, triggerRef])
 
-	// Animation class — only applied while open. Under reduced-motion we swap
-	// the `sheet-enter` slide-up class for the `sheet-enter--reduced` sentinel
-	// so the test can assert className presence without depending on CSS.
-	const animationClass = open
-		? prefersReducedMotion
-			? "sheet-enter--reduced"
-			: "sheet-enter"
-		: ""
-
 	const dialogClassName = [
-		dialogBaseClass(resolvedBottomClass),
-		animationClass,
+		dialogBaseClass(open, prefersReducedMotion),
 		className ?? "",
 	]
 		.filter(Boolean)
@@ -265,18 +247,12 @@ export function FeedbackSheet({
 				</h2>
 				<button
 					type="button"
-					onClick={() => {
-						const dialog = dialogRef.current
-						if (dialog && typeof dialog.close === "function") {
-							try {
-								dialog.close()
-								return
-							} catch {
-								// Fall through to onClose() below.
-							}
-						}
-						onClose()
-					}}
+					// CONTROLLED close: call onClose() ONLY. The parent flips
+					// `open` → false → the open/close effect closes the native
+					// dialog. Calling dialog.close() here would hide it while the
+					// parent still thinks it's open, and the effect would
+					// immediately re-show() it — the "× does nothing" bug.
+					onClick={onClose}
 					aria-label="Close feedback panel"
 					className={[
 						CLOSE_BUTTON_CLASS,

@@ -22,7 +22,7 @@ import { buildBrowseUrl } from "@/lib/browse/url"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
 import { BrowseMarkdown } from "./BrowseMarkdown"
-import { RESOLUTION_BADGES } from "./feedback-badges"
+import { RESOLUTION_BADGES, SEVERITY_BADGES } from "./feedback-badges"
 import { FixHistory } from "./IterationHistory"
 import { IntentKanban } from "./KanbanView"
 import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
@@ -1658,6 +1658,27 @@ function StageDetail({
 					</span>
 				)}
 			</div>
+			{/* Per-stage BRIEF — the briefer's plain-language summary, shown
+			    first so a reviewer reads the human-facing framing before the
+			    units. */}
+			{stage.brief && (
+				<div className="space-y-2">
+					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+						Brief
+					</h4>
+					<div className="rounded-xl border border-stone-200 p-5 dark:border-stone-700">
+						<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
+							<BrowseMarkdown
+								assets={assets}
+								host={host}
+								basePath={`.haiku/intents/${slug}/stages/${stage.name}`}
+							>
+								{stage.brief}
+							</BrowseMarkdown>
+						</div>
+					</div>
+				</div>
+			)}
 			{hasUnits && (
 				<div className="space-y-3">
 					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
@@ -1766,6 +1787,26 @@ function StageDetail({
 					{otherArtifacts.map((artifact) => (
 						<OtherArtifactCard key={artifact.name} artifact={artifact} />
 					))}
+				</div>
+			)}
+			{/* Per-stage OBSERVATIONS — the agent's free-form reflection
+			    written at stage close. Shown last; it's a retrospective. */}
+			{stage.observations && (
+				<div className="space-y-2">
+					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+						Observations
+					</h4>
+					<div className="rounded-xl border border-stone-200 p-5 dark:border-stone-700">
+						<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
+							<BrowseMarkdown
+								assets={assets}
+								host={host}
+								basePath={`.haiku/intents/${slug}/stages/${stage.name}`}
+							>
+								{stage.observations}
+							</BrowseMarkdown>
+						</div>
+					</div>
 				</div>
 			)}
 			{/* Fullscreen modal for thumbnail artifacts */}
@@ -2125,22 +2166,41 @@ function FeedbackList({
 	title: string | null
 }) {
 	const [filter, setFilter] = useState<"open" | "closed" | "all">("open")
+	const [sevFilter, setSevFilter] = useState<
+		"all" | "blocker" | "high" | "medium" | "low"
+	>("all")
 	if (feedback.length === 0) return null
 	const counts = {
 		open: feedback.filter((f) => f.closedAt == null).length,
 		closed: feedback.filter((f) => f.closedAt != null).length,
 		all: feedback.length,
 	}
-	const visible = feedback.filter((f) => {
+	const statusVisible = feedback.filter((f) => {
 		if (filter === "all") return true
 		if (filter === "open") return f.closedAt == null
 		return f.closedAt != null
 	})
+	const visible = statusVisible.filter(
+		(f) => sevFilter === "all" || f.severity === sevFilter,
+	)
 	const FILTERS: Array<{ key: "open" | "closed" | "all"; label: string }> = [
 		{ key: "open", label: "Open" },
 		{ key: "closed", label: "Closed" },
 		{ key: "all", label: "All" },
 	]
+	// Severity chips reflect the status-filtered pool so the counts track the
+	// Open/Closed/All selection above. Only render when ≥1 finding carries a
+	// severity — unclassified-only scopes get no severity rail.
+	const SEVERITIES: Array<"blocker" | "high" | "medium" | "low"> = [
+		"blocker",
+		"high",
+		"medium",
+		"low",
+	]
+	const sevCounts = Object.fromEntries(
+		SEVERITIES.map((s) => [s, statusVisible.filter((f) => f.severity === s).length]),
+	) as Record<"blocker" | "high" | "medium" | "low", number>
+	const hasSeverities = SEVERITIES.some((s) => sevCounts[s] > 0)
 	return (
 		<div className="space-y-2">
 			<div className="flex flex-wrap items-center gap-2">
@@ -2178,6 +2238,37 @@ function FeedbackList({
 						)
 					})}
 				</div>
+				{hasSeverities && (
+					<div className="flex flex-wrap items-center gap-1">
+						<span className="mr-0.5 text-[10px] uppercase tracking-wider text-stone-400">
+							Severity
+						</span>
+						{(["all", ...SEVERITIES] as const).map((s) => {
+							const active = sevFilter === s
+							const badge = s === "all" ? null : SEVERITY_BADGES[s]
+							const n = s === "all" ? statusVisible.length : sevCounts[s]
+							if (s !== "all" && n === 0) return null
+							return (
+								<button
+									key={s}
+									type="button"
+									onClick={() => setSevFilter(s)}
+									title={badge?.tooltip}
+									className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${
+										active
+											? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
+											: badge
+												? badge.classes
+												: "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+									}`}
+								>
+									{s === "all" ? "All" : badge?.label}
+									<span className="ml-1 opacity-70">{n}</span>
+								</button>
+							)
+						})}
+					</div>
+				)}
 			</div>
 			{visible.length > 0 ? (
 				<div className="space-y-2">
@@ -2214,6 +2305,7 @@ function FeedbackCard({
 	const resolutionBadge = fb.resolution
 		? RESOLUTION_BADGES[fb.resolution]
 		: null
+	const severityBadge = fb.severity ? SEVERITY_BADGES[fb.severity] : null
 	return (
 		<div
 			className={`rounded-lg border ${
@@ -2238,6 +2330,14 @@ function FeedbackCard({
 					>
 						{statusLabel}
 					</span>
+					{severityBadge && (
+						<span
+							className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${severityBadge.classes}`}
+							title={severityBadge.tooltip}
+						>
+							{severityBadge.label}
+						</span>
+					)}
 					{resolutionBadge && (
 						<span
 							className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${resolutionBadge.classes}`}
@@ -2272,9 +2372,7 @@ function FeedbackCard({
 				<div className="border-t border-stone-100 dark:border-stone-800 px-4 py-3 text-sm text-stone-700 dark:text-stone-300">
 					{fb.body ? (
 						<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
-							<pre className="whitespace-pre-wrap font-sans text-sm">
-								{fb.body}
-							</pre>
+							<BrowseMarkdown>{fb.body}</BrowseMarkdown>
 						</div>
 					) : (
 						<p className="text-stone-400 italic">No body.</p>

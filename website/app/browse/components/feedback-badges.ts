@@ -30,3 +30,38 @@ export const RESOLUTION_BADGES: Record<
 			"Stage revisit — the cursor walks back to this finding's stage and reopens its elaborate phase. Corrective units land in the next bolt; completed work isn't mutated.",
 	},
 }
+
+/**
+ * Feedback severity badges — mirror the SPA's `SEVERITY_LABELS`
+ * (`packages/haiku-ui/src/organisms/FeedbackItem.tsx`) so a finding's
+ * severity reads identically on the website browse view. Color runs hot
+ * (red) to cool (stone) with severity.
+ */
+export const SEVERITY_BADGES: Record<
+	"blocker" | "high" | "medium" | "low",
+	{ label: string; classes: string; tooltip: string }
+> = {
+	blocker: {
+		label: "Blocker",
+		classes: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+		tooltip:
+			"Blocker — stops the gate; fixed before the stage advances. The fix-loop dispatches blockers first.",
+	},
+	high: {
+		label: "High",
+		classes:
+			"bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+		tooltip: "High — a real defect that should be fixed before delivery.",
+	},
+	medium: {
+		label: "Medium",
+		classes:
+			"bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+		tooltip: "Medium — a genuine issue worth fixing; not delivery-blocking.",
+	},
+	low: {
+		label: "Low",
+		classes: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
+		tooltip: "Low — a nit, polish, or nice-to-have.",
+	},
+}

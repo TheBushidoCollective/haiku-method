@@ -742,6 +742,12 @@ export class GitLabProvider implements BrowseProvider {
 		else if (stageNames.indexOf(stageName) < stageNames.indexOf(activeStage))
 			status = "complete"
 
+		// Per-stage user-facing BRIEF + agent OBSERVATIONS.
+		const briefText = data.blobByPath.get(`${stagePath}/BRIEF.md`)
+		const observationsText = data.blobByPath.get(
+			`${stagePath}/observations.md`,
+		)
+
 		return {
 			name: stageName,
 			status,
@@ -753,6 +759,8 @@ export class GitLabProvider implements BrowseProvider {
 			units,
 			artifacts: artifacts.length > 0 ? artifacts : undefined,
 			feedback: feedback.length > 0 ? feedback : undefined,
+			brief: briefText?.trim() || null,
+			observations: observationsText?.trim() || null,
 		}
 	}
 

@@ -656,6 +656,15 @@ export class GitHubProvider implements BrowseProvider {
 		else if (stageNames.indexOf(stageName) < stageNames.indexOf(activeStage))
 			status = "complete"
 
+		// Per-stage user-facing BRIEF + agent OBSERVATIONS — direct blob
+		// children of the stage dir (fetched at the stage-children depth).
+		const briefText = stageChildren.find(
+			(e) => e.name === "BRIEF.md" && e.type === "blob",
+		)?.object?.text
+		const observationsText = stageChildren.find(
+			(e) => e.name === "observations.md" && e.type === "blob",
+		)?.object?.text
+
 		return {
 			name: stageName,
 			status,
@@ -667,6 +676,8 @@ export class GitHubProvider implements BrowseProvider {
 			units,
 			artifacts: artifacts.length > 0 ? artifacts : undefined,
 			feedback: feedback.length > 0 ? feedback : undefined,
+			brief: briefText?.trim() || null,
+			observations: observationsText?.trim() || null,
 		}
 	}
 

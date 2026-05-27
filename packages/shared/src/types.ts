@@ -80,6 +80,15 @@ export interface HaikuStageState {
 	/** Stage-scoped feedback items targeting units in this stage or the
 	 *  stage itself. Loaded by the detail view only. */
 	feedback?: HaikuFeedback[]
+	/** The per-stage user-facing BRIEF (`stages/<stage>/BRIEF.md`) — the
+	 *  plain-language summary the briefer wrote before the gate. Read
+	 *  server-side / by the browse provider; agents never read it. Absent
+	 *  when the stage has no brief yet. */
+	brief?: string | null
+	/** The per-stage agent OBSERVATIONS (`stages/<stage>/observations.md`) —
+	 *  the free-form reflection written at stage close. Absent until the
+	 *  stage completes (or when reflection is opted out). */
+	observations?: string | null
 	/** The git branch for this stage (e.g. haiku/{slug}/{stage}) */
 	branch?: string
 	/** PR/MR URL if one exists for this stage's branch */
@@ -106,6 +115,11 @@ export interface HaikuFeedback {
 	/** Whether the FB was authored by a human or an agent. Drives the
 	 *  amber-vs-stone styling in the UI. */
 	authorType: "agent" | "human" | "system" | null
+	/** Finding severity (`blocker` | `high` | `medium` | `low`). Review agents
+	 *  classify as they file; user/SPA findings land severity-less and the
+	 *  classifier fix-hat backfills it. `null` when unclassified. Drives the
+	 *  fix-loop dispatch order; surfaced here as a badge + filter. */
+	severity: "blocker" | "high" | "medium" | "low" | null
 	/** Markdown body of the FB file (everything after the YAML frontmatter). */
 	body: string
 	/** Unit slug this FB targets, or null for stage/intent-scope items. */

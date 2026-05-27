@@ -28,11 +28,24 @@ export const ENGINE_REVIEW_ROLES = [
 	"continuity",
 	"cross-stage-consistency",
 ] as const
-/** Engine approval roles — the review roles plus the engine quality gate. */
-export const ENGINE_APPROVAL_ROLES = [
-	...ENGINE_REVIEW_ROLES,
-	"quality_gates",
-] as const
+/**
+ * Engine approval roles that are LOAD-BEARING for "is this unit/stage past."
+ *
+ * Mirrors the engine's `approvalRolesFor` (packages/shared/src/derived-stage-
+ * state.ts → `["spec", "quality_gates", ...reviewAgents, "user"]`), the SAME
+ * set `findCurrentStage` → `isStageComplete` → `isUnitComplete` walk uses to
+ * decide the cursor's position. Critically it does NOT include `continuity` or
+ * `cross-stage-consistency`: those are engine review roles, auto-managed by the
+ * per-tick dispatch loop, and the engine deliberately excludes them from the
+ * completeness check (requiring them would be circular — and the first stage
+ * legitimately never stamps `cross-stage-consistency`, there being no prior
+ * stage to cross-check). Seeding them here made the inception stage derive as
+ * forever-incomplete browse-side, so the active-stage walk stopped on it
+ * instead of the stage the cursor is really on. `user` is appended by
+ * `seedRoleList` (non-autopilot); studio review-agents enter via the stamped
+ * union, matching `...reviewAgents`.
+ */
+export const ENGINE_APPROVAL_ROLES = ["spec", "quality_gates"] as const
 
 /** Build the full expected review/approval role list for a stage or unit:
  *  the always-present engine roles, then any studio agents seen stamped
@@ -325,6 +338,17 @@ export function parseFeedback(
 		resolutionRaw === "stage_revisit"
 			? resolutionRaw
 			: null
+	// Severity drives the fix-loop dispatch order and the browse badge/filter.
+	// Review agents stamp it at create; user/SPA findings land null until the
+	// classifier backfills (write-once). Only the four known values surface.
+	const severityRaw = data.severity
+	const severity: "blocker" | "high" | "medium" | "low" | null =
+		severityRaw === "blocker" ||
+		severityRaw === "high" ||
+		severityRaw === "medium" ||
+		severityRaw === "low"
+			? severityRaw
+			: null
 	// stage scope unused here but kept in the signature so providers can
 	// disambiguate intent vs stage scope when constructing the path —
 	// the field is reserved for future per-scope rendering.
@@ -335,6 +359,7 @@ export function parseFeedback(
 		origin: typeof data.origin === "string" ? data.origin : null,
 		author: typeof data.author === "string" ? data.author : null,
 		authorType,
+		severity,
 		body: content,
 		unit: typeof targets.unit === "string" ? targets.unit : null,
 		invalidates: Array.isArray(targets.invalidates)

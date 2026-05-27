@@ -343,6 +343,16 @@ export class LocalProvider implements BrowseProvider {
 				)
 			}
 
+			// Per-stage user-facing BRIEF + agent OBSERVATIONS. Both are
+			// plain-Write markdown surfaced in the stage view (the brief at
+			// the top, observations at the bottom). Absent until authored.
+			const briefRaw = await this.readFile(
+				`.haiku/intents/${slug}/stages/${stageName}/BRIEF.md`,
+			)
+			const observationsRaw = await this.readFile(
+				`.haiku/intents/${slug}/stages/${stageName}/observations.md`,
+			)
+
 			stages.push({
 				name: stageName,
 				status,
@@ -354,6 +364,8 @@ export class LocalProvider implements BrowseProvider {
 				units,
 				artifacts: stageArtifacts.length > 0 ? stageArtifacts : undefined,
 				feedback: stageFeedback.length > 0 ? stageFeedback : undefined,
+				brief: briefRaw?.trim() || null,
+				observations: observationsRaw?.trim() || null,
 			})
 		}
 

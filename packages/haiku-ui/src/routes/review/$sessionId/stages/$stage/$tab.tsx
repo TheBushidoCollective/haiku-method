@@ -19,6 +19,7 @@ import { StageContent } from "./-stage-content"
 
 const VALID_TABS: ReviewTab[] = [
 	"overview",
+	"elaboration",
 	"units",
 	"knowledge",
 	"outputs",

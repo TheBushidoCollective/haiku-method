@@ -512,6 +512,7 @@ export function StageReview({
 	const stageSummary = resolveStageSummary(session, stageName)
 	const stageBrief = resolveStageBrief(session, stageName)
 	const stageObservations = resolveStageObservations(session, stageName)
+	const stageElaboration = resolveStageElaboration(session, stageName)
 	const seen = useSeenTracker(seenScopeId)
 
 	// Detail mode: when set, the active tab renders a single-item focused
@@ -693,6 +694,59 @@ export function StageReview({
 					flashAnchor={flashAnchor ?? null}
 					onFlashCommentConsumed={onFlashCommentConsumed}
 				/>
+			),
+		},
+		{
+			id: "elaboration",
+			label: "Elaboration",
+			// The decompose-phase narrative. Its own tab (BRIEF lives on
+			// Overview); annotatable like the brief so a reviewer can comment
+			// on the planning rationale.
+			disabled: !stageElaboration,
+			content: stageElaboration ? (
+				(() => {
+					const elabBody = stripFrontmatter(stageElaboration)
+					const elabPath = intentSlug
+						? `.haiku/intents/${intentSlug}/stages/${stageName}/elaboration.md`
+						: undefined
+					return (
+						<Card as="article" ariaLabelledBy="stage-elaboration-heading">
+							<SectionHeading id="stage-elaboration-heading" variant="eyebrow">
+								Elaboration{" "}
+								<span className="font-normal normal-case text-stone-500">
+									(how this stage was broken into units)
+								</span>
+							</SectionHeading>
+							{onInlineCommentsChange ? (
+								<InlineComments
+									htmlContent={markdownToSimpleHtml(elabBody)}
+									rawContent={elabBody}
+									location="Elaboration"
+									filePath={elabPath}
+									existingAnchors={
+										elabPath
+											? deriveExistingAnchorsForFile(elabPath, feedback)
+											: []
+									}
+									onCommentsChange={onInlineCommentsChange}
+									onSaveInline={onSaveInline}
+									flashAnchor={flashAnchor ?? null}
+									onFlashCommentConsumed={onFlashCommentConsumed}
+								/>
+							) : (
+								<MarkdownViewer id={`elaboration-${stageName}`}>
+									{stageElaboration}
+								</MarkdownViewer>
+							)}
+						</Card>
+					)
+				})()
+			) : (
+				<Card>
+					<p className="text-stone-500 dark:text-stone-400 italic">
+						This stage hasn't elaborated yet.
+					</p>
+				</Card>
 			),
 		},
 		{
@@ -2528,6 +2582,19 @@ function resolveStageObservations(
 	const obs = session.stage_observations
 	if (obs && typeof obs[stageName] === "string" && obs[stageName]) {
 		return obs[stageName]
+	}
+	return null
+}
+
+/** The per-stage ELABORATION (markdown) — the decompose-phase narrative.
+ *  Rendered in its own Elaboration tab. */
+function resolveStageElaboration(
+	session: ReviewPageSessionData,
+	stageName: string,
+): string | null {
+	const elabs = session.stage_elaborations
+	if (elabs && typeof elabs[stageName] === "string" && elabs[stageName]) {
+		return elabs[stageName]
 	}
 	return null
 }

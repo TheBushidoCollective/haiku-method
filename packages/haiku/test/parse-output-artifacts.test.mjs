@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { parseOutputArtifacts } from "../src/parser.ts"
+import { parseOutputArtifacts, parseStageFiles } from "../src/parser.ts"
 
 const tmp = mkdtempSync(join(tmpdir(), "haiku-parse-output-"))
 let passed = 0
@@ -619,6 +619,46 @@ await test("unit-filename filter: scratch files in units/ are ignored", async ()
 	assert.ok(
 		!names.includes("product/DRAFT-OUT.md"),
 		`scratch-file outputs should NOT surface (strict filter dropped non-unit files); got ${JSON.stringify(names)}`,
+	)
+})
+
+await test("parseStageFiles: BRIEF/elaboration/observations excluded from 'other'; subdir files tagged with directory", async () => {
+	const intentDir = mkdtempSync(join(tmp, "intent-stagefiles-"))
+	const stageDir = join(intentDir, "stages", "development")
+	mkdirSync(join(stageDir, "proofs"), { recursive: true })
+	// Stage-root narrative files — dedicated surfaces (Overview / Elaboration),
+	// NOT the catch-all "other" bucket.
+	writeFileSync(join(stageDir, "BRIEF.md"), "# brief")
+	writeFileSync(join(stageDir, "elaboration.md"), "# elaboration")
+	writeFileSync(join(stageDir, "observations.md"), "# observations")
+	// A subdirectory of assets → its own per-directory tab.
+	writeFileSync(join(stageDir, "proofs", "run-1.md"), "# proof one")
+	// A stage-root loose file → the catch-all "Other" tab (no directory).
+	writeFileSync(join(stageDir, "scratch.md"), "# scratch")
+
+	const { other } = await parseStageFiles(intentDir)
+	const names = other.map((a) => a.name)
+
+	assert.ok(!names.includes("BRIEF.md"), "BRIEF.md must NOT be in 'other'")
+	assert.ok(
+		!names.includes("elaboration.md"),
+		"elaboration.md must NOT be in 'other'",
+	)
+	assert.ok(
+		!names.includes("observations.md"),
+		"observations.md must NOT be in 'other'",
+	)
+
+	const proof = other.find((a) => a.name === "proofs/run-1.md")
+	assert.ok(proof, "subdir file should surface in 'other'")
+	assert.strictEqual(proof.directory, "proofs", "tagged with its top-level dir")
+
+	const scratch = other.find((a) => a.name === "scratch.md")
+	assert.ok(scratch, "loose root file should surface in 'other'")
+	assert.strictEqual(
+		scratch.directory,
+		undefined,
+		"stage-root loose file has no directory → catch-all Other tab",
 	)
 })
 

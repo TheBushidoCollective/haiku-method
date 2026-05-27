@@ -396,6 +396,7 @@ export function respondSessionApi(
 					const summaries: Record<string, string> = {}
 					const briefs: Record<string, string> = {}
 					const observations: Record<string, string> = {}
+					const elaborations: Record<string, string> = {}
 					for (const st of stages) {
 						try {
 							const steps = deriveStageMilestones({
@@ -439,6 +440,17 @@ export function respondSessionApi(
 						} catch {
 							/* skip this stage's observations — others still ship */
 						}
+						// Per-stage ELABORATION — the decompose-phase narrative,
+						// surfaced in its own tab. Same shape as the brief.
+						try {
+							const elabPath = join(dir, "stages", st, "elaboration.md")
+							if (existsSync(elabPath)) {
+								const body = readFileSync(elabPath, "utf8").trim()
+								if (body) elaborations[st] = body
+							}
+						} catch {
+							/* skip this stage's elaboration — others still ship */
+						}
 					}
 					if (Object.keys(milestonesByStage).length > 0)
 						data.stage_milestones = milestonesByStage
@@ -447,6 +459,8 @@ export function respondSessionApi(
 					if (Object.keys(briefs).length > 0) data.stage_briefs = briefs
 					if (Object.keys(observations).length > 0)
 						data.stage_observations = observations
+					if (Object.keys(elaborations).length > 0)
+						data.stage_elaborations = elaborations
 					// Intent-scope synthesized REFLECTION — written once at intent
 					// close. Surfaced at the intent level (not per stage).
 					try {

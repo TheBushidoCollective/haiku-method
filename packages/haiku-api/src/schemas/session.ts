@@ -93,6 +93,11 @@ export const OutputArtifactSchema = z.object({
 	 *  …). Undefined when the text has no known grammar (renders as a plain
 	 *  `<pre>`). */
 	language: z.string().optional(),
+	/** For "other" files: the top-level subdirectory under
+	 *  `stages/<stage>/` the file lives in (e.g. `proofs`), which the SPA
+	 *  groups into a per-directory tab. Undefined for a stage-root loose
+	 *  file (those fall into the catch-all "Other" tab). */
+	directory: z.string().optional(),
 	content: z.string().optional(),
 	/** URL the SPA fetches via the `/stage-artifacts/:sessionId/*`
 	 *  route — already includes the route prefix and session id. */
@@ -328,6 +333,12 @@ export const ReviewSessionPayloadSchema = z
 		 *  server-side from `stages/<stage>/observations.md`; absent for a
 		 *  stage that hasn't recorded any. */
 		stage_observations: z.record(z.string()).optional(),
+		/** Per-stage ELABORATION (markdown) keyed by stage name — the
+		 *  decompose-phase narrative the agent wrote while breaking the stage
+		 *  into units (`stages/<stage>/elaboration.md`). Surfaced in its own
+		 *  Elaboration tab (SPA + website). Read server-side; absent when the
+		 *  stage hasn't elaborated yet. */
+		stage_elaborations: z.record(z.string()).optional(),
 		/** Intent-scope synthesized REFLECTION (markdown) — the agent's
 		 *  end-of-intent `reflection.md`, written once at intent close: a
 		 *  synthesis across every stage's observations, feedback, and

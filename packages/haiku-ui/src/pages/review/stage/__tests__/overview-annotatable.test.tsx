@@ -13,7 +13,7 @@
  * whose `inline_anchor.file_path` matches the surface's real repo path.
  */
 
-import { cleanup, render } from "@testing-library/react"
+import { cleanup, fireEvent, render } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import type { FeedbackItemData } from "../../../../types"
 import type { ReviewPageSessionData } from "../../shared/session-data"
@@ -122,5 +122,60 @@ describe("deriveExistingAnchorsForFile", () => {
 	it("returns empty when no anchor matches the path", () => {
 		const items = [fbWithAnchor("FB-01", obsPath, "elsewhere")]
 		expect(deriveExistingAnchorsForFile(briefPath, items)).toEqual([])
+	})
+})
+
+describe("StageReview — Elaboration tab", () => {
+	it("surfaces elaboration.md in its own Elaboration tab (annotatable), not on Overview or Other", () => {
+		const session = {
+			stage_briefs: { [STAGE]: "## Brief\n\nDeliver the thing." },
+			stage_elaborations: {
+				[STAGE]: "## Elaboration\n\nBroke the stage into three units.",
+			},
+		} as unknown as ReviewPageSessionData
+		const { getAllByRole, getByText } = render(
+			<StageReview
+				session={session}
+				sessionId="sess-elab"
+				intentSlug={INTENT}
+				stageName={STAGE}
+				feedback={[]}
+				onInlineCommentsChange={() => {}}
+			/>,
+		)
+		// An Elaboration tab button exists in the tablist.
+		const elabTab = getAllByRole("tab").find(
+			(t) => t.textContent === "Elaboration",
+		)
+		expect(elabTab).toBeTruthy()
+		// Activate it (the Tabs component renders only the active panel), then
+		// the elaboration body + its eyebrow caption render.
+		if (elabTab) fireEvent.click(elabTab)
+		expect(getByText(/how this stage was broken into units/i)).toBeTruthy()
+		expect(getByText(/Broke the stage into three units/i)).toBeTruthy()
+	})
+
+	it("disables the Elaboration tab when the stage has no elaboration.md", () => {
+		const session = {
+			stage_briefs: { [STAGE]: "## Brief" },
+		} as unknown as ReviewPageSessionData
+		const { getAllByRole } = render(
+			<StageReview
+				session={session}
+				sessionId="sess-noelab"
+				intentSlug={INTENT}
+				stageName={STAGE}
+				feedback={[]}
+				onInlineCommentsChange={() => {}}
+			/>,
+		)
+		const elabTab = getAllByRole("tab").find(
+			(t) => t.textContent === "Elaboration",
+		)
+		expect(elabTab).toBeTruthy()
+		expect(
+			elabTab?.getAttribute("aria-disabled") === "true" ||
+				(elabTab as HTMLButtonElement)?.disabled,
+		).toBeTruthy()
 	})
 })

@@ -585,6 +585,11 @@ export interface OutputArtifact {
 	 *  has no known grammar — the renderer falls through to a plain
 	 *  `<pre>`. */
 	language?: string
+	/** For "other" files: the top-level subdirectory under
+	 *  `stages/<stage>/` the file lives in (e.g. `proofs`). The SPA groups
+	 *  these into a per-directory tab; a stage-root loose file leaves this
+	 *  undefined and lands in the catch-all "Other" tab. */
+	directory?: string
 	/** Markdown, code, and HTML content is inlined; images, video, and
 	 *  unknown binary files use relativePath */
 	content?: string
@@ -1039,6 +1044,13 @@ export async function parseStageFiles(
 		files.sort((a, b) => a.relFromStage.localeCompare(b.relFromStage))
 		for (const { absPath, relFromStage } of files) {
 			if (seen.has(absPath)) continue
+			// Stage-root narrative files have DEDICATED surfaces, so they don't
+			// belong in the catch-all "other" bucket: BRIEF.md → Overview,
+			// elaboration.md → the Elaboration tab, observations.md → Overview.
+			// (They're keyed into `stage_briefs` / `stage_elaborations` /
+			// `stage_observations` server-side.) Without this they double-showed
+			// in "Other" (reported 2026-05-27).
+			if (STAGE_ROOT_DEDICATED_FILES.has(relFromStage)) continue
 			// Keep the full filename (extension included) — see the artifacts
 			// walk above for why stripping it breaks links + collides types.
 			const nameWithDir = relFromStage
@@ -1052,6 +1064,12 @@ export async function parseStageFiles(
 				httpPath,
 			)
 			if (entry) {
+				// Tag the top-level subdirectory (the first path segment when
+				// the file is nested, e.g. `proofs/run-1.png` → `proofs`) so the
+				// SPA can group it into a per-directory tab. A stage-root loose
+				// file has no slash → directory stays undefined → "Other" tab.
+				const slash = relFromStage.indexOf("/")
+				if (slash > 0) entry.directory = relFromStage.slice(0, slash)
 				other.push(entry)
 				seen.add(absPath)
 			}
@@ -1059,3 +1077,11 @@ export async function parseStageFiles(
 	}
 	return { outputs, other }
 }
+
+/** Stage-root files that have their own dedicated review surface, so they
+ *  must NOT also appear in the catch-all "other" bucket. */
+const STAGE_ROOT_DEDICATED_FILES = new Set([
+	"BRIEF.md",
+	"elaboration.md",
+	"observations.md",
+])

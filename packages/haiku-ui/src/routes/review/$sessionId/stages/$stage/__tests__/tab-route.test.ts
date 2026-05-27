@@ -32,6 +32,7 @@ const TAB_ROUTE_FILE = resolve(HERE, "..", "$tab.tsx")
 // they enforce coverage in both directions.
 const EXPECTED_TABS = [
 	"overview",
+	"elaboration",
 	"units",
 	"knowledge",
 	"outputs",

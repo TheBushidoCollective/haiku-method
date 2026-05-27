@@ -1,5 +1,5 @@
 /**
- * FeedbackRail — regression coverage for the right-edge vertical FEEDBACK tab
+ * FeedbackRail — regression coverage for the LEFT-edge vertical FEEDBACK tab
  * that replaced the legacy circular bottom-right FAB, plus a state-matrix
  * snapshot for audit-state-coverage.mjs.
  *
@@ -11,8 +11,8 @@
  *   - Click dispatches onToggle.
  *   - Ref forwarding surfaces the <button>.
  *   - Focus ring + touch-target canonical classes.
- *   - Right-edge geometry (right-0, vertical center, vertical writing-mode),
- *     NOT a bottom-right circular FAB.
+ *   - Left-edge geometry (left-0, full height, vertical writing-mode reading
+ *     top-to-bottom — no rotate-180), NOT a bottom-right circular FAB.
  *   - md:hidden (mobile-only affordance).
  *   - State-matrix snapshot (6 cells).
  */
@@ -151,18 +151,22 @@ describe("FeedbackRail — canonical a11y classes", () => {
 	})
 })
 
-describe("FeedbackRail — full-height right-edge column geometry", () => {
-	it("is a full-height column pinned to the right edge (right-0 + top-0 + bottom-0 + fixed width), not a bottom FAB nor a floating centered tab", () => {
+describe("FeedbackRail — full-height left-edge column geometry", () => {
+	it("is a full-height column pinned to the left edge (left-0 + top-0 + bottom-0 + fixed width), not a bottom FAB nor a floating centered tab", () => {
 		render(<FeedbackRail open={false} onToggle={() => {}} />)
 		const btn = screen.getByRole("button")
 		const cls = btn.className
-		expect(cls).toMatch(/\bright-0\b/)
+		expect(cls).toMatch(/\bleft-0\b/)
 		expect(cls).toMatch(/\btop-0\b/)
 		expect(cls).toMatch(/\bbottom-0\b/)
 		expect(cls).toMatch(/\bfixed\b/)
 		// Reserved width — matches RAIL_WIDTH_CLASS / RAIL_GUTTER_CLASS.
 		expect(cls).toMatch(/\bw-9\b/)
-		expect(cls).toMatch(/rounded-l-lg/)
+		// Only the RIGHT corners round (left edge flush with the viewport).
+		expect(cls).toMatch(/rounded-r-lg/)
+		expect(cls).not.toMatch(/rounded-l-lg/)
+		// Docked left, NOT right.
+		expect(cls).not.toMatch(/\bright-0\b/)
 		// Not the old bottom-right circular FAB.
 		expect(cls).not.toMatch(/\brounded-full\b/)
 		expect(cls).not.toMatch(/\bbottom-44\b/)
@@ -175,10 +179,13 @@ describe("FeedbackRail — full-height right-edge column geometry", () => {
 		// The gutter the content container reserves MUST match the rail's own
 		// width, or content would either slip under the rail (gutter too
 		// narrow) or leave a dead band (gutter too wide). Pin them to the same
-		// numeric step.
+		// numeric step. The gutter is now a LEFT-padding (`pl-*`) since the
+		// rail docks to the left edge.
 		const widthStep = RAIL_WIDTH_CLASS.replace(/^w-/, "")
-		const gutterStep = RAIL_GUTTER_CLASS.replace(/^pr-/, "")
+		const gutterStep = RAIL_GUTTER_CLASS.replace(/^pl-/, "")
 		expect(widthStep).toBe(gutterStep)
+		// The gutter is a left-padding, not a right-padding.
+		expect(RAIL_GUTTER_CLASS).toMatch(/^pl-/)
 		// And the rail actually carries that width class.
 		render(<FeedbackRail open={false} onToggle={() => {}} />)
 		expect(screen.getByRole("button").className).toMatch(
@@ -186,14 +193,16 @@ describe("FeedbackRail — full-height right-edge column geometry", () => {
 		)
 	})
 
-	it("renders the FEEDBACK label with a vertical writing mode", () => {
+	it("renders the FEEDBACK label with a vertical writing mode reading top-to-bottom (no rotate-180, which would flip it for a right-edge tab)", () => {
 		render(<FeedbackRail open={false} onToggle={() => {}} />)
 		const btn = screen.getByRole("button")
 		// The vertical label class is applied to the label span inside the
 		// button — assert it appears in the rendered markup.
 		const label = btn.querySelector("[class*='writing-mode']")
 		expect(label).not.toBeNull()
-		expect(label?.className).toMatch(/rotate-180/)
+		// LEFT-edge tab reads top-to-bottom: vertical-rl WITHOUT the 180° flip.
+		expect(label?.className).toMatch(/vertical-rl/)
+		expect(label?.className).not.toMatch(/rotate-180/)
 	})
 })
 

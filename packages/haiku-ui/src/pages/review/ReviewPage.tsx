@@ -33,6 +33,7 @@ import { RAIL_GUTTER_CLASS } from "../../organisms/feedbackRailLayout"
 import type { InlineCommentEntry } from "../../organisms/InlineComments"
 import type { ReviewAnnotations } from "../../types"
 import { ArtifactsPane } from "./ArtifactsPane"
+import { FeedbackComposer } from "./FeedbackComposer"
 import { FeedbackPanelBody } from "./FeedbackPanelBody"
 import { FeedbackSidebar } from "./FeedbackSidebar"
 import { GateDecisionBar } from "./GateDecisionBar"
@@ -397,17 +398,25 @@ function MobileFeedbackSection(): React.ReactElement {
 				onClose={() => setSheetOpen(false)}
 				triggerRef={fabRef}
 			>
-				<FeedbackPanelBody
-					items={controller.items}
-					loading={controller.loading}
-					error={controller.error}
-					onStatusChange={controller.handleStatusChange}
-					onDelete={controller.handleDelete}
-					onRetry={controller.retry}
-					onReply={controller.handleReply}
-					busyIds={controller.busyIds}
-					creating={controller.creating}
-				/>
+				{/* Feedback AUTHORING lives in the drawer (mobile split): the
+				    composer pins at the TOP (immediately usable on open), the
+				    list scrolls below it with bottom padding to clear the
+				    sticky gate bar. The gate DECISION is separate — the sticky
+				    bottom bar (GateDecisionBar composer={false}). */}
+				<FeedbackComposer className="border-t-0 border-b" />
+				<div className="flex-1 min-h-0 overflow-y-auto pb-28">
+					<FeedbackPanelBody
+						items={controller.items}
+						loading={controller.loading}
+						error={controller.error}
+						onStatusChange={controller.handleStatusChange}
+						onDelete={controller.handleDelete}
+						onRetry={controller.retry}
+						onReply={controller.handleReply}
+						busyIds={controller.busyIds}
+						creating={controller.creating}
+					/>
+				</div>
 			</FeedbackSheet>
 		</>
 	)
@@ -756,16 +765,18 @@ export function ReviewPage({
 
 				{isMobile && <MobileFeedbackSection />}
 
-				{/* Mobile gate controls — the SAME decision composer +
-				    Approve / Request-Changes / Add-comment surface the desktop
-				    sidebar pins at its bottom, here as a sticky bottom bar so
-				    the gate is actionable below the xl breakpoint. The desktop
-				    FeedbackSidebar is `hidden xl:flex` + suppressed via
-				    `!isMobile`, which previously stranded the gate with no way
-				    to Approve / Request Changes on mobile. Never co-renders
-				    with the desktop sidebar, so it owns its own composer
-				    state. Suppressed on the intent-overview + post-submit
-				    screens, which have no stage gate to drive. */}
+				{/* Mobile gate controls — DECISION-ONLY (composer={false}).
+				    The Approve / Request-Changes surface docks here as a sticky
+				    bottom bar so the gate is actionable below the xl breakpoint.
+				    The desktop FeedbackSidebar is `hidden xl:flex` + suppressed
+				    via `!isMobile`, which previously stranded the gate with no
+				    way to Approve / Request Changes on mobile. The comment
+				    composer lives inside the feedback drawer
+				    (`<FeedbackComposer/>`), not here — "the approve button is
+				    its own thing, not part of feedback authoring." Never
+				    co-renders with the desktop sidebar, so it owns its own
+				    decision state. Suppressed on the intent-overview +
+				    post-submit screens, which have no stage gate to drive. */}
 				{isMobile && !viewingIntent && !submittedDecision && (
 					<div
 						className={`sticky bottom-0 z-[60] w-full border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 ${RAIL_GUTTER_CLASS}`}
@@ -780,6 +791,7 @@ export function ReviewPage({
 							pendingDecisionQueued={!!session.pending_decision}
 							getAnnotations={getAnnotations}
 							adHoc={isAdHoc}
+							composer={false}
 							onDecisionSuccess={(decision) => {
 								if (decision === "approved" || decision === "external") {
 									setSubmittedDecision(decision)

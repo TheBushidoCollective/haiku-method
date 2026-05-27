@@ -4,8 +4,14 @@
  *
  * Two render sites, never co-rendered (the route toggles on
  * `useIsMobile()`):
- *   - the pinned bottom of the desktop `FeedbackSidebar` (≥ xl), and
- *   - a sticky bottom bar in the route's mobile branch (< xl).
+ *   - the pinned bottom of the desktop `FeedbackSidebar` (≥ xl) —
+ *     `composer` defaults to true, so the FULL composer + decision render
+ *     together (unchanged), and
+ *   - a sticky bottom bar in the route's mobile branch (< xl) — rendered
+ *     with `composer={false}`, so it is DECISION-ONLY. On mobile the
+ *     comment composer lives inside the feedback drawer
+ *     (`<FeedbackComposer/>`), not the bottom bar — "the approve button is
+ *     its own thing, not part of feedback authoring."
  *
  * Because the two sites never mount together, this component owns its own
  * local composer state (`composerText`, `addingComment`, `submitting`,
@@ -13,6 +19,11 @@
  * list + mutators from `useFeedbackSidebarController()`, the API client,
  * and the announcer; everything else (the gate props) is passed in by the
  * render site.
+ *
+ * When `composer={false}` the textarea + Add-comment button are omitted;
+ * `composerText` stays empty so `hasTyped` is always false and the gate
+ * mode is driven purely by pending / unverified / approve state. The
+ * Request-Changes path (RevisitModal) and Approve stay in the bar.
  *
  * Smart decision button (canonical mockup §onApprove/onRequestChanges):
  *   - If there is any pending feedback on this stage OR the composer has
@@ -79,6 +90,12 @@ export interface GateDecisionBarProps {
 	/** Applied to the outer footer wrapper so the route can position it
 	 *  (sticky bottom bar) differently from the in-sidebar use. */
 	className?: string
+	/** Whether to render the inline comment composer (textarea +
+	 *  Add-comment button). Defaults to true — the desktop sidebar
+	 *  pins the FULL composer + decision together. The mobile bottom
+	 *  bar passes `false` so it renders DECISION-ONLY; the composer
+	 *  lives inside the feedback drawer there. */
+	composer?: boolean
 }
 
 export function GateDecisionBar({
@@ -93,6 +110,7 @@ export function GateDecisionBar({
 	awaitActive,
 	pendingDecisionQueued,
 	className,
+	composer = true,
 }: GateDecisionBarProps): React.ReactElement {
 	const { items, createFeedback, refetch } = useFeedbackSidebarController()
 
@@ -131,7 +149,10 @@ export function GateDecisionBar({
 	const unverifiedCount = countItemsNeedingUserVerification(items)
 	const hasUnverified = unverifiedCount > 0
 
-	const hasTyped = composerText.trim().length > 0
+	// `hasTyped` gates the "add" mode. When the inline composer is hidden
+	// (mobile bottom bar — authoring moved to the drawer) there is no
+	// textarea, so typing is impossible and the bar is decision-only.
+	const hasTyped = composer && composerText.trim().length > 0
 	const showExternal = isExternalGate(gateType)
 	const showLocalApprove = gateAcceptsLocalApprove(gateType)
 	const isCurrent = !!stage && stage === activeStage
@@ -259,27 +280,29 @@ export function GateDecisionBar({
 					.filter(Boolean)
 					.join(" ")}
 			>
-				<textarea
-					value={composerText}
-					onChange={(e) => setComposerText(e.target.value)}
-					onKeyDown={(e) => {
-						// Meta/Ctrl+Enter adds the comment without reaching
-						// for the mouse. Plain Enter still inserts a newline
-						// — reviewers type multi-line comments often enough
-						// that hijacking Enter would be a footgun.
-						if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-							e.preventDefault()
-							void handleAddComment()
-						}
-					}}
-					placeholder="Add a comment on this stage…"
-					rows={2}
-					disabled={addingComment}
-					aria-disabled={addingComment || undefined}
-					className="w-full text-xs p-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-teal-500 focus:outline-none resize-none disabled:bg-stone-100 disabled:text-stone-500 dark:disabled:bg-stone-800 dark:disabled:text-stone-400 disabled:cursor-not-allowed"
-				/>
+				{composer && (
+					<textarea
+						value={composerText}
+						onChange={(e) => setComposerText(e.target.value)}
+						onKeyDown={(e) => {
+							// Meta/Ctrl+Enter adds the comment without reaching
+							// for the mouse. Plain Enter still inserts a newline
+							// — reviewers type multi-line comments often enough
+							// that hijacking Enter would be a footgun.
+							if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+								e.preventDefault()
+								void handleAddComment()
+							}
+						}}
+						placeholder="Add a comment on this stage…"
+						rows={2}
+						disabled={addingComment}
+						aria-disabled={addingComment || undefined}
+						className="w-full text-xs p-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-teal-500 focus:outline-none resize-none disabled:bg-stone-100 disabled:text-stone-500 dark:disabled:bg-stone-800 dark:disabled:text-stone-400 disabled:cursor-not-allowed"
+					/>
+				)}
 				<div className="flex gap-2 flex-wrap">
-					{(mode === "add" || mode === "disabled") && (
+					{composer && (mode === "add" || mode === "disabled") && (
 						<button
 							type="button"
 							onClick={() => void handleAddComment()}

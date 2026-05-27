@@ -4,9 +4,10 @@
  *
  * The drawer is a PLAIN CONTROLLED `<aside role="dialog">` — NOT a native
  * `<dialog>`. It stays mounted in the DOM at all times; `open` drives the
- * slide transform (`translate-x-full` closed → `translate-x-0` open) and the
- * a11y visibility (`aria-hidden` + `pointer-events-none` when closed). The
- * rest of the page — header, content, sticky GateDecisionBar — stays visible
+ * slide transform (`-translate-x-full` closed → `translate-x-0` open — the
+ * LEFT-edge drawer slides off-screen to the left) and the a11y visibility
+ * (`aria-hidden` + `pointer-events-none` when closed). The rest of the page
+ * — header, content, sticky GateDecisionBar — stays visible
  * AND interactive while feedback is open (non-modal). The behavior contract:
  * Escape closes (via onClose, controlled), the × button calls onClose, focus
  * returns to the rail on close, the title renders. The MODAL-only pieces are
@@ -140,31 +141,36 @@ describe("FeedbackSheet — dialog semantics when open (CC1)", () => {
 		expect(sheet.classList.contains("feedback-sheet")).toBe(true)
 	})
 
-	// Right-edge slide-out geometry — full-height panel anchored to the RIGHT
+	// Left-edge slide-out geometry — full-height panel anchored to the LEFT
 	// edge, transform-driven (`translate-x-0` when open). Pin the drawer-shape
 	// utilities so a regression back to a bottom drawer or a full-viewport
 	// modal fails loudly.
-	it("is a right-edge slide-out drawer (right-0 + full height + translate), not full-screen or bottom drawer", () => {
+	it("is a left-edge slide-out drawer (left-0 + full height + translate + border-r), not full-screen or bottom drawer", () => {
 		render(<Harness initialOpen />)
 		const sheet = screen.getByRole("dialog", { name: /feedback/i })
 		const cls = sheet.className
 		expect(cls).toMatch(/\bfixed\b/)
-		expect(cls).toMatch(/\bright-0\b/)
+		expect(cls).toMatch(/\bleft-0\b/)
 		expect(cls).toMatch(/\btop-0\b/)
 		expect(cls).toMatch(/\bbottom-0\b/)
 		expect(cls).toMatch(/w-\[min\(85vw,360px\)\]/)
 		// Open → slid into place.
 		expect(cls).toMatch(/\btranslate-x-0\b/)
+		// Left-edge drawer borders on its RIGHT side, not its left.
+		expect(cls).toMatch(/\bborder-r\b/)
+		expect(cls).not.toMatch(/\bborder-l\b/)
+		// Docked left, NOT right.
+		expect(cls).not.toMatch(/\bright-0\b/)
 		// Must NOT be a full-screen modal nor a bottom drawer.
 		expect(cls).not.toMatch(/\binset-0\b/)
 		expect(cls).not.toMatch(/\binset-x-0\b/)
 		expect(cls).not.toMatch(/\bbottom-44\b/)
 	})
 
-	it("slides off-screen (translate-x-full + pointer-events-none + aria-hidden) when closed", () => {
+	it("slides off-screen to the LEFT (-translate-x-full + pointer-events-none + aria-hidden) when closed", () => {
 		render(<Harness initialOpen={false} />)
 		const sheet = screen.getByTestId("feedback-sheet")
-		expect(sheet.className).toMatch(/\btranslate-x-full\b/)
+		expect(sheet.className).toMatch(/-translate-x-full/)
 		expect(sheet.className).not.toMatch(/\btranslate-x-0\b/)
 		// Closed → not interactive + removed from the a11y tree.
 		expect(sheet.className).toMatch(/\bpointer-events-none\b/)
@@ -216,10 +222,10 @@ describe("FeedbackSheet — close paths + focus restore (CC3)", () => {
 		// goes aria-hidden, so the `role="dialog"` no longer resolves (getByRole
 		// excludes aria-hidden subtrees).
 		expect(screen.queryByRole("dialog")).toBeNull()
-		// The aside is still mounted but hidden + slid off-screen.
+		// The aside is still mounted but hidden + slid off-screen to the LEFT.
 		const sheet = screen.getByTestId("feedback-sheet")
 		expect(sheet.getAttribute("aria-hidden")).toBe("true")
-		expect(sheet.className).toMatch(/\btranslate-x-full\b/)
+		expect(sheet.className).toMatch(/-translate-x-full/)
 	})
 
 	it("× button restores focus to the rail", () => {

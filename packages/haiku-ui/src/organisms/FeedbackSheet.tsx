@@ -1,25 +1,25 @@
 /**
- * FeedbackSheet — mobile right-edge SLIDE-OUT feedback drawer.
+ * FeedbackSheet — mobile left-edge SLIDE-OUT feedback drawer.
  *
  * A plain controlled `<aside>`, NOT a native `<dialog>`. The previous
  * `<dialog>` implementation kept rendering as a small floating box instead of
  * a docked drawer: a non-modal `<dialog>` carries UA-default positioning
  * (`position: absolute; margin: auto; width/height: fit-content`) that fought
- * the Tailwind `fixed top-0 right-0 bottom-0` classes, and its imperative
+ * the Tailwind `fixed top-0 left-0 bottom-0` classes, and its imperative
  * `show()`/`close()` lifecycle desynced from the controlled `open` prop (the
  * "× does nothing" bug — the button hid the dialog while the parent still
  * thought it was open, so the effect re-`show()`-ed it). A plain `<aside>`
  * with `position: fixed` has none of those surprises: positioning is exactly
  * what the classes say, and close is a pure parent state flip.
  *
- * Geometry: full-height panel docked to the RIGHT edge
- * (`fixed top-0 right-0 bottom-0 w-[min(85vw,360px)]`), transform-based slide
- * (`translate-x-full` closed → `translate-x-0` open). It is NON-modal — the
- * page behind it (header, content, and the sticky `GateDecisionBar` at the
- * bottom) stays visible and interactive. The drawer sits at `z-50`; the route
- * docks the gate bar at `z-[60]` so it paints over the drawer's bottom edge
- * and stays clickable, and the drawer body carries bottom padding so the last
- * feedback item scrolls clear of the bar.
+ * Geometry: full-height panel docked to the LEFT edge
+ * (`fixed top-0 left-0 bottom-0 w-[min(85vw,360px)]`), transform-based slide
+ * (`-translate-x-full` closed → `translate-x-0` open — off-screen to the
+ * LEFT). It is NON-modal — the page behind it (header, content, and the
+ * sticky `GateDecisionBar` at the bottom) stays visible and interactive. The
+ * drawer sits at `z-50`; the route docks the gate bar at `z-[60]` so it paints
+ * over the drawer's bottom edge and stays clickable, and the drawer body
+ * carries bottom padding so the last feedback item scrolls clear of the bar.
  *
  * Controlled-only API: the parent owns `open` and supplies `onClose`. The rail
  * (`FeedbackRail`) is the trigger and lives one level up. Close paths — the ×
@@ -62,21 +62,21 @@ export interface FeedbackSheetProps {
 function panelClass(open: boolean, prefersReducedMotion: boolean): string {
 	return [
 		"feedback-sheet",
-		// Full-height panel docked to the RIGHT edge. `fixed` anchors to the
+		// Full-height panel docked to the LEFT edge. `fixed` anchors to the
 		// viewport (a plain element has no `<dialog>` UA-position surprises).
-		"fixed top-0 right-0 bottom-0 z-50",
+		"fixed top-0 left-0 bottom-0 z-50",
 		"w-[min(85vw,360px)] max-w-full",
 		"flex flex-col",
 		// Surface — explicit on the element (no dependency on a CSS selector).
 		"bg-white dark:bg-stone-900",
 		"text-stone-900 dark:text-stone-100",
-		"border-l border-stone-200 dark:border-stone-700 shadow-2xl",
-		// Transform slide from the right edge. Closed → off-screen
-		// (`translate-x-full`); open → in place (`translate-x-0`). Reduced
+		"border-r border-stone-200 dark:border-stone-700 shadow-2xl",
+		// Transform slide from the left edge. Closed → off-screen
+		// (`-translate-x-full`); open → in place (`translate-x-0`). Reduced
 		// motion drops the transition so it snaps.
-		open ? "translate-x-0" : "translate-x-full",
+		open ? "translate-x-0" : "-translate-x-full",
 		prefersReducedMotion ? "" : "transition-transform duration-300 ease-out",
-		// Closed → not interactive (it's off-screen to the right; this keeps it
+		// Closed → not interactive (it's off-screen to the left; this keeps it
 		// from catching clicks or stealing focus during/after the slide-out).
 		open ? "" : "pointer-events-none",
 	]
@@ -99,13 +99,14 @@ const CLOSE_BUTTON_CLASS = [
 	"text-lg",
 ].join(" ")
 
-// `pb-44` (11rem) keeps the last feedback item scrollable clear of the sticky
-// GateDecisionBar that docks full-width at the very bottom — belt-and-
-// suspenders on top of the z-order that already keeps the bar clickable.
+// The body is a flex COLUMN, not the scroll container — so a consumer can pin
+// a composer (shrink-0) and let the feedback list scroll in the remaining
+// space (the list carries its own bottom padding to clear the sticky gate
+// bar). Making the body itself `overflow-y-auto` scrolled the composer away
+// with the list — it ended up buried below a long feedback list.
 const BODY_CLASS = [
 	"feedback-sheet__body",
-	"flex-1 overflow-y-auto",
-	"pb-44",
+	"flex-1 flex flex-col min-h-0",
 ].join(" ")
 
 export function FeedbackSheet({

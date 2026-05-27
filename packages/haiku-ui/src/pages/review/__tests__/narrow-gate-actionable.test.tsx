@@ -160,4 +160,36 @@ describe("ReviewPage — gate actionable at narrow (mobile) viewport", () => {
 		// reachable on mobile — that's the whole point of the fix.
 		expect(decisionButton?.disabled).toBe(false)
 	})
+
+	// Mobile composer↔decision split (2026-05-27): the bottom bar is
+	// DECISION-ONLY — no textarea composer. Authoring moved into the
+	// feedback drawer (`<FeedbackComposer/>` inside `FeedbackSheet`). This
+	// test pins both halves of the split: the bottom bar has no textarea,
+	// and the drawer carries the composer textarea.
+	it("mobile bottom bar is DECISION-ONLY (no composer textarea); the feedback drawer carries the composer", async () => {
+		stubMatchMedia(true)
+		stubFetch()
+		const client = buildMockClient(items)
+		render(
+			<ApiClientProvider client={client}>
+				<ReviewPage session={session} sessionId="test-review-full" />
+				<LiveRegionShell />
+			</ApiClientProvider>,
+		)
+
+		// Bottom bar present (decision surface).
+		const footer = await screen.findByTestId("review-footer-bar")
+		// DECISION-ONLY: the bottom bar must NOT contain any textarea — the
+		// composer is no longer part of the gate decision surface.
+		expect(footer.querySelector("textarea")).toBeNull()
+
+		// The composer lives inside the feedback drawer instead.
+		const composer = await screen.findByTestId("feedback-composer")
+		expect(composer.querySelector("textarea")).not.toBeNull()
+		// And the composer is inside the drawer (FeedbackSheet), not the
+		// bottom bar.
+		const drawer = screen.getByTestId("feedback-sheet")
+		expect(drawer.contains(composer)).toBe(true)
+		expect(footer.contains(composer)).toBe(false)
+	})
 })

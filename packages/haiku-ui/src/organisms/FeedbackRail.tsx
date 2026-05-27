@@ -1,5 +1,5 @@
 /**
- * FeedbackRail — mobile right-edge vertical TAB that toggles the FeedbackSheet
+ * FeedbackRail — mobile left-edge vertical TAB that toggles the FeedbackSheet
  * slide-out drawer (replaces the legacy circular bottom-right FAB).
  *
  * Why a rail instead of a FAB:
@@ -7,25 +7,25 @@
  *   sticky `GateDecisionBar` that docks full-width at the very bottom on
  *   mobile — that clearance offset left a "mystery gap" band at the bottom of
  *   the page. The rail moves the trigger out of the bottom band entirely: a
- *   thin FULL-HEIGHT column pinned to the RIGHT edge, so it never collides
+ *   thin FULL-HEIGHT column pinned to the LEFT edge, so it never collides
  *   with the gate and needs no bottom offset.
  *
  * Closed rail = DEDICATED LAYOUT SPACE, zero overlap:
- *   The rail is `fixed` to the right edge spanning the full viewport height,
+ *   The rail is `fixed` to the left edge spanning the full viewport height,
  *   but it is NOT a floating tab over content. The review content container
- *   reserves a matching right-padding gutter (`RAIL_GUTTER_CLASS`, the same
+ *   reserves a matching left-padding gutter (`RAIL_GUTTER_CLASS`, the same
  *   width as `RAIL_WIDTH_CLASS` in `feedbackRailLayout.ts`) on the mobile
  *   branch, so page content is inset by the rail's width and never renders
  *   underneath it. The gutter is the rail's permanent home.
  *
- * Geometry: `fixed right-0 top-0 bottom-0` full-height column, ~36px wide
- * (`RAIL_WIDTH_CLASS`), `rounded-l-lg` (only the left corners round — the
- * right edge is flush with the viewport). The word FEEDBACK is rendered
- * vertically via `[writing-mode:vertical-rl]` + `rotate-180` so it reads
- * bottom-to-top (the conventional right-edge-tab orientation), centered in the
- * full-height column. The OPEN drawer floats ON TOP of content as a separate
- * out-of-flow overlay (see `FeedbackSheet`) — opening it causes NO layout
- * shift; only this rail gutter is permanent layout.
+ * Geometry: `fixed left-0 top-0 bottom-0` full-height column, ~36px wide
+ * (`RAIL_WIDTH_CLASS`), `rounded-r-lg` (only the right corners round — the
+ * left edge is flush with the viewport). The word FEEDBACK is rendered
+ * vertically via `[writing-mode:vertical-rl]` so it reads top-to-bottom (the
+ * natural left-edge-tab orientation), centered in the full-height column. The
+ * OPEN drawer floats ON TOP of content as a separate out-of-flow overlay (see
+ * `FeedbackSheet`) — opening it causes NO layout shift; only this rail gutter
+ * is permanent layout.
  *
  * a11y wiring (unchanged contract from the old FAB):
  *   - `aria-haspopup="dialog"`, `aria-expanded` (driven by `open`),
@@ -69,15 +69,15 @@ export interface FeedbackRailProps {
 }
 
 const RAIL_CLASSES = [
-	// Full-height column pinned to the RIGHT edge. The content container
-	// reserves a matching `RAIL_GUTTER_CLASS` right-padding gutter so content
+	// Full-height column pinned to the LEFT edge. The content container
+	// reserves a matching `RAIL_GUTTER_CLASS` left-padding gutter so content
 	// never renders underneath this column — closed rail overlays NOTHING.
 	// z-30 sits BELOW the header (a flex item at z-40, whose z-index applies)
 	// so the rail's top can't paint over the header's theme toggle, and BELOW
 	// the drawer (z-50) + gate bar (z-[60]). It's still above page content.
-	`fixed right-0 top-0 bottom-0 z-30 ${RAIL_WIDTH_CLASS}`,
-	// Only the LEFT corners round (right edge is flush with the viewport).
-	"rounded-l-lg",
+	`fixed left-0 top-0 bottom-0 z-30 ${RAIL_WIDTH_CLASS}`,
+	// Only the RIGHT corners round (left edge is flush with the viewport).
+	"rounded-r-lg",
 	"bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800",
 	"text-white",
 	"shadow-lg",
@@ -91,10 +91,11 @@ const RAIL_CLASSES = [
 	// single source of truth for when the rail shows.
 ].join(" ")
 
-// Vertical label: rotate the writing mode and flip 180° so "FEEDBACK" reads
-// bottom-to-top along the right edge (the conventional right-tab orientation).
+// Vertical label: rotate the writing mode so "FEEDBACK" reads top-to-bottom
+// along the LEFT edge (the natural left-tab orientation — no rotate-180, which
+// would flip it to bottom-to-top for a right tab).
 const LABEL_CLASSES = [
-	"[writing-mode:vertical-rl] rotate-180",
+	"[writing-mode:vertical-rl]",
 	"text-xs font-bold tracking-wider uppercase",
 	"select-none",
 ].join(" ")

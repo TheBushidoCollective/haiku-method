@@ -18,10 +18,16 @@ export interface AnnotationModeFabProps {
 	 *  fixed control docked there (the review page's mobile feedback
 	 *  button). Default sits flush at `bottom-4 right-4`. */
 	stacked?: boolean
+	/** Explicit bottom-offset utility class. When set it overrides the
+	 *  `stacked`/default offset — used by the review route's mobile
+	 *  branch to lift the FAB clear of the sticky GateDecisionBar that
+	 *  docks full-width at the very bottom. */
+	bottomClass?: string
 }
 
 export function AnnotationModeFab({
 	stacked = false,
+	bottomClass,
 }: AnnotationModeFabProps): React.ReactElement {
 	const { active, pinned, transient, toggle } = useAnnotationMode()
 
@@ -42,7 +48,7 @@ export function AnnotationModeFab({
 			aria-pressed={pinned}
 			aria-label={label}
 			title="Annotate — click to toggle, or hold ⌥ Option for a quick pass"
-			className={`fixed ${stacked ? "bottom-20" : "bottom-4"} right-4 z-40 inline-flex items-center justify-center rounded-full shadow-lg w-12 h-12 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 ${
+			className={`fixed ${bottomClass ?? (stacked ? "bottom-20" : "bottom-4")} right-4 z-40 inline-flex items-center justify-center rounded-full shadow-lg w-12 h-12 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 ${
 				active
 					? pinned
 						? "bg-teal-700 hover:bg-teal-800 border-teal-800 text-white"

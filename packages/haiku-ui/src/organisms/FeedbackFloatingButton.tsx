@@ -54,18 +54,24 @@ export interface FeedbackFloatingButtonProps {
 	ariaControlsId?: string
 	/** Optional className passthrough; appended to the canonical classes. */
 	className?: string
+	/** Explicit bottom-offset utility class. Defaults to `bottom-4`;
+	 *  the review route's mobile branch overrides it to lift the FAB
+	 *  clear of the sticky GateDecisionBar docked at the very bottom. */
+	bottomClass?: string
 }
 
-const BASE_BUTTON_CLASSES = [
-	"fixed bottom-4 right-4 z-50",
-	"w-14 h-14 rounded-full",
-	"bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800",
-	"text-white text-lg",
-	"shadow-lg",
-	"inline-flex items-center justify-center",
-	"md:hidden",
-	"feedback-fab-pulse",
-].join(" ")
+function baseButtonClasses(bottomClass: string): string {
+	return [
+		`fixed ${bottomClass} right-4 z-50`,
+		"w-14 h-14 rounded-full",
+		"bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800",
+		"text-white text-lg",
+		"shadow-lg",
+		"inline-flex items-center justify-center",
+		"md:hidden",
+		"feedback-fab-pulse",
+	].join(" ")
+}
 
 // FB-70: light-mode text lifted from `text-amber-700` (3.68:1 on amber-100 — AA FAIL
 // for 12px bold) to `text-amber-800` (6.37:1 — AA pass). Dark-mode pair
@@ -84,7 +90,7 @@ export const FeedbackFloatingButton = forwardRef<
 	HTMLButtonElement,
 	FeedbackFloatingButtonProps
 >(function FeedbackFloatingButton(
-	{ open, onToggle, count, ariaControlsId, className },
+	{ open, onToggle, count, ariaControlsId, className, bottomClass },
 	ref,
 ) {
 	const hasBadge = typeof count === "number" && count > 0
@@ -93,7 +99,7 @@ export const FeedbackFloatingButton = forwardRef<
 		: "Open feedback panel"
 
 	const composedClass = [
-		BASE_BUTTON_CLASSES,
+		baseButtonClasses(bottomClass ?? "bottom-4"),
 		touchTargetClass,
 		focusRingClass,
 		className ?? "",

@@ -34,6 +34,7 @@ import type { ReviewAnnotations } from "../../types"
 import { ArtifactsPane } from "./ArtifactsPane"
 import { FeedbackPanelBody } from "./FeedbackPanelBody"
 import { FeedbackSidebar } from "./FeedbackSidebar"
+import { GateDecisionBar } from "./GateDecisionBar"
 import { IntentDriftAssessmentsSection } from "./IntentDriftAssessmentsSection"
 import { RereviewBanner } from "./shared/RereviewBanner"
 import type { ReviewPageSessionData } from "./shared/session-data"
@@ -277,7 +278,11 @@ function PhaseStepper({
 						const done = isStageComplete || m.status === "done"
 						const active = !isStageComplete && m.status === "active"
 						return (
-							<div key={m.key} className="flex items-center gap-1" title={m.label}>
+							<div
+								key={m.key}
+								className="flex items-center gap-1"
+								title={m.label}
+							>
 								<span
 									className={`inline-block w-2 h-2 rounded-full transition-colors ${
 										active
@@ -385,6 +390,9 @@ function MobileFeedbackSection(): React.ReactElement {
 				open={sheetOpen}
 				onToggle={() => setSheetOpen((o) => !o)}
 				count={pendingCount}
+				// Lift clear of the sticky GateDecisionBar docked full-width
+				// at the very bottom on mobile so the FAB isn't occluded.
+				bottomClass="bottom-44"
 			/>
 			<FeedbackSheet
 				open={sheetOpen}
@@ -740,6 +748,37 @@ export function ReviewPage({
 				</div>
 
 				{isMobile && <MobileFeedbackSection />}
+
+				{/* Mobile gate controls — the SAME decision composer +
+				    Approve / Request-Changes / Add-comment surface the desktop
+				    sidebar pins at its bottom, here as a sticky bottom bar so
+				    the gate is actionable below the xl breakpoint. The desktop
+				    FeedbackSidebar is `hidden xl:flex` + suppressed via
+				    `!isMobile`, which previously stranded the gate with no way
+				    to Approve / Request Changes on mobile. Never co-renders
+				    with the desktop sidebar, so it owns its own composer
+				    state. Suppressed on the intent-overview + post-submit
+				    screens, which have no stage gate to drive. */}
+				{isMobile && !viewingIntent && !submittedDecision && (
+					<div className="sticky bottom-0 z-30 w-full border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950">
+						<GateDecisionBar
+							stage={selectedStage ?? activeStage}
+							activeStage={activeStage}
+							sessionId={sessionId}
+							gateType={session.gate_type}
+							approveAction={session.approve_action}
+							awaitActive={session.await_active}
+							pendingDecisionQueued={!!session.pending_decision}
+							getAnnotations={getAnnotations}
+							adHoc={isAdHoc}
+							onDecisionSuccess={(decision) => {
+								if (decision === "approved" || decision === "external") {
+									setSubmittedDecision(decision)
+								}
+							}}
+						/>
+					</div>
+				)}
 			</div>
 		</FeedbackProvider>
 	)

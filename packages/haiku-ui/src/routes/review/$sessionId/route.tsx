@@ -47,6 +47,7 @@ import { FeedbackSheet } from "../../../organisms/FeedbackSheet"
 import type { InlineCommentEntry } from "../../../organisms/InlineComments"
 import { FeedbackPanelBody } from "../../../pages/review/FeedbackPanelBody"
 import { FeedbackSidebar } from "../../../pages/review/FeedbackSidebar"
+import { GateDecisionBar } from "../../../pages/review/GateDecisionBar"
 import { IntentCompleteView } from "../../../pages/review/IntentCompleteView"
 import type { ReviewPageSessionData } from "../../../pages/review/shared/session-data"
 import { useFeedbackSidebarController } from "../../../pages/review/useFeedbackSidebarController"
@@ -106,6 +107,9 @@ function MobileFeedbackSection(): React.ReactElement {
 				open={sheetOpen}
 				onToggle={() => setSheetOpen((o) => !o)}
 				count={pendingCount}
+				// Lift clear of the sticky GateDecisionBar docked full-width
+				// at the very bottom on mobile so the FAB isn't occluded.
+				bottomClass="bottom-44"
 			/>
 			<FeedbackSheet
 				open={sheetOpen}
@@ -596,10 +600,46 @@ function ReviewLayoutLoaded({
 
 					{isMobile && <MobileFeedbackSection />}
 
+					{/* Mobile gate controls — the SAME decision composer +
+					    Approve / Request-Changes / Add-comment surface that the
+					    desktop sidebar pins at its bottom, here as a sticky
+					    bottom bar so the gate is actionable below the xl
+					    breakpoint (the desktop FeedbackSidebar is `hidden
+					    xl:flex` + suppressed via `!isMobile`, which previously
+					    stranded the gate with no way to Approve / Request
+					    Changes on mobile). Never co-renders with the desktop
+					    sidebar, so it owns its own composer state. */}
+					{isMobile && !isIntentTerminal && (
+						<div className="sticky bottom-0 z-30 w-full border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950">
+							<GateDecisionBar
+								stage={chromeSelectedStage}
+								activeStage={isIntentTerminal ? null : activeStage}
+								sessionId={sessionId}
+								gateType={session.gate_type}
+								approveAction={session.approve_action}
+								awaitActive={session.await_active}
+								pendingDecisionQueued={!!session.pending_decision}
+								getAnnotations={getAnnotations}
+								adHoc={isAdHoc}
+								onDecisionSuccess={(decision) => {
+									if (decision === "approved" || decision === "external") {
+										setSubmittedDecision(decision)
+									}
+								}}
+							/>
+						</div>
+					)}
+
 					{/* Global annotation toggle. On mobile it stacks above the
 					    feedback floating button so the two don't overlap in the
-					    bottom-right corner. */}
-					<AnnotationModeFab stacked={isMobile} />
+					    bottom-right corner; lifted further when the sticky
+					    GateDecisionBar is docked so it clears the bar too. */}
+					<AnnotationModeFab
+						stacked={isMobile}
+						bottomClass={
+							isMobile && !isIntentTerminal ? "bottom-60" : undefined
+						}
+					/>
 				</div>
 			</FeedbackProvider>
 		</ReviewRouteProvider>

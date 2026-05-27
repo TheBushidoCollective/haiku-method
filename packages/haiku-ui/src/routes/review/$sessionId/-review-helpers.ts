@@ -162,6 +162,22 @@ export function phaseBadgeCopy(
 				"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
 		}
 	}
+	if (phase === "approve") {
+		// Post-execute adversarial approval — the work is built and being
+		// signed off. Amber like the other review phases.
+		return {
+			label: "In Approval",
+			classes:
+				"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+		}
+	}
+	if (phase === "complete") {
+		return {
+			label: "All Gates Closed",
+			classes:
+				"bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
+		}
+	}
 	if (phase === "execute") {
 		return {
 			label: "Executing",

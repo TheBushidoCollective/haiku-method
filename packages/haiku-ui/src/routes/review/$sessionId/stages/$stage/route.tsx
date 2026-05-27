@@ -65,7 +65,16 @@ function StageLayout(): React.ReactElement {
 			: stageState?.mergedIntoMain === true
 				? "completed"
 				: (stageState?.status ?? "pending")
-	const stagePhase = stageState?.phase ?? null
+	// Phase pill source. `stage_states[stage].phase` is a DEPRECATED v3 shim
+	// (StageStateInfoSchema marks it "derived") that lags the cursor — it
+	// stayed "execute" while the engine had already advanced to the review /
+	// approval gate, so the pill read "Executing" at the gate (reported
+	// 2026-05-27). For the stage the engine is actually sitting on, prefer the
+	// LIVE `current_state.phase` (elaborate|execute|review|approve|gate|…);
+	// fall back to the legacy field for other stages / older payloads.
+	const liveCurrentPhase =
+		stage === activeStage ? (session.current_state?.phase ?? null) : null
+	const stagePhase = liveCurrentPhase || stageState?.phase || null
 	const gateModes = resolveGateModes(session.gate_type)
 	const gateBadges = gateModes.map(gateBadgeCopy)
 	const isAdHoc = session.ad_hoc === true

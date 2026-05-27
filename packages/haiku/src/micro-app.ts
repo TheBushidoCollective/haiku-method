@@ -42,12 +42,6 @@ import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 import { getSession } from "./sessions.js"
 
-// ── Default micro-app window geometry ──────────────────────────────────
-// App-sized, not full-screen — it should read as a focused tool window,
-// not a browser. Chrome centers app windows on the active display.
-const DEFAULT_WIDTH = 1200
-const DEFAULT_HEIGHT = 860
-
 interface MicroAppRecord {
 	child: ChildProcess
 	profileDir: string
@@ -221,17 +215,21 @@ export function isMicroAppCapable(): boolean {
  *  window. `--app` strips the tab strip / address bar / bookmarks;
  *  `--user-data-dir` isolates the profile (no picker, no extensions, no
  *  cross-talk); the rest suppress first-run nags and background chatter
- *  so the window opens straight onto the SPA. */
-export function buildMicroAppArgs(
-	url: string,
-	profileDir: string,
-	width = DEFAULT_WIDTH,
-	height = DEFAULT_HEIGHT,
-): string[] {
+ *  so the window opens straight onto the SPA.
+ *
+ *  Sizing: `--start-maximized` rather than `--window-size`. On a Retina
+ *  (2x) display Chrome treats `--window-size` as PHYSICAL pixels, so
+ *  `--window-size=1200` rendered ~600 CSS px — narrow enough to trip the
+ *  review SPA's 1280px "mobile" breakpoint, which hides the gate's
+ *  Approve / Request-Changes controls. Maximizing is DPR-proof: it fills
+ *  the work area at whatever scale factor, so the desktop layout (with
+ *  the decision controls) always renders. A future geometry-restore path
+ *  will swap this for the user's remembered bounds. */
+export function buildMicroAppArgs(url: string, profileDir: string): string[] {
 	return [
 		`--app=${url}`,
 		`--user-data-dir=${profileDir}`,
-		`--window-size=${width},${height}`,
+		"--start-maximized",
 		"--no-first-run",
 		"--no-default-browser-check",
 		"--no-service-autorun",
@@ -263,7 +261,7 @@ export function microAppProfileDir(
  */
 export function launchMicroApp(
 	url: string,
-	opts: { sessionId?: string; width?: number; height?: number } = {},
+	opts: { sessionId?: string } = {},
 ): boolean {
 	if (!isMicroAppCapable()) return false
 	const exe = microAppExecutable()
@@ -289,11 +287,10 @@ export function launchMicroApp(
 	}
 
 	try {
-		const child = spawn(
-			exe,
-			buildMicroAppArgs(url, profileDir, opts.width, opts.height),
-			{ stdio: "ignore", detached: false },
-		)
+		const child = spawn(exe, buildMicroAppArgs(url, profileDir), {
+			stdio: "ignore",
+			detached: false,
+		})
 		child.on("error", (err) => {
 			console.error(
 				`[haiku-micro-app] launch error (${exe}): ${err.message}. ` +

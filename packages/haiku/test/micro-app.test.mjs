@@ -53,15 +53,18 @@ test("buildMicroAppArgs opens app-mode against a clean profile", () => {
 			args.includes("--no-default-browser-check"),
 		"first-run nags suppressed so the window opens straight on the SPA",
 	)
-	assert.ok(
-		args.some((a) => a.startsWith("--window-size=")),
-		"app-sized window",
-	)
 })
 
-test("buildMicroAppArgs honors custom window geometry", () => {
-	const args = buildMicroAppArgs("http://x/", "/tmp/p", 1440, 900)
-	assert.ok(args.includes("--window-size=1440,900"))
+test("buildMicroAppArgs maximizes (DPR-proof) rather than passing a fixed window-size", () => {
+	const args = buildMicroAppArgs("http://x/", "/tmp/p")
+	assert.ok(
+		args.includes("--start-maximized"),
+		"maximize so a Retina display can't shrink the window into the mobile breakpoint",
+	)
+	assert.ok(
+		!args.some((a) => a.startsWith("--window-size=")),
+		"no fixed --window-size — it's physical px on Retina and trips the mobile layout",
+	)
 })
 
 test("microAppProfileDir is per-session under a base", () => {

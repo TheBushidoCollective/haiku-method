@@ -13,8 +13,14 @@
 //
 // Agent-authorable fields (creation + select_mode/select_studio):
 //   - title, description, slug, mode, studio, granularity
-//   - skip_stages (mode config)
 //   - follows (parent-link, creation-time only)
+//
+// `stages` is the canonical, materialized, ordered stage plan for the
+// intent (engine-managed — see FSM list). The studio's `stages:` is the
+// superset *template*; the intent owns the live list. A stage drops out
+// of the plan via haiku_drop_stage (removed from `stages`), so "what got
+// dropped" is `studio.stages − intent.stages`. The old `skip_stages`
+// deny-list was removed 2026-05-27 — one canonical list, no second filter.
 //
 // Intent-completion review is universal: every intent runs the studio's
 // review-agents after the final stage gate. The only knob is a studio
@@ -104,7 +110,6 @@ export const INTENT_FRONTMATTER_SCHEMA = Type.Object(
 		// `mode` accepted by AJV (so on-disk reads + tests validate)
 		// but engine-only at write time — see FSM list.
 		mode: Type.Optional(Type.String({ enum: [...INTENT_MODES] })),
-		skip_stages: Type.Optional(Type.Array(Type.String())),
 		studio: Type.Optional(Type.String()),
 		// Agent-authored studio shortlist (creation-time hint). The agent
 		// has the description in context when it calls haiku_intent_create,

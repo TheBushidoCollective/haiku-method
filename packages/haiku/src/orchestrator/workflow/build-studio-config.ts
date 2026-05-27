@@ -296,6 +296,9 @@ function buildStageConfig(
 		// (producing units must declare `quality_gates:`). Anything else —
 		// including absent — is the lenient `knowledge` default.
 		produces: data.produces === "build" ? "build" : "knowledge",
+		// `optional: true` opts the stage into the keep-or-drop entry gate.
+		// Absent / anything-else is the mandatory default.
+		optional: data.optional === true,
 		hats,
 		fixHats,
 		reviewAgents,
@@ -353,6 +356,9 @@ export function buildStudioConfig(
 		slug: info.slug,
 		dir: studioDir,
 		description: info.description,
+		// `deprecated: true` hides the studio from new-intent pickers but
+		// keeps it resolvable for in-flight intents. Absent = active.
+		deprecated: data.deprecated === true,
 		defaultStages,
 		stages,
 		studioReviewAgents,

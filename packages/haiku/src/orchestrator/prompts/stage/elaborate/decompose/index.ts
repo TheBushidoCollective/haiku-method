@@ -59,7 +59,10 @@ import {
 	resolveStageInputs,
 	studioSearchPaths,
 } from "../../../../../studio-reader.js"
-import { resolveIntentStages } from "../../../../studio.js"
+import {
+	filterInputsByPlanStages,
+	resolveIntentStages,
+} from "../../../../studio.js"
 import { buildOutputRequirements } from "../../../../validators.js"
 import {
 	batchDispatchDirective,
@@ -370,15 +373,29 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	const lenses = buildReviewAgentLensSection(studio, stage, dir, slug)
 	if (lenses) sections.push(lenses)
 
+	// Plan stages for this intent — the canonical materialized list with any
+	// dropped optional stages excluded. Used to auto-ignore inputs from
+	// out-of-plan stages here AND to enumerate prior stages below.
+	const planStages = resolveIntentStages(
+		existsSync(join(dir, "intent.md"))
+			? readFrontmatter(join(dir, "intent.md"))
+			: {},
+		studio,
+	)
+
 	// Upstream context — REFERENCES, not inlined bodies.
 	const upstreamReferenceLines: string[] = []
 	let upstreamRefPaths: string[] = []
 	if (stageDef?.data?.inputs && Array.isArray(stageDef.data.inputs)) {
-		const inputs = stageDef.data.inputs as Array<{
+		const declaredInputs = stageDef.data.inputs as Array<{
 			stage: string
 			discovery?: string
 			output?: string
 		}>
+		// Auto-ignore inputs whose source stage was dropped from the plan —
+		// without this they'd fall into the missing-warning below and tell the
+		// agent to file a stage_revisit at a stage that isn't in the plan.
+		const inputs = filterInputsByPlanStages(declaredInputs, planStages)
 		const resolved = resolveStageInputs(studio, inputs, dir, slug)
 		const found = resolved.filter((r) => r.exists)
 		const missing = resolved.filter((r) => !r.exists)
@@ -409,12 +426,7 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	// Prior-stage reference enumeration.
 	const priorStageReferenceLines: string[] = []
 	{
-		const orderedStages = resolveIntentStages(
-			existsSync(join(dir, "intent.md"))
-				? readFrontmatter(join(dir, "intent.md"))
-				: {},
-			studio,
-		)
+		const orderedStages = planStages
 		const myIdx = orderedStages.indexOf(stage)
 		const priorStages = myIdx > 0 ? orderedStages.slice(0, myIdx) : []
 		for (const prior of priorStages) {

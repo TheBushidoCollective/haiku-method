@@ -991,12 +991,13 @@ export function findCurrentStage(
 
 	const intentMdPath = join(resolvedIntentDir, "intent.md")
 	const intentFm = readFm(intentMdPath)?.data ?? {}
-	// Use the intent's effective stage list — intersection of studio
-	// stages with `intent.stages` (if set) minus `intent.skip_stages`.
-	// Walking the full studio list would surface stages the intent
-	// explicitly opted out of (e.g. a `/haiku:haiku-quick` intent that
-	// declared only [inception, design, product] in a 6-stage software
-	// studio would otherwise loop trying to elaborate `development`).
+	// Use the intent's canonical materialized stage plan (`intent.stages`).
+	// The studio's `stages:` is the superset template; the intent owns the
+	// live list, with any dropped optional stages already removed. Walking
+	// the full studio list would surface stages the intent dropped (e.g. a
+	// `/haiku:haiku-quick` intent that declared only [inception, design,
+	// product] in a 6-stage software studio would otherwise loop trying to
+	// elaborate `development`).
 	const stages = resolveIntentStages(intentFm, studio)
 	if (stages.length === 0) return null
 	const mode =

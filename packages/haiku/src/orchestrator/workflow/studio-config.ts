@@ -109,6 +109,14 @@ export interface StageConfig {
 	 *  Defaults to `"knowledge"` when absent — the lenient default, so only
 	 *  stages that explicitly opt in to `produces: build` change behavior. */
 	readonly produces: "build" | "knowledge"
+	/** Whether this stage is optional, from STAGE.md `optional:`. When
+	 *  `true`, the cursor offers a keep-or-drop decision the first time it
+	 *  arrives at the stage (before elaboration). Dropping removes the stage
+	 *  from `intent.stages` via haiku_drop_stage and the walk advances. Cross-
+	 *  stage references (inputs / review-agents-include) to a dropped stage
+	 *  are auto-ignored. Defaults to `false` — stages are mandatory unless they
+	 *  opt in. */
+	readonly optional: boolean
 	/** Hat sequence executed during the execute phase. The fix loop
 	 *  uses `fixHats` instead. */
 	readonly hats: readonly HatConfig[]
@@ -153,6 +161,11 @@ export interface StudioConfig {
 	readonly dir: string
 	/** Studio description from STUDIO.md frontmatter. */
 	readonly description: string
+	/** Whether this studio is deprecated, from STUDIO.md `deprecated:`.
+	 *  Deprecated studios are hidden from new-intent pickers/lists but still
+	 *  resolve by name so in-flight intents on them keep working. Defaults to
+	 *  `false`. Deprecate — never delete — a retired studio. */
+	readonly deprecated: boolean
 	/** Default ordered list of stages (intent.md `stages:` can
 	 *  override per-intent). */
 	readonly defaultStages: readonly string[]

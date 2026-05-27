@@ -45,31 +45,61 @@ export function resolveStudioFilePath(subpath: string): string | null {
 
 /** Compute the effective stage list for an intent.
  *
- *  Resolution order:
- *    1. Start with the studio's full stage list (from STUDIO.md).
- *    2. If `intent.stages` is an explicit non-empty array, intersect
- *       with studio stages (preserves studio order; rejects unknown
- *       stages). This is how `/haiku:haiku-quick` restricts a multi-stage
- *       studio to a single stage without enumerating skip_stages.
- *    3. Apply `intent.skip_stages` filter on the result.
+ *  `intent.stages` is the CANONICAL, materialized, ordered plan — the
+ *  studio's `stages:` is the superset *template*; the intent owns the live
+ *  list. It's stamped at mode selection (`haiku_select_mode`) and mutated
+ *  only by the engine (e.g. `haiku_drop_stage` removing an optional stage).
  *
- *  Callers that need the full studio list (not intent-filtered)
- *  should call `resolveStudioStages` directly. */
+ *  Resolution:
+ *    1. If `intent.stages` is a non-empty array, it IS the plan — ordered
+ *       by itself (drops preserve studio order, so it stays pipeline-valid).
+ *       Each entry is guarded against the studio's current stage set: a
+ *       stage the studio no longer defines (renamed/removed) is dropped
+ *       rather than emitted as a phantom the cursor can't resolve
+ *       hats/gates for. This is the tick-time stale-stage guard.
+ *    2. If absent/empty (legacy / pre-materialization), fall back to the
+ *       studio's full stage list.
+ *
+ *  The old `skip_stages` deny-list was removed 2026-05-27 — one canonical
+ *  list, no second filter. "What got dropped" = `studio.stages − stages`.
+ *
+ *  Callers that need the full studio list (not intent-filtered) should
+ *  call `resolveStudioStages` directly. */
 export function resolveIntentStages(
 	intent: Record<string, unknown>,
 	studio: string,
 ): string[] {
 	const studioStages = resolveStudioStages(studio)
 	const explicit = Array.isArray(intent.stages)
-		? (intent.stages as string[])
+		? (intent.stages as string[]).filter((s) => typeof s === "string")
 		: []
-	const allowed = explicit.length > 0 ? new Set(explicit) : null
-	const skipStages = (intent.skip_stages as string[]) || []
-	return studioStages.filter((s) => {
-		if (allowed && !allowed.has(s)) return false
-		if (skipStages.includes(s)) return false
-		return true
-	})
+	if (explicit.length > 0) {
+		const studioSet = new Set(studioStages)
+		return explicit.filter((s) => studioSet.has(s))
+	}
+	return studioStages
+}
+
+/** Filter cross-stage references (a stage's `inputs:` entries) to those whose
+ *  source stage is still in the intent's plan — the auto-ignore that lets an
+ *  optional stage be dropped without orphaning a downstream dependency.
+ *
+ *  Most downstream paths handle a dropped stage WITHOUT this, because a dropped
+ *  optional stage never ran (haiku_drop_stage refuses a started stage) so it
+ *  has no artifacts and no `stages/<stage>/` dir: the coverage gate skips a
+ *  prior stage whose dir is absent, and `start_unit` injects only resolved
+ *  inputs that `.exists`. The one path that needs the explicit filter is the
+ *  decompose builder's found/missing split — a dropped-stage input would
+ *  otherwise fall into "missing" and emit a false "⚠ Missing Upstream
+ *  Artifacts" warning telling the agent to file a stage_revisit at a stage
+ *  that isn't in the plan. Filtering by plan first drops it from BOTH sets. */
+export function filterInputsByPlanStages<T extends { stage: string }>(
+	inputs: readonly T[],
+	planStages: readonly string[] | ReadonlySet<string>,
+): T[] {
+	const set =
+		planStages instanceof Set ? planStages : new Set<string>(planStages)
+	return inputs.filter((r) => set.has(r.stage))
 }
 
 export function resolveStudioStages(studio: string): string[] {

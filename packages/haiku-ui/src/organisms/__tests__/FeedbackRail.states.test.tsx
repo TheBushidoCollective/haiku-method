@@ -138,16 +138,16 @@ describe("FeedbackRail — canonical a11y classes", () => {
 		expect(btn.className).toMatch(/focus-visible:ring-teal-500/)
 	})
 
-	it("carries touch-target class", () => {
+	it("does NOT carry the touch-target class — it forces position:relative and overrode the rail's position:fixed (verified via Playwright: the rail rendered unpositioned at the bottom-left until touch-target was dropped). The full-height edge column is its own large touch target.", () => {
 		render(<FeedbackRail open={false} onToggle={() => {}} />)
 		const btn = screen.getByRole("button")
-		expect(btn.classList.contains("touch-target")).toBe(true)
+		expect(btn.classList.contains("touch-target")).toBe(false)
 	})
 
-	it("hides on md: breakpoint via md:hidden", () => {
+	it("does NOT use md:hidden — the rail is JS-gated to the mobile layout (`{isMobile && …}`, <1280px). A md:hidden (≥768px) CSS hide fought that gate, hiding the rail in the 768–1280px band while the layout still reserved its gutter.", () => {
 		render(<FeedbackRail open={false} onToggle={() => {}} />)
 		const btn = screen.getByRole("button")
-		expect(btn.className).toMatch(/\bmd:hidden\b/)
+		expect(btn.className).not.toMatch(/\bmd:hidden\b/)
 	})
 })
 

@@ -43,7 +43,7 @@
  */
 
 import { forwardRef } from "react"
-import { focusRingClass, touchTargetClass } from "../a11y"
+import { focusRingClass } from "../a11y"
 import { RAIL_WIDTH_CLASS } from "./feedbackRailLayout"
 
 export interface FeedbackRailProps {
@@ -72,7 +72,10 @@ const RAIL_CLASSES = [
 	// Full-height column pinned to the RIGHT edge. The content container
 	// reserves a matching `RAIL_GUTTER_CLASS` right-padding gutter so content
 	// never renders underneath this column — closed rail overlays NOTHING.
-	`fixed right-0 top-0 bottom-0 z-40 ${RAIL_WIDTH_CLASS}`,
+	// z-30 sits BELOW the header (a flex item at z-40, whose z-index applies)
+	// so the rail's top can't paint over the header's theme toggle, and BELOW
+	// the drawer (z-50) + gate bar (z-[60]). It's still above page content.
+	`fixed right-0 top-0 bottom-0 z-30 ${RAIL_WIDTH_CLASS}`,
 	// Only the LEFT corners round (right edge is flush with the viewport).
 	"rounded-l-lg",
 	"bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800",
@@ -80,8 +83,12 @@ const RAIL_CLASSES = [
 	"shadow-lg",
 	// Label centered in the full-height column.
 	"inline-flex items-center justify-center",
-	// Mobile-only affordance — the desktop sidebar owns feedback at ≥ xl.
-	"md:hidden",
+	// NOTE: no `md:hidden`. The rail is JS-gated to the mobile layout already
+	// (`{isMobile && <MobileFeedbackSection/>}`, isMobile = <1280px). A
+	// `md:hidden` CSS hide (≥768px) fought that gate: in the 768–1280px band
+	// the layout dropped the desktop sidebar AND hid the rail, leaving an
+	// empty reserved gutter and no feedback affordance. The JS gate is the
+	// single source of truth for when the rail shows.
 ].join(" ")
 
 // Vertical label: rotate the writing mode and flip 180° so "FEEDBACK" reads
@@ -115,12 +122,14 @@ export const FeedbackRail = forwardRef<HTMLButtonElement, FeedbackRailProps>(
 			? `Open feedback panel, ${count} pending`
 			: "Open feedback panel"
 
-		const composedClass = [
-			RAIL_CLASSES,
-			touchTargetClass,
-			focusRingClass,
-			className ?? "",
-		]
+		// NOTE: deliberately NOT `touchTargetClass`. That utility sets
+		// `position: relative`, which OVERRODE the rail's `position: fixed`
+		// (verified via Playwright: with touch-target the rail computed to
+		// position:relative and sat unpositioned at the bottom-left; without
+		// it the `fixed right-0 top-0 bottom-0 w-9` pins it full-height to the
+		// right edge). The rail doesn't need the 44px min-size anyway — it's a
+		// full-height edge column, a huge touch target vertically.
+		const composedClass = [RAIL_CLASSES, focusRingClass, className ?? ""]
 			.filter(Boolean)
 			.join(" ")
 

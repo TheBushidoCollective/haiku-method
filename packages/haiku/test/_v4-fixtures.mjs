@@ -405,6 +405,51 @@ export function initTestRepo({ repoRoot, slug }) {
 }
 
 /**
+ * Resolve the repo's default (mainline) branch — the one the engine's
+ * `getMainlineBranch()` picks. Mirrors that candidate order (main →
+ * master) for tests, falling back to the current branch.
+ */
+export function defaultBranchOf(repoRoot) {
+	for (const c of ["main", "master"]) {
+		try {
+			git(repoRoot, "rev-parse", "--verify", c)
+			return c
+		} catch {
+			/* not this candidate */
+		}
+	}
+	return git(repoRoot, "branch", "--show-current")
+}
+
+/**
+ * Simulate the human/host merging the intent's delivery (`haiku/<slug>/main`)
+ * into the repo's default branch. This is what satisfies the pending-seal
+ * merge gate (2026-05-28) so the cursor walks `seal_intent` instead of
+ * holding at `pending_seal`. The ENGINE never does this — it never merges
+ * into the default branch (honors "never merge unless asked") — so a test
+ * that drives a git-backed intent all the way to `sealed` must call this
+ * first, mirroring a real merged PR. Restores the prior checkout.
+ */
+export function deliverIntent({ repoRoot, slug }) {
+	const intentMain = `haiku/${slug}/main`
+	const def = defaultBranchOf(repoRoot)
+	const cur = git(repoRoot, "branch", "--show-current")
+	// Fast-forward the default branch ref to the hub branch tip WITHOUT a
+	// checkout — the engine leaves runtime sidecars (statusline.json,
+	// .deadlock-history.json) dirty in the tree, which would block a branch
+	// switch. `git branch -f` moves the ref in place; since the hub branch
+	// descends from the default branch's base in these fixtures this is a
+	// genuine fast-forward (== a merged delivery). Can't force the
+	// currently-checked-out branch, so fall back to a real merge in the rare
+	// case the default branch IS the checkout.
+	if (def === cur) {
+		git(repoRoot, "merge", "--no-edit", intentMain)
+	} else {
+		git(repoRoot, "branch", "-f", def, intentMain)
+	}
+}
+
+/**
  * Build a project-local studio fixture under `<repoRoot>/.haiku/studios/<studio>/`.
  * The studio search path is project-local first, so this overrides the
  * plugin's built-in studios for tests.

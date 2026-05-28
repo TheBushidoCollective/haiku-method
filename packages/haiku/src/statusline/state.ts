@@ -159,6 +159,7 @@ const INTENT_COMPLETION_KINDS = new Set([
 	"intent_review",
 	"record_reflection",
 	"seal_intent",
+	"pending_seal",
 	"sealed",
 ])
 
@@ -266,6 +267,10 @@ function describeAction(action: CursorAction | null): {
 		case "seal_intent":
 		case "sealed":
 			return { kind: "sealed", label: "sealed", gated: false }
+		case "pending_seal":
+			// Built + signed + reflected, held until the work lands on the
+			// default branch. Gated: the human owns the merge.
+			return { kind: "pending_seal", label: "pending seal", gated: true }
 		case "unit_inputs_not_declared":
 		case "unit_outputs_empty_iterations":
 			return { kind: "blocked", label: "spec error", gated: true }

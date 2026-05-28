@@ -78,6 +78,7 @@ import {
 	resolveStudioFixHats,
 } from "../studio.js"
 import { engineHandleDriftEvents } from "./drift-handle-events.js"
+import { intentDeliveryState } from "./intent-delivery.js"
 import { runDriftSweep } from "./drift-sweep.js"
 
 // Roles that dispatch as serial sequential gates (one per tick).
@@ -313,6 +314,17 @@ export type CursorAction =
 	// `reflection.md` already exists for this intent.
 	| { kind: "record_reflection" }
 	| { kind: "seal_intent" }
+	// Pending seal (2026-05-28) — every stage built, every intent-scope
+	// approval signed, reflection done, but the intent's `haiku/<slug>/main`
+	// hub branch has NOT yet landed on the repo's default branch. The work
+	// is on the PR; the delivery hasn't merged. The intent is HELD here
+	// rather than sealed: `sealed_at` stays null. The engine never performs
+	// the merge (honors "never merge unless asked"); the next tick re-checks
+	// and seals once the merge lands. On pickup the delivery-verifier
+	// re-audits the open change request and files feedback for any new
+	// review comments. `default_branch` is the branch we're waiting to land
+	// on. See `intent-delivery.ts`.
+	| { kind: "pending_seal"; default_branch: string }
 	| { kind: "sealed" }
 	// Pre-dispatch validation — refuse to fire `start_unit_hat` when
 	// one or more units in the wave/dispatch set are structurally
@@ -2369,6 +2381,25 @@ export function derivePosition(args: {
 						track: "intent",
 						action: { kind: "record_reflection" },
 					}
+				}
+			}
+			// Merge gate (2026-05-28). The intent is fully built, signed,
+			// and reflected — but it is not SEALED until its work has landed
+			// on the repo's default branch. While the hub branch is still
+			// ahead of (not merged into) the default branch, hold in
+			// `pending_seal` instead of stamping `sealed_at`. Authoritative
+			// (squash-merge-aware) read — this is the signal that actually
+			// writes the terminal lock. Inapplicable in filesystem mode / when
+			// no default branch resolves → `merged` is true and the seal
+			// proceeds exactly as before.
+			const delivery = intentDeliveryState(slug)
+			if (delivery.applicable && !delivery.merged) {
+				return {
+					track: "intent",
+					action: {
+						kind: "pending_seal",
+						default_branch: delivery.defaultBranch,
+					},
 				}
 			}
 			return {

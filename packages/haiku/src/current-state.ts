@@ -38,6 +38,7 @@ import {
 	serializeElaborateSignals,
 } from "./orchestrator/workflow/cursor.js"
 import { deriveStageState } from "./orchestrator/workflow/derived-stage-state.js"
+import { intentDeliveryState } from "./orchestrator/workflow/intent-delivery.js"
 import { intentDir, parseFrontmatter } from "./state-tools.js"
 import type { IntentCurrentState, IntentPhase } from "./types.js"
 
@@ -152,10 +153,33 @@ export function getCurrentState(
 		if (signals.length > 0) pending_signals = serializeElaborateSignals(signals)
 	}
 
+	// Terminal seal state — only meaningful once every stage has merged
+	// (`findCurrentStage` returned null). `sealed_at` → "sealed"; otherwise
+	// the work is built+signed but the hub branch may still be awaiting a
+	// merge into the default branch → "pending_seal". LOCAL-only merge probe
+	// (no gh/glab) — this is a per-request display path.
+	let seal_status: "sealed" | "pending_seal" | undefined
+	let awaiting_merge_into: string | undefined
+	if (cursorStage === null) {
+		const sealedAt =
+			typeof intent.sealed_at === "string" && intent.sealed_at.length > 0
+		if (sealedAt) {
+			seal_status = "sealed"
+		} else {
+			const delivery = intentDeliveryState(slug, { localOnly: true })
+			if (delivery.applicable && !delivery.merged) {
+				seal_status = "pending_seal"
+				awaiting_merge_into = delivery.defaultBranch
+			}
+		}
+	}
+
 	return {
 		studio,
 		stage: current,
 		phase,
 		...(pending_signals ? { pending_signals } : {}),
+		...(seal_status ? { seal_status } : {}),
+		...(awaiting_merge_into ? { awaiting_merge_into } : {}),
 	}
 }

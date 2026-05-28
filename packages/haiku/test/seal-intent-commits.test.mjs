@@ -22,6 +22,7 @@ import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import matter from "gray-matter"
 import {
+	deliverIntent,
 	initTestRepo,
 	makeIntent,
 	makeMergedUnit,
@@ -85,6 +86,11 @@ test("seal_intent COMMITS the sealed_at stamp (so the auto-push can fire)", asyn
 				spec: { at: AT },
 				continuity: { at: AT },
 				"cross-stage-consistency": { at: AT },
+				// delivery-verifier is a GLOBAL intent-review-agent every studio
+				// walks; pre-sign it so the cursor reaches the terminal merge
+				// gate (the subject under test) instead of parking on its
+				// dispatch.
+				"delivery-verifier": { at: AT },
 				user: { at: AT },
 				intent_quality_gates: { at: AT },
 			},
@@ -122,20 +128,50 @@ test("seal_intent COMMITS the sealed_at stamp (so the auto-push can fire)", asyn
 		const { _resetIsGitRepoForTests } = await import(`${SRC}/state-tools.ts`)
 		_resetIsGitRepoForTests()
 		const { handleToolCall } = await import(`${SRC}/server/tool-call.ts`)
-		// Tick until the intent seals (first tick may run the version migration;
-		// the seal walk follows once the cursor reaches all-merged + approved).
-		const actions = []
-		for (let i = 0; i < 8; i++) {
+
+		const tick = async () => {
 			const rnResp = await handleToolCall({
 				params: { name: "haiku_run_next", arguments: { intent: slug } },
 			})
-			let parsedResp
+			// The response is the action JSON, then `\n\n---\n\n`, then prose.
+			const txt = rnResp?.content?.[0]?.text ?? "{}"
+			const jsonPart = txt.split("\n\n---\n\n")[0]
 			try {
-				parsedResp = JSON.parse(rnResp?.content?.[0]?.text ?? "{}")
+				return JSON.parse(jsonPart)
 			} catch {
-				parsedResp = { action: rnResp?.content?.[0]?.text?.slice(0, 60) }
+				return { action: txt.slice(0, 60) }
 			}
-			actions.push(parsedResp.action)
+		}
+
+		// MERGE GATE (2026-05-28): the hub branch `haiku/<slug>/main` has NOT
+		// landed on the default branch yet, so the intent must HOLD at
+		// `pending_seal` — built, signed, reflected, but not delivered. It
+		// must NOT stamp `sealed_at`. (First tick may run a no-op migration;
+		// give it a couple ticks to settle on the terminal action.)
+		let preDeliverAction
+		for (let i = 0; i < 4; i++) {
+			preDeliverAction = (await tick()).action
+			if (preDeliverAction === "pending_seal") break
+		}
+		assert.equal(
+			preDeliverAction,
+			"pending_seal",
+			`unmerged intent must hold at pending_seal, got: ${preDeliverAction}`,
+		)
+		assert.ok(
+			!matter(readFileSync(intentMd, "utf8")).data.sealed_at,
+			"sealed_at must NOT be stamped while the hub branch is unmerged",
+		)
+
+		// Simulate the human/host merging the delivery into the default
+		// branch — the engine never does this itself.
+		deliverIntent({ repoRoot, slug })
+
+		// Now tick until the intent seals (the cursor walks `seal_intent`
+		// once the hub branch is an ancestor of the default branch).
+		const actions = []
+		for (let i = 0; i < 8; i++) {
+			actions.push((await tick()).action)
 			if (matter(readFileSync(intentMd, "utf8")).data.sealed_at) break
 		}
 

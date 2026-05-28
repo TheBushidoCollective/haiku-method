@@ -45,6 +45,7 @@ import { dirname, join, resolve } from "node:path"
 import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import matter from "gray-matter"
+import { deliverIntent } from "./_v4-fixtures.mjs"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SRC = join(HERE, "..", "src")
@@ -134,6 +135,13 @@ async function withRealStudioRepo(slug, fn) {
 }
 
 function applyResponse(intentDir, action, root, slug) {
+	// Merge gate (2026-05-28): when the engine holds at pending_seal, the
+	// human/host delivers the hub branch onto the default branch so the next
+	// tick can seal. The engine never performs this merge itself.
+	if (action.action === "pending_seal") {
+		deliverIntent({ repoRoot: root, slug })
+		return
+	}
 	const at = new Date().toISOString()
 	const stage = action.stage
 	if (!stage) {

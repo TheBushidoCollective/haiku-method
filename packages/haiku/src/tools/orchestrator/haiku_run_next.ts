@@ -49,6 +49,7 @@ import {
 	isStageComplete,
 	stageOwesObservations,
 } from "../../orchestrator/workflow/cursor.js"
+import { PR_INTERACTION_ROLES } from "../../orchestrator/review-role-classes.js"
 import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
 import type { OrchestratorAction as OrchestratorActionType } from "../../orchestrator.js"
 import {
@@ -1315,6 +1316,50 @@ export default defineTool({
 			} catch (err) {
 				console.error(
 					`[haiku_run_next] merge_intent execution failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}
+
+		// Pending seal + pickup (2026-05-28). The intent is built, signed,
+		// and reflected, but its hub branch hasn't landed on the default
+		// branch — so the cursor is HOLDING it in `pending_seal` (no
+		// `sealed_at` written; the merge is the user's call). A pickup is the
+		// user's explicit "I'm back, re-check the delivery" signal: re-open
+		// the delivery PR-interaction approval(s) so the cursor re-dispatches
+		// the delivery-verifier, which re-reads the open change request, files
+		// feedback for any NEW review comments, and re-confirms
+		// CI/mergeability before the intent can seal again. Keyed on
+		// `PR_INTERACTION_ROLES` (not a hardcoded name) so a studio that
+		// overrides or adds a PR-interaction role is re-audited too. A plain
+		// (non-pickup) tick just returns the holding prompt.
+		if (result.action === "pending_seal" && args.pickup === true) {
+			try {
+				const intentMd = join(findHaikuRoot(), "intents", slug, "intent.md")
+				if (existsSync(intentMd)) {
+					const { data } = parseFrontmatter(readFileSync(intentMd, "utf8"))
+					const approvals = (
+						data.approvals && typeof data.approvals === "object"
+							? { ...(data.approvals as Record<string, unknown>) }
+							: {}
+					) as Record<string, unknown>
+					let reopened = false
+					for (const role of Object.keys(approvals)) {
+						if (PR_INTERACTION_ROLES.has(role) && approvals[role] != null) {
+							approvals[role] = null
+							reopened = true
+						}
+					}
+					if (reopened) {
+						setFrontmatterField(intentMd, "approvals", approvals)
+						gitCommitState(
+							`haiku: re-open delivery review on pickup for ${slug}`,
+						)
+						result = dispatchOrchestratorAction(slug)
+					}
+				}
+			} catch (err) {
+				console.error(
+					`[haiku_run_next] pending-seal pickup re-open failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}

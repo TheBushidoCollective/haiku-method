@@ -50,6 +50,7 @@ import safe_intent_repair from "./intent/repair/safe_intent_repair/index.js"
 import intent_review from "./intent/review/intent_review/index.js"
 import intent_approved from "./intent/seal/intent_approved/index.js"
 import intent_complete from "./intent/seal/intent_complete/index.js"
+import pending_seal from "./intent/seal/pending_seal/index.js"
 import seal_intent from "./intent/seal/seal_intent/index.js"
 // ── intent/ ───────────────────────────────────────────────────────
 import migrated from "./intent/setup/migrated/index.js"
@@ -130,6 +131,7 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["intent_approved", intent_approved],
 	["intent_complete", intent_complete],
 	["seal_intent", seal_intent],
+	["pending_seal", pending_seal],
 	["external_review_requested", external_review_requested],
 	["revise_unit_specs", revise_unit_specs],
 	["safe_intent_repair", safe_intent_repair],

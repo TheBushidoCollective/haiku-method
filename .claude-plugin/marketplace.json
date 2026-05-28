@@ -27,5 +27,8 @@
         "human-ai-collaboration"
       ]
     }
-  ]
+  ],
+  "metadata": {
+    "version": "10.0.0"
+  }
 }

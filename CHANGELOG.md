@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.0] - 2026-05-28
+
+### Added
+- Optional stages: design, operations, and security are now droppable per intent; libdev studio deprecated for optional release stage.
+- Feedback severity-gated fix loops: only blocking findings trigger fixes; non-actionable findings handled separately.
+- Review agents, hats, and fix hats now resolve via project/studio/stage hierarchy, enabling per-studio or per-stage customization without forking.
+- Discovery artifacts now persist across intents and auto-load as starting points for new work.
+- Stage observations auto-record and summarize at intent close with studio-defined perspectives; opt out via reflection: false.
+
+### Changed
+- Unit and fix-chain isolation: code runs on ephemeral git branches per unit/fix, pushed on advance, merged at terminal with recovery on pickup.
+- Delivery verification gates on CI meaningfulness (not just green) and merge readiness; escalates to human when provider CLI access is missing.
+
 ## [8.0.0] - 2026-05-16
 
 ### Added

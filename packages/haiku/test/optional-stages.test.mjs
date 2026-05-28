@@ -118,21 +118,21 @@ console.log("=== config fields: optional / deprecated ===")
 
 const software = buildStudioConfig("software")
 
-test("StageConfig.optional defaults to false for a mandatory stage", () => {
-	assert.strictEqual(software.stages.inception.optional, false)
-	assert.strictEqual(software.stages.development.optional, false)
-})
-
-test("StageConfig.optional is true for software design / product / operations", () => {
+test("StageConfig.optional is true for software design / operations / security", () => {
 	assert.strictEqual(software.stages.design.optional, true)
-	assert.strictEqual(software.stages.product.optional, true)
 	assert.strictEqual(software.stages.operations.optional, true)
+	assert.strictEqual(software.stages.security.optional, true)
 })
 
-test("mandatory software stages stay non-optional", () => {
+test("mandatory software MVP core stays non-optional (inception / product / development)", () => {
 	assert.strictEqual(software.stages.inception.optional, false)
+	assert.strictEqual(software.stages.product.optional, false)
 	assert.strictEqual(software.stages.development.optional, false)
-	assert.strictEqual(software.stages.security.optional, false)
+})
+
+test("software has no release stage (the libdev import was removed)", () => {
+	assert.strictEqual(software.stages.release, undefined)
+	assert.ok(!software.defaultStages.includes("release"))
 })
 
 test("StudioConfig.deprecated defaults to false for an active studio", () => {
@@ -143,7 +143,9 @@ console.log("=== resolveStageOptional / computeStageDependents ===")
 
 test("resolveStageOptional reads STAGE.md optional:", () => {
 	assert.strictEqual(resolveStageOptional("software", "design"), true)
+	assert.strictEqual(resolveStageOptional("software", "security"), true)
 	assert.strictEqual(resolveStageOptional("software", "inception"), false)
+	assert.strictEqual(resolveStageOptional("software", "product"), false)
 	assert.strictEqual(resolveStageOptional("software", "development"), false)
 })
 

@@ -181,6 +181,14 @@ Before adding a paragraph anywhere, ask:
 
 If a paragraph passes more than one test, split it. Duplication across layers is how drift starts.
 
+### 2.5 Optional stages
+
+A stage MAY declare `optional: true` in its `STAGE.md`. The studio's `stages:` list is a **superset template**; each intent's `intent.stages` is the canonical, materialized plan it actually walks. The first time the cursor arrives at an optional stage that hasn't started (no `elaboration.md`, no units), the `elaborate_loop` action carries `optional_offer` and the elaborate prompt leads with a keep-or-drop decision — the one judgment the engine can't make (does *this* intent need this phase?). Dropping calls `haiku_drop_stage`, which removes the stage from `intent.stages`; keeping just proceeds to elaborate. The decision is **one-shot by construction** — once elaboration starts the offer condition is false — so it needs no frontmatter "decided" stamp (filesystem is the only signal, §1.0).
+
+Cross-stage references to a dropped stage are **auto-ignored**, not orphaned: a dropped optional stage never ran, so it has no `stages/<stage>/` dir and no artifacts. The cumulative-input-coverage gate skips a prior stage whose dir is absent; `start_unit` / `decompose` inject only resolved inputs that exist on disk; `decompose` additionally filters its declared inputs by the plan so a dropped stage's input doesn't trip the missing-upstream warning. So a mandatory stage's declared input from an optional upstream simply ceases to exist when that upstream drops — no required-input deadlock. Hat mandates therefore MUST NOT hard-list upstream artifacts by name; they reference the dispatch's resolved inputs, which already reflect the plan.
+
+A studio MAY declare `deprecated: true` to fold into a successor: hidden from new-intent pickers, still resolvable by name so in-flight intents finish. Deprecate — never delete.
+
 ## 3. Hat sequence pattern: plan → do → verify
 
 Every stage's `hats:` list MUST follow `plan → do → verify`, in that order. Additional plan/do/verify roles MAY appear (e.g. two do hats), but the sequence is plan-do-verify roles only — adversarial review is NOT an in-loop hat (§3.5).

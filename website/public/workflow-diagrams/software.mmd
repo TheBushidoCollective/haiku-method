@@ -9,7 +9,8 @@ stateDiagram-v2
   product --> development
   development --> operations
   operations --> security
-  security --> intent_review
+  security --> release
+  release --> intent_review
   intent_review --> seal_intent : approvals.signed
   seal_intent --> complete
 
@@ -344,6 +345,61 @@ stateDiagram-v2
     }
     security_review_fix --> security_gate
     security_gate --> [*]
+  }
+
+  state release {
+    [*] --> release_start_stage
+    release_start_stage --> release_elaborate_loop : tick
+    release_elaborate_loop --> release_elaborate_loop : signals.partial
+    release_elaborate_loop --> release_execute : signals.all_met
+    release_elaborate_loop --> release_review_fix : verifier.fail
+    release_elaborate_loop --> release_review_fix : feedback.pending
+    state release_execute {
+      [*] --> release_execute_release_engineer
+      release_execute_release_engineer --> release_execute_doc_writer : hat.advance
+      release_execute_doc_writer --> release_execute_verifier : hat.advance
+      release_execute_doc_writer --> release_execute_release_engineer : hat.reject
+      release_execute_verifier --> release_execute_done : hat.advance
+      release_execute_verifier --> release_execute_doc_writer : hat.reject
+      release_execute_done --> [*]
+    }
+    release_execute --> release_review
+    release_review --> release_gate : review.clean
+    release_review --> release_review_fix : review.findings
+    state release_review_fix {
+      [*] --> release_review_fix_bolt_1
+      state release_review_fix_bolt_1 {
+        [*] --> release_review_fix_bolt_1_classifier
+        release_review_fix_bolt_1_classifier --> release_review_fix_bolt_1_release_engineer : fix.advance
+        release_review_fix_bolt_1_release_engineer --> release_review_fix_bolt_1_feedback_assessor : fix.advance
+        release_review_fix_bolt_1_feedback_assessor --> release_review_fix_bolt_1_validated : fix.advance
+        release_review_fix_bolt_1_validated --> [*]
+      }
+      release_review_fix_bolt_1 --> release_review_fix_done : feedback.closed
+      release_review_fix_bolt_1 --> release_review_fix_bolt_2 : feedback.open
+      state release_review_fix_bolt_2 {
+        [*] --> release_review_fix_bolt_2_classifier
+        release_review_fix_bolt_2_classifier --> release_review_fix_bolt_2_release_engineer : fix.advance
+        release_review_fix_bolt_2_release_engineer --> release_review_fix_bolt_2_feedback_assessor : fix.advance
+        release_review_fix_bolt_2_feedback_assessor --> release_review_fix_bolt_2_validated : fix.advance
+        release_review_fix_bolt_2_validated --> [*]
+      }
+      release_review_fix_bolt_2 --> release_review_fix_done : feedback.closed
+      release_review_fix_bolt_2 --> release_review_fix_bolt_3 : feedback.open
+      state release_review_fix_bolt_3 {
+        [*] --> release_review_fix_bolt_3_classifier
+        release_review_fix_bolt_3_classifier --> release_review_fix_bolt_3_release_engineer : fix.advance
+        release_review_fix_bolt_3_release_engineer --> release_review_fix_bolt_3_feedback_assessor : fix.advance
+        release_review_fix_bolt_3_feedback_assessor --> release_review_fix_bolt_3_validated : fix.advance
+        release_review_fix_bolt_3_validated --> [*]
+      }
+      release_review_fix_bolt_3 --> release_review_fix_done : feedback.closed
+      release_review_fix_bolt_3 --> release_review_fix_escalated : feedback.open
+      release_review_fix_done --> [*]
+      release_review_fix_escalated --> [*]
+    }
+    release_review_fix --> release_gate
+    release_gate --> [*]
   }
 
   complete --> [*]

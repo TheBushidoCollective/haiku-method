@@ -256,7 +256,20 @@ test("returns second stage when first is done and second is active", () => {
 test("returns last stage when every stage is done", () => {
 	const { haikuRoot, cleanup } = fixture(
 		"all-done",
-		{ studio: "software" },
+		{
+			studio: "software",
+			// An application plan that dropped the optional `release` stage —
+			// the canonical intent.stages IS the plan, so `security` is its
+			// last stage even though the studio superset now ends at `release`.
+			stages: [
+				"inception",
+				"design",
+				"product",
+				"development",
+				"operations",
+				"security",
+			],
+		},
 		{
 			inception: { stage: "inception", status: "completed", phase: "gate" },
 			design: { stage: "design", status: "completed", phase: "gate" },

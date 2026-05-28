@@ -52,6 +52,7 @@ test("default stages list is preserved in declared order", () => {
 		"development",
 		"operations",
 		"security",
+		"release",
 	])
 })
 

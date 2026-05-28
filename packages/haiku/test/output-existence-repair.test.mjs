@@ -32,7 +32,12 @@ import { fileURLToPath } from "node:url"
 import matter from "gray-matter"
 
 const SRC = new URL("../src/", import.meta.url).pathname
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..")
+const REPO_ROOT = resolve(
+	dirname(fileURLToPath(import.meta.url)),
+	"..",
+	"..",
+	"..",
+)
 process.env.CLAUDE_PLUGIN_ROOT = join(REPO_ROOT, "plugin")
 
 const { repairDeclaredOutput, readFeedbackFiles } = await import(
@@ -42,19 +47,23 @@ const { autoRepairOrFileMissingOutputs } = await import(
 	`${SRC}orchestrator/workflow/validate-output-existence-gate.ts`
 )
 
-/** A throwaway git repo with one intent + one stage, cwd set to its root so
- *  the cwd-driven resolvers (`intentDir`, `primaryRepoRoot`) anchor here. */
+// Each call gets a UNIQUE slug. Every test runs in the SAME process; a fixed
+// slug + the engine's cwd-keyed root cache let one test's repaired unit bleed
+// into the next (a no-sibling test would read a prior test's `.tsx` unit). A
+// per-test slug makes `intentDir(slug)` resolve to exactly this fixture.
+let _seedN = 0
 function seedIntent(label, { stage = "development", outputs }) {
+	const slug = `demo-${label}-${_seedN++}`
 	const root = mkdtempSync(join(tmpdir(), `haiku-outrepair-${label}-`))
 	execSync("git init -q", { cwd: root })
 	execSync("git config user.email t@t && git config user.name t", { cwd: root })
-	const intentDir = join(root, ".haiku", "intents", "demo")
+	const intentDir = join(root, ".haiku", "intents", slug)
 	mkdirSync(join(intentDir, "stages", stage, "units"), { recursive: true })
 	mkdirSync(join(intentDir, "stages", stage, "feedback"), { recursive: true })
 	writeFileSync(
 		join(intentDir, "intent.md"),
 		matter.stringify("body\n", {
-			title: "demo",
+			title: slug,
 			studio: "software",
 			mode: "continuous",
 			stages: [stage],
@@ -69,7 +78,7 @@ function seedIntent(label, { stage = "development", outputs }) {
 			inputs: [],
 		}),
 	)
-	return { root, intentDir, stage }
+	return { root, intentDir, stage, slug }
 }
 
 function writeArtifact(intentDir, stage, relName, body = "x") {
@@ -92,51 +101,53 @@ function withCwd(root, fn) {
 const DECLARED = "stages/development/artifacts/WorkerDates.test.ts"
 
 test("repairDeclaredOutput: corrects an extension typo (.test.ts → .test.tsx)", () => {
-	const { root, intentDir, stage } = seedIntent("ext-typo", {
+	const { root, intentDir, stage, slug } = seedIntent("ext-typo", {
 		outputs: [DECLARED],
 	})
 	withCwd(root, () => {
 		writeArtifact(intentDir, stage, "WorkerDates.test.tsx", "export {}\n")
-		const fixed = repairDeclaredOutput("demo", "unit-01-dates", DECLARED)
+		const fixed = repairDeclaredOutput(slug, "unit-01-dates", DECLARED)
 		assert.equal(fixed, "stages/development/artifacts/WorkerDates.test.tsx")
 	})
 })
 
 test("repairDeclaredOutput: returns null when no sibling exists", () => {
-	const { root } = seedIntent("no-sibling", { outputs: [DECLARED] })
+	const { root, slug } = seedIntent("no-sibling", { outputs: [DECLARED] })
 	withCwd(root, () => {
-		assert.equal(repairDeclaredOutput("demo", "unit-01-dates", DECLARED), null)
+		assert.equal(repairDeclaredOutput(slug, "unit-01-dates", DECLARED), null)
 	})
 })
 
 test("repairDeclaredOutput: returns null when the match is ambiguous", () => {
-	const { root, intentDir, stage } = seedIntent("ambiguous", {
+	const { root, intentDir, stage, slug } = seedIntent("ambiguous", {
 		outputs: [DECLARED],
 	})
 	withCwd(root, () => {
 		// Two same-stem siblings → don't guess.
 		writeArtifact(intentDir, stage, "WorkerDates.test.tsx", "a\n")
 		writeArtifact(intentDir, stage, "WorkerDates.test.js", "b\n")
-		assert.equal(repairDeclaredOutput("demo", "unit-01-dates", DECLARED), null)
+		assert.equal(repairDeclaredOutput(slug, "unit-01-dates", DECLARED), null)
 	})
 })
 
 test("repairDeclaredOutput: returns null for an extension-less declaration", () => {
 	const decl = "stages/development/artifacts/NOTES"
-	const { root, intentDir, stage } = seedIntent("no-ext", { outputs: [decl] })
+	const { root, intentDir, stage, slug } = seedIntent("no-ext", {
+		outputs: [decl],
+	})
 	withCwd(root, () => {
 		writeArtifact(intentDir, stage, "NOTES.md", "n\n")
-		assert.equal(repairDeclaredOutput("demo", "unit-01-dates", decl), null)
+		assert.equal(repairDeclaredOutput(slug, "unit-01-dates", decl), null)
 	})
 })
 
 test("closeout sweep: repairs a near-miss in place, files no FB", () => {
-	const { root, intentDir, stage } = seedIntent("sweep-repair", {
+	const { root, intentDir, stage, slug } = seedIntent("sweep-repair", {
 		outputs: [DECLARED],
 	})
 	withCwd(root, () => {
 		writeArtifact(intentDir, stage, "WorkerDates.test.tsx", "export {}\n")
-		const res = autoRepairOrFileMissingOutputs("demo", "software", [stage])
+		const res = autoRepairOrFileMissingOutputs(slug, [stage])
 		assert.equal(res.repaired.length, 1, "one declaration repaired")
 		assert.equal(res.filed.length, 0, "no FB filed for a repairable typo")
 		// The unit FM now points at the real file.
@@ -153,13 +164,13 @@ test("closeout sweep: repairs a near-miss in place, files no FB", () => {
 })
 
 test("closeout sweep: files a deduplicated FB for an unrepairable missing output", () => {
-	const { root, stage } = seedIntent("sweep-fb", { outputs: [DECLARED] })
+	const { root, stage, slug } = seedIntent("sweep-fb", { outputs: [DECLARED] })
 	withCwd(root, () => {
 		// No sibling — unrepairable.
-		const first = autoRepairOrFileMissingOutputs("demo", "software", [stage])
+		const first = autoRepairOrFileMissingOutputs(slug, [stage])
 		assert.equal(first.repaired.length, 0)
 		assert.equal(first.filed.length, 1, "one FB filed")
-		const fbs = readFeedbackFiles("demo", stage)
+		const fbs = readFeedbackFiles(slug, stage)
 		const mine = fbs.filter(
 			(f) =>
 				typeof f.source_ref === "string" &&
@@ -168,8 +179,40 @@ test("closeout sweep: files a deduplicated FB for an unrepairable missing output
 		assert.equal(mine.length, 1)
 		assert.equal(mine[0].severity, "high")
 		// Second run dedups — no new FB.
-		const second = autoRepairOrFileMissingOutputs("demo", "software", [stage])
+		const second = autoRepairOrFileMissingOutputs(slug, [stage])
 		assert.equal(second.filed.length, 0, "dedup: nothing filed on re-run")
 		assert.equal(second.skipped.length, 1, "covered by the open FB")
+	})
+})
+
+test("closeout sweep: a non_actionable-closed FB suppresses re-file (no infinite loop)", () => {
+	// The fix loop can close a missing-output FB as `non_actionable` — the
+	// output is intentionally absent and accepted. That close sets BOTH
+	// `status: non_actionable` and `closed_at`. The dedup must still treat
+	// it as covering the ref; otherwise every closeout tick re-files, the
+	// fix loop re-closes it non_actionable, and it loops forever.
+	const { root, intentDir, stage, slug } = seedIntent("na-dedup", {
+		outputs: [DECLARED],
+	})
+	withCwd(root, () => {
+		// readFeedbackFiles requires `NN-slug.md`; status is DERIVED from
+		// `resolution` + `closed_at` (the `status:` FM field was dropped in v8).
+		writeFileSync(
+			join(intentDir, "stages", stage, "feedback", "01-missing-output.md"),
+			matter.stringify("body\n", {
+				title: "missing output",
+				resolution: "non_actionable",
+				closed_at: new Date().toISOString(),
+				source_ref: `missing-output:unit-01-dates:${DECLARED}`,
+				origin: "agent",
+			}),
+		)
+		const res = autoRepairOrFileMissingOutputs(slug, [stage])
+		assert.equal(
+			res.filed.length,
+			0,
+			"non_actionable-settled: must not re-file",
+		)
+		assert.equal(res.skipped.length, 1, "counted as settled/skipped")
 	})
 })

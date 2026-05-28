@@ -53,7 +53,6 @@ export interface OutputExistenceGateResult {
  *  complete) so it never flags an in-flight unit's not-yet-written output. */
 export function autoRepairOrFileMissingOutputs(
 	slug: string,
-	studio: string,
 	stages: string[],
 ): OutputExistenceGateResult {
 	const repaired: OutputExistenceGateResult["repaired"] = []
@@ -71,10 +70,19 @@ export function autoRepairOrFileMissingOutputs(
 			for (const fb of readFeedbackFiles(slug, stage)) {
 				const ref = (fb as { source_ref?: unknown }).source_ref
 				const closed = fb as { closed_at?: unknown; status?: unknown }
+				// Skip closures that should ALLOW a re-file if the output is
+				// still missing: `closed` (the fix landed — the output now
+				// exists, so we won't reach the file step anyway) and `rejected`
+				// (the finding was invalid). But a `non_actionable` close is the
+				// fix loop ACCEPTING the output as intentionally absent — it must
+				// SUPPRESS re-filing (it carries `closed_at`, so we keep it in
+				// `openRefs` rather than letting it leak into an infinite
+				// re-file → non_actionable → re-file loop).
+				const status = typeof closed.status === "string" ? closed.status : null
 				if (
-					closed.closed_at ||
-					(typeof closed.status === "string" &&
-						(closed.status === "closed" || closed.status === "rejected"))
+					(closed.closed_at && status !== "non_actionable") ||
+					status === "closed" ||
+					status === "rejected"
 				)
 					continue
 				if (typeof ref === "string" && ref.startsWith("missing-output:"))
@@ -127,10 +135,16 @@ export function autoRepairOrFileMissingOutputs(
 
 			if (dirty) {
 				try {
-					parsed.data.outputs = corrected
+					// Build a FRESH data object — never mutate `parsed.data`. gray-matter
+					// caches parse results by content and returns a SHARED object, so
+					// mutating it corrupts every other unit with byte-identical content
+					// (e.g. two skeleton units) on its next parse.
 					writeFileSync(
 						join(unitsDir, file),
-						matter.stringify(parsed.content, parsed.data),
+						matter.stringify(parsed.content, {
+							...parsed.data,
+							outputs: corrected,
+						}),
 					)
 				} catch {
 					/* best-effort; next tick retries */

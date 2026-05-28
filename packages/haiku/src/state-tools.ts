@@ -10092,8 +10092,16 @@ export function handleStateTool(
 						const repairRaw = readFileSync(advPath, "utf8")
 						const { data: repairData, content: repairContent } =
 							matter(repairRaw)
-						repairData.outputs = correctedOutputs
-						writeFileSync(advPath, matter.stringify(repairContent, repairData))
+						// Fresh data object — gray-matter caches parse results by content
+						// and returns a SHARED object; mutating `repairData` would corrupt
+						// any byte-identical unit's next parse.
+						writeFileSync(
+							advPath,
+							matter.stringify(repairContent, {
+								...repairData,
+								outputs: correctedOutputs,
+							}),
+						)
 						const sf = args.state_file as string | undefined
 						if (sf)
 							logSessionEvent(sf, {

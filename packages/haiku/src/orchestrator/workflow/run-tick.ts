@@ -523,7 +523,7 @@ export function runWorkflowTick(
 	try {
 		if (findCurrentStage(slug, studio, iDir) === null) {
 			const closeoutStages = resolveIntentStages(intentFm, studio)
-			const sweep = autoRepairOrFileMissingOutputs(slug, studio, closeoutStages)
+			const sweep = autoRepairOrFileMissingOutputs(slug, closeoutStages)
 			if (sweep.repaired.length > 0 || sweep.filed.length > 0) {
 				emitTelemetry("haiku.output_validation.closeout_sweep", {
 					intent: slug,

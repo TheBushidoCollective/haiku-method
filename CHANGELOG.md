@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.1.0] - 2026-05-28
+
+### Added
+- Intents now hold at pending seal until merged into the default branch, showing delivery status at a glance
+- Browse displays unit creation dates and activity timelines; hat/fix histories are now interactive steppers; outputs and agent definitions open inline
+
+### Changed
+- Browse list views now use optimized queries to handle large intent counts
+
+### Fixed
+- Browse no longer drops intents past index 100
+- Unit metrics and code inputs/outputs now display accurate data from real sources
+- Engine state is protected during branch-to-stage merges
+
 ## [10.0.0] - 2026-05-28
 
 ### Added

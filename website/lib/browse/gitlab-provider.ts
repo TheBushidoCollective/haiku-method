@@ -143,10 +143,28 @@ export class GitLabProvider implements BrowseProvider {
 				},
 				body: JSON.stringify({ query, variables: variables ?? {} }),
 			})
-			if (!res.ok) return undefined
-			const json = (await res.json()) as { data?: T }
+			if (!res.ok) {
+				console.warn(
+					`[haiku-browse] raw GraphQL HTTP ${res.status} ${res.statusText}`,
+				)
+				return undefined
+			}
+			const json = (await res.json()) as {
+				data?: T
+				errors?: Array<{ message: string }>
+			}
+			// GraphQL errors come back 200 with `errors[]` + (often) null data.
+			// Surface them — a silently-dropped intent in the list view is
+			// otherwise indistinguishable from "no such intent".
+			if (json.errors?.length) {
+				console.warn(
+					"[haiku-browse] raw GraphQL errors:",
+					json.errors.map((e) => e.message).join("; "),
+				)
+			}
 			return json.data
-		} catch {
+		} catch (err) {
+			console.warn("[haiku-browse] raw GraphQL fetch failed:", err)
 			return undefined
 		}
 	}
@@ -189,13 +207,40 @@ export class GitLabProvider implements BrowseProvider {
 				project?: { repository?: RepoFields }
 			}>(query, { fp: this.projectPath })
 			const repo = data?.project?.repository
-			chunk.forEach((m, j) => {
-				const rawText = repo?.[`a${j}_md`]?.nodes?.[0]?.rawTextBlob ?? null
-				const stageDirs = (repo?.[`a${j}_st`]?.trees?.nodes ?? [])
-					.map((n) => n?.name)
-					.filter((n): n is string => typeof n === "string" && n.length > 0)
-				out.set(m.slug, { rawText, stageDirs })
-			})
+			// Per-branch fallback: if the aliased batch yielded no intent.md for
+			// a branch (transport error, a per-alias field error, or an empty
+			// node), fall back to the proven single-ref reads so the intent
+			// still surfaces. Correctness first; the batch is the fast path.
+			await Promise.all(
+				chunk.map(async (m, j) => {
+					let rawText = repo?.[`a${j}_md`]?.nodes?.[0]?.rawTextBlob ?? null
+					let stageDirs = (repo?.[`a${j}_st`]?.trees?.nodes ?? [])
+						.map((n) => n?.name)
+						.filter((n): n is string => typeof n === "string" && n.length > 0)
+					if (!rawText) {
+						rawText = await this.readFileFromRef(
+							m.branch,
+							`.haiku/intents/${m.slug}/intent.md`,
+						)
+						const treeData =
+							await this.cachedQuery<operationsListIntentsTreeQuery$data>(
+								ListIntentsTreeQuery,
+								{
+									fullPath: this.projectPath,
+									path: `.haiku/intents/${m.slug}/stages`,
+									ref: m.branch,
+								},
+								`gl:${this.host}:${this.projectPath}:stagesDirs:${m.slug}:${m.branch}`,
+							)
+						stageDirs = (
+							treeData?.project?.repository?.tree?.trees?.nodes ?? []
+						)
+							.map((n) => n?.name)
+							.filter((n): n is string => typeof n === "string" && n.length > 0)
+					}
+					out.set(m.slug, { rawText, stageDirs })
+				}),
+			)
 		}
 		return out
 	}

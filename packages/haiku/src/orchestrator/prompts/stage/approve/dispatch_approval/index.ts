@@ -29,6 +29,7 @@ import {
 	resolveReviewAgentPath,
 } from "../../../../../studio-reader.js"
 import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
+import { PER_STAGE_PR_MODES } from "../../../../workflow/delivery-modes.js"
 import {
 	buildDecisionsBlock,
 	buildExistingFeedbackBlock,
@@ -43,8 +44,6 @@ import {
 	sharedBlockRef,
 } from "../../../_shared/index.js"
 import { definePromptBuilder } from "../../../define.js"
-
-const PER_STAGE_PR_MODES = new Set(["discrete", "discrete-hybrid"])
 
 /** The PR/MR a runtime-verifier uploads this stage's proof to. In
  *  per-stage delivery modes that's the stage's own draft PR (base =

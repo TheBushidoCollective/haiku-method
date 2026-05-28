@@ -1355,8 +1355,7 @@ export function openStageDraftPullRequest(opts: {
 }): OpenIntentMrResult {
 	const branch = `haiku/${opts.slug}/${opts.stage}`
 	const base = `haiku/${opts.slug}/main`
-	const title =
-		opts.title ?? `H·AI·K·U: ${opts.slug} — stage ${opts.stage}`
+	const title = opts.title ?? `H·AI·K·U: ${opts.slug} — stage ${opts.stage}`
 	const body =
 		opts.body ??
 		`Stage \`${opts.stage}\` of intent \`${opts.slug}\` is in flight. The H·AI·K·U engine opened this PR as a draft so the stage's work — and its runtime-verification proof — can be watched as units land. The engine marks it ready at the stage gate; merging it signals approval.`

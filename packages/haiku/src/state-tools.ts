@@ -4686,8 +4686,16 @@ export function ensureHaikuGitignored(): void {
 			(p) => !lineSet.has(p.entry) && !p.accept.some((a) => lineSet.has(a)),
 		).map((p) => p.entry)
 		if (missing.length === 0) return
-		const banner =
-			"# H·AI·K·U engine-managed: worktree pool (linked git worktrees) + runtime-verification proof (regenerated binary churn — uploaded to the PR, never committed)."
+		// Only emit the banner when no H·AI·K·U-managed line is present yet.
+		// A repo upgraded from the old worktree-only seeder already carries a
+		// banner above `.haiku/worktrees/`; appending a second one when we add
+		// the proof globs leaves two banners stacked (cosmetic, but messy on
+		// upgrade). When some patterns already exist, append just the missing
+		// lines under a short inline note instead.
+		const hasManagedLine = lines.some((l) => l.startsWith(".haiku/"))
+		const banner = hasManagedLine
+			? "# H·AI·K·U engine-managed (proof: regenerated binary churn — uploaded to the PR, never committed)"
+			: "# H·AI·K·U engine-managed: worktree pool (linked git worktrees) + runtime-verification proof (regenerated binary churn — uploaded to the PR, never committed)."
 		const prefix = existing && !existing.endsWith("\n") ? "\n" : ""
 		const separator = existing ? "\n" : ""
 		writeFileSync(

@@ -56,7 +56,6 @@ import {
 import { withIntentMainLock } from "../../locks.js"
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { resolveIntentStages } from "../../orchestrator.js"
-import { stageRequiresExternalReview } from "../studio.js"
 import { sealIntentState } from "../../state-integrity.js"
 import {
 	appendStageIteration,
@@ -71,6 +70,8 @@ import {
 	timestamp,
 } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
+import { stageRequiresExternalReview } from "../studio.js"
+import { PER_STAGE_PR_MODES } from "./delivery-modes.js"
 import { deriveStageState } from "./derived-stage-state.js"
 
 /** Best-effort push of the stage branch to origin after an engine
@@ -101,13 +102,6 @@ function readFrontmatter(filePath: string): Record<string, unknown> {
 	const { data } = parseFrontmatter(raw)
 	return data
 }
-
-/** Modes whose stages each get their own draft PR (base = intent main).
- *  In discrete delivery the per-stage PR is where that stage's work — and
- *  its runtime-verification proof — lands; merging it is the approval
- *  signal. continuous / autopilot / quick keep everything on the single
- *  intent-main draft PR opened at intent_create. */
-const PER_STAGE_PR_MODES = new Set(["discrete", "discrete-hybrid"])
 
 /** Best-effort: open a DRAFT PR for this stage at stage start, in the
  *  modes that use per-stage delivery. Mirrors the intent-create draft-PR

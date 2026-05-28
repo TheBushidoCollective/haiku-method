@@ -581,15 +581,16 @@ export default defineTool({
 				let externalReviewMessage: string
 				const existingStagePr = readStagePr(slug, stage)
 				if (isGitRepo() && existingStagePr?.url) {
-					// Per-stage delivery (discrete / discrete-hybrid): a DRAFT
-					// stage PR was already opened at stage start. Flip it to
-					// ready instead of opening a SECOND, non-draft PR. The
-					// merge is still the approval signal (gate.ts reconciles
-					// on branch-merged-into-intent-main).
+					// Per-stage delivery (discrete / discrete-hybrid) where the
+					// stage-start draft PR opened SUCCESSFULLY (we have its URL):
+					// flip that existing draft to ready rather than opening a
+					// second, non-draft PR. The `else if` branch below covers
+					// both no-per-stage-PR modes AND the case where the stage-
+					// start open failed (no URL recorded) — there we fall back
+					// to opening the PR now. The merge is still the approval
+					// signal (gate.ts reconciles on branch-merged-into-intent-main).
 					const stagePrUrl = existingStagePr.url
-					const { markPullRequestReady } = await import(
-						"../../git-worktree.js"
-					)
+					const { markPullRequestReady } = await import("../../git-worktree.js")
 					const ready = markPullRequestReady(stagePrUrl)
 					try {
 						const intentMd = join(intentDir(slug), "intent.md")

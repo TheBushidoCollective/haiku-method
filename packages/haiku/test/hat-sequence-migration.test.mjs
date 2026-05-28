@@ -210,3 +210,71 @@ test("trim drops ONLY orphan-hat entries — hat-absent entries survive", async 
 		rmSync(tmp, { recursive: true, force: true })
 	}
 })
+
+test("strips feedback-assessor from a unit — it's a fix hat, never a unit hat", async () => {
+	// A unit that declared `closes:` used to get feedback-assessor injected as
+	// a terminal hat. That injection is gone (feedback-assessor is fix-loop-only),
+	// so an existing unit carrying a feedback-assessor iteration is now an orphan
+	// the reconciler must trim — leaving the plan-do-verify tail (development is
+	// [planner, builder, reviewer]).
+	const slug = "fa-test"
+	const tmp = mkdtempSync(join(tmpdir(), "haiku-fa-"))
+	const iDir = join(tmp, ".haiku", "intents", slug)
+	const unitsDir = join(iDir, "stages", "development", "units")
+	mkdirSync(unitsDir, { recursive: true })
+	writeFileSync(
+		join(iDir, "intent.md"),
+		matter.stringify("# t\n", {
+			title: "t",
+			studio: "software",
+			mode: "continuous",
+			stages: ["development"],
+		}),
+	)
+	writeFileSync(
+		join(unitsDir, "unit-07-closes-fb.md"),
+		matter.stringify("# u\n", {
+			title: "u",
+			closes: ["FB-001"],
+			iterations: [
+				adv("planner"),
+				adv("builder"),
+				adv("reviewer"),
+				adv("feedback-assessor"),
+			],
+		}),
+	)
+	const orig = process.cwd()
+	try {
+		process.chdir(tmp)
+		const { reconcileOrphanedHatSequences, resolveUnitHats } = await import(
+			`${SRC}/orchestrator/workflow/hat-sequence-migration.ts`
+		).then(async (m) => ({
+			...m,
+			resolveUnitHats: (await import(`${SRC}/state-tools.ts`)).resolveUnitHats,
+		}))
+
+		// A closes: unit's resolved sequence is just the stage hats — no assessor.
+		assert.deepStrictEqual(
+			resolveUnitHats(slug, "development", "unit-07-closes-fb"),
+			["planner", "builder", "reviewer"],
+			"feedback-assessor is NOT appended to a closes: unit",
+		)
+
+		const res = reconcileOrphanedHatSequences(slug)
+		assert.deepStrictEqual(res.reconciled, ["development/unit-07-closes-fb"])
+		const iters = itersOf(unitsDir, "unit-07-closes-fb")
+		assert.deepStrictEqual(
+			iters.map((i) => i.hat),
+			["planner", "builder", "reviewer"],
+			"the stale feedback-assessor iteration is stripped",
+		)
+	} finally {
+		try {
+			process.chdir(orig)
+		} catch {
+			process.chdir(tmpdir())
+		}
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})

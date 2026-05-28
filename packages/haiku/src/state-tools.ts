@@ -5050,33 +5050,29 @@ function findUnitFile(
 	return null
 }
 
-/** The built-in terminal hat auto-injected on any unit that declares `closes:`
- *  feedback items. Verifies the unit's output actually resolves each claim
- *  and marks them closed/addressed; rejects back to the designer if not. */
+/** The terminal hat of a fix-loop (`fix_hats:`). It verifies a fix landed and
+ *  stamps closure on the FEEDBACK item via `haiku_feedback_advance_hat`. It is
+ *  a FIX hat, used ONLY in fix loops — never a unit hat. */
 export const FEEDBACK_ASSESSOR_HAT = "feedback-assessor"
 
-/** Resolve the hat sequence for a specific unit. Starts from the stage's
- *  declared hats and appends `feedback-assessor` as the terminal hat when
- *  the unit has `closes:` references — so any unit claiming closures gets
- *  independently verified before completion. */
+/** Resolve the hat sequence for a unit. A unit runs exactly its stage's
+ *  declared `hats:` — plan-do-verify, nothing else. Feedback never happens
+ *  inside a unit's hat loop: it's filed at the approval stage and resolved by
+ *  the fix loop (whose terminal `feedback-assessor` stamps closure on the FB).
+ *
+ *  Earlier this appended `feedback-assessor` to any unit declaring `closes:`.
+ *  That put a FIX hat inside the unit loop for no benefit — in v4 the unit's
+ *  `closes:` is an informational breadcrumb only and does NOT close the FB (see
+ *  `haiku_unit_advance_hat`: "Feedback closure no longer happens here"). The
+ *  injection was vestigial; closure is, and always was in v4, the fix loop's
+ *  job. `reconcileOrphanedHatSequences` strips any stale `feedback-assessor`
+ *  iteration left on a unit, since it's no longer in this sequence. */
 export function resolveUnitHats(
 	intent: string,
 	stage: string,
-	unit: string,
+	_unit: string,
 ): string[] {
-	const stageHats = resolveStageHats(intent, stage)
-	try {
-		const p = unitPath(intent, stage, unit)
-		if (!existsSync(p)) return stageHats
-		const { data } = parseFrontmatter(readFileSync(p, "utf8"))
-		const closes = (data.closes as string[]) || []
-		if (closes.length > 0 && !stageHats.includes(FEEDBACK_ASSESSOR_HAT)) {
-			return [...stageHats, FEEDBACK_ASSESSOR_HAT]
-		}
-	} catch {
-		/* non-fatal */
-	}
-	return stageHats
+	return resolveStageHats(intent, stage)
 }
 
 /** Resolve hat sequence for a stage — used by haiku_unit_advance_hat and haiku_unit_reject_hat */

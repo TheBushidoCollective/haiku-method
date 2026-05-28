@@ -1,6 +1,7 @@
 ---
 name: design
 description: Visual and interaction design for user-facing surfaces
+optional: true
 hats: [designer-prep, designer, design-reviewer]
 fix_hats: [classifier, designer, feedback-assessor]
 review: [external, ask]

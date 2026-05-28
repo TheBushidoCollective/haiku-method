@@ -21,6 +21,7 @@ import {
 	HAIKU_AWAIT_GATE_INPUT_SCHEMA,
 	HAIKU_DEBUG_INPUT_SCHEMA,
 	HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA,
+	HAIKU_DROP_STAGE_INPUT_SCHEMA,
 	HAIKU_INTENT_CREATE_INPUT_SCHEMA,
 	HAIKU_INTENT_SEAL_INPUT_SCHEMA,
 	HAIKU_REVIEW_STAMP_INPUT_SCHEMA,
@@ -111,6 +112,12 @@ export const orchestratorToolDefs = [
 		description:
 			"Select the single stage for a quick-mode intent. Uses elicitation to present the studio's stage list. Refuses if the intent's mode is not `quick` or if a stage is already set.",
 		inputSchema: jsonSchemaOf(HAIKU_SELECT_STAGE_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_drop_stage",
+		description:
+			"Drop an OPTIONAL stage from an intent's plan when the elaborate-loop offered a keep-or-drop decision and this intent doesn't need the stage. Removes it from the plan so the next haiku_run_next advances. Only the active, not-yet-started stage can be dropped (drop_stage_not_active / drop_stage_not_optional / drop_stage_already_started).",
+		inputSchema: jsonSchemaOf(HAIKU_DROP_STAGE_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_intent_reset",

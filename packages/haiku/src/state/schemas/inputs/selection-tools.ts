@@ -100,3 +100,27 @@ export type HaikuSelectStageInput = Static<
 export const validateHaikuSelectStageInputSchema = stateAjv.compile(
 	HAIKU_SELECT_STAGE_INPUT_SCHEMA,
 )
+
+// haiku_drop_stage — drop an OPTIONAL stage from the intent's plan when the
+// cursor is actively on it (the keep-or-drop offer's "drop" path). Removes the
+// stage from intent.stages; the next tick advances. Refuses a non-active stage
+// (`drop_stage_not_active`), a non-optional stage (`drop_stage_not_optional`),
+// or a stage already started (`drop_stage_already_started`).
+export const HAIKU_DROP_STAGE_INPUT_SCHEMA = Type.Object(
+	{
+		intent: Type.String({
+			minLength: 1,
+			description: "Intent slug. Required.",
+		}),
+		stage: Type.String({
+			minLength: 1,
+			description:
+				"Name of the optional stage to drop. Must be the intent's active stage and not yet started.",
+		}),
+	},
+	{ additionalProperties: false },
+)
+export type HaikuDropStageInput = Static<typeof HAIKU_DROP_STAGE_INPUT_SCHEMA>
+export const validateHaikuDropStageInputSchema = stateAjv.compile(
+	HAIKU_DROP_STAGE_INPUT_SCHEMA,
+)

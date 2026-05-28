@@ -41,6 +41,8 @@ type ElaborateLoopAction = {
 	signals_unmet?: SignalEntry[]
 	verifier_nonces?: Record<string, string>
 	prompt_file?: string
+	optional_offer?: boolean
+	dependents?: Array<{ stage: string; inputs: string[]; reviewAgents: string[] }>
 	[key: string]: unknown
 }
 
@@ -155,6 +157,40 @@ export default definePromptBuilder((ctx) => {
 		? `## Elaborate Loop — \`${stage}\``
 		: "## Elaborate Loop — pre-intent"
 	sections.push(header)
+
+	// Optional-stage keep-or-drop offer (first arrival at an optional stage).
+	// Lead with the decision so it's settled before any elaborate work is done
+	// — a drop here skips this stage's entire elaborate/execute cost. Decision
+	// criteria only (does this intent need this phase?); the drop tool's return
+	// carries the next step. Keeping needs no action — just elaborate below.
+	if (parent.optional_offer && stage) {
+		const deps = parent.dependents ?? []
+		const severs =
+			deps.length === 0
+				? "Nothing downstream references this stage — dropping it severs no inputs or review agents."
+				: `Dropping it severs these downstream references (they auto-ignore once dropped, so downstream proceeds without them):\n${deps
+						.map((d) => {
+							const parts: string[] = []
+							if (d.inputs.length > 0)
+								parts.push(`inputs ${d.inputs.map((i) => `\`${i}\``).join(", ")}`)
+							if (d.reviewAgents.length > 0)
+								parts.push(
+									`review agents ${d.reviewAgents.map((a) => `\`${a}\``).join(", ")}`,
+								)
+							return `> - \`${d.stage}\` — ${parts.join("; ")}`
+						})
+						.join("\n")}`
+		sections.push(
+			[
+				`> **\`${stage}\` is an OPTIONAL stage.** It applies to some intents and not others. Decide whether THIS intent needs it before doing any elaboration work below:`,
+				">",
+				`> - **If it doesn't apply** to this intent's goals, drop it: \`haiku_drop_stage { intent: "${intentSlug}", stage: "${stage}" }\`. The plan advances to the next stage and this stage's elaborate/execute work is skipped entirely.`,
+				"> - **If it applies**, just proceed with the elaboration below — keeping the stage needs no separate action.",
+				">",
+				`> ${severs}`,
+			].join("\n"),
+		)
+	}
 
 	const signalList = signals
 		.map((s) =>

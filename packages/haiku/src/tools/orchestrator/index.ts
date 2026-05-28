@@ -17,6 +17,7 @@ import haiku_coverage_acknowledge from "./haiku_coverage_acknowledge.js"
 import haiku_debug from "./haiku_debug.js"
 import haiku_discovery_complete from "./haiku_discovery_complete.js"
 import haiku_dispatch_quality_gates from "./haiku_dispatch_quality_gates.js"
+import haiku_drop_stage from "./haiku_drop_stage.js"
 import haiku_human_write from "./haiku_human_write.js"
 import haiku_intent_archive from "./haiku_intent_archive.js"
 import haiku_intent_create from "./haiku_intent_create.js"
@@ -43,6 +44,7 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 			haiku_debug,
 			haiku_discovery_complete,
 			haiku_dispatch_quality_gates,
+			haiku_drop_stage,
 			haiku_human_write,
 			haiku_intent_archive,
 			haiku_intent_create,

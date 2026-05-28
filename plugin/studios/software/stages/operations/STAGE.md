@@ -1,6 +1,7 @@
 ---
 name: operations
 description: Deployment, monitoring, and operational readiness
+optional: true
 hats: [ops-engineer, sre, verifier]
 fix_hats: [classifier, ops-engineer, feedback-assessor]
 review: auto

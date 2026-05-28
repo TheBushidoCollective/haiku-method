@@ -70,9 +70,11 @@ import {
 } from "../../studio-reader.js"
 import { RUNTIME_OBSERVATION_ROLES } from "../review-role-classes.js"
 import {
+	computeStageDependents,
 	resolveIntentStages,
 	resolveStageFixHats,
 	resolveStageHats,
+	resolveStageOptional,
 	resolveStudioFixHats,
 } from "../studio.js"
 import { engineHandleDriftEvents } from "./drift-handle-events.js"
@@ -155,6 +157,20 @@ export type CursorAction =
 			kind: "elaborate_loop"
 			stage?: string
 			signals_unmet: ReadonlyArray<ElaborateLoopSignal>
+			// Set on the FIRST arrival at an OPTIONAL stage (no elaboration,
+			// no units): the elaborate prompt leads with a keep-or-drop offer.
+			// Dropping calls haiku_drop_stage; keeping just proceeds to
+			// elaborate (which is one-shot — once elaboration starts, the
+			// offer condition is false and never re-fires).
+			optional_offer?: boolean
+			// Downstream in-plan stages whose inputs / review-agents-include
+			// reference this stage — surfaced so the drop decision sees what
+			// it severs (those references auto-ignore once the stage drops).
+			dependents?: ReadonlyArray<{
+				stage: string
+				inputs: string[]
+				reviewAgents: string[]
+			}>
 	  }
 	| {
 			kind: "start_unit_hat"
@@ -1531,6 +1547,29 @@ function walkIntentTrack(args: {
 	})
 
 	if (signalsUnmet.length > 0) {
+		// First arrival at an OPTIONAL stage (nothing started yet): lead the
+		// elaborate prompt with a keep-or-drop offer. One-shot by construction
+		// — once elaboration.md or any unit exists, this condition is false, so
+		// keeping (proceeding to elaborate) naturally stops the offer. No FM
+		// bookkeeping; the on-disk elaboration/unit state IS the "decided"
+		// signal (outputs-are-the-signal).
+		if (
+			resolveStageOptional(studio, stage) &&
+			units.length === 0 &&
+			!existsSync(join(stageDir, "elaboration.md"))
+		) {
+			const planStages = resolveIntentStages(
+				readFm(join(intentDir, "intent.md"))?.data ?? {},
+				studio,
+			)
+			return {
+				kind: "elaborate_loop",
+				stage,
+				signals_unmet: signalsUnmet,
+				optional_offer: true,
+				dependents: computeStageDependents(studio, stage, planStages),
+			}
+		}
 		return { kind: "elaborate_loop", stage, signals_unmet: signalsUnmet }
 	}
 

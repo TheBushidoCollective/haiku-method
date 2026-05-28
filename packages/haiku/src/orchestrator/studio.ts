@@ -138,6 +138,76 @@ export function resolveStageHats(studio: string, stage: string): string[] {
 	return []
 }
 
+/** Read a stage's STAGE.md frontmatter (project override → plugin). */
+function readStageFrontmatter(
+	studio: string,
+	stage: string,
+): Record<string, unknown> {
+	const info = resolveStudio(studio)
+	const dir = info ? info.dir : studio
+	const pluginRoot = resolvePluginRoot()
+	for (const base of [
+		join(process.cwd(), ".haiku", "studios"),
+		join(pluginRoot, "studios"),
+	]) {
+		const stageFile = join(base, dir, "stages", stage, "STAGE.md")
+		if (existsSync(stageFile)) return readFrontmatter(stageFile)
+	}
+	return {}
+}
+
+/** Whether a stage is optional (STAGE.md `optional: true`). An optional
+ *  stage is offered for keep-or-drop the first time the cursor arrives at
+ *  it; dropping removes it from `intent.stages` via haiku_drop_stage. */
+export function resolveStageOptional(studio: string, stage: string): boolean {
+	return readStageFrontmatter(studio, stage).optional === true
+}
+
+/** Downstream in-plan stages that reference `stage` via their `inputs:` or
+ *  `review-agents-include:`. Drives the "what you're severing" summary shown
+ *  when an optional stage is offered for drop — so the decision isn't blind to
+ *  the cross-stage references the drop will auto-ignore. */
+export function computeStageDependents(
+	studio: string,
+	stage: string,
+	planStages: readonly string[],
+): Array<{ stage: string; inputs: string[]; reviewAgents: string[] }> {
+	const idx = planStages.indexOf(stage)
+	if (idx < 0) return []
+	const out: Array<{
+		stage: string
+		inputs: string[]
+		reviewAgents: string[]
+	}> = []
+	for (const ds of planStages.slice(idx + 1)) {
+		const fm = readStageFrontmatter(studio, ds)
+		const inputs = Array.isArray(fm.inputs)
+			? (
+					fm.inputs as Array<{
+						stage?: string
+						discovery?: string
+						output?: string
+					}>
+				)
+					.filter((i) => i.stage === stage)
+					.map((i) => i.discovery ?? i.output ?? "?")
+			: []
+		const reviewAgents = Array.isArray(fm["review-agents-include"])
+			? (
+					fm["review-agents-include"] as Array<{
+						stage?: string
+						agents?: string[]
+					}>
+				)
+					.filter((r) => r.stage === stage)
+					.flatMap((r) => (Array.isArray(r.agents) ? r.agents : []))
+			: []
+		if (inputs.length > 0 || reviewAgents.length > 0)
+			out.push({ stage: ds, inputs, reviewAgents })
+	}
+	return out
+}
+
 /** Read the ordered studio-level `fix_hats:` list (intent-scope fix
  *  loop). Source order: explicit `fix_hats:` on STUDIO.md frontmatter
  *  if present (so a studio can pin the chain), otherwise alphabetical

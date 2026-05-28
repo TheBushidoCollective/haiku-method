@@ -199,14 +199,17 @@ export {
 	validateHaikuReviewStampInputSchema,
 } from "./inputs/review-stamp.js"
 export type {
+	HaikuDropStageInput,
 	HaikuSelectModeInput,
 	HaikuSelectStageInput,
 	HaikuSelectStudioInput,
 } from "./inputs/selection-tools.js"
 export {
+	HAIKU_DROP_STAGE_INPUT_SCHEMA,
 	HAIKU_SELECT_MODE_INPUT_SCHEMA,
 	HAIKU_SELECT_STAGE_INPUT_SCHEMA,
 	HAIKU_SELECT_STUDIO_INPUT_SCHEMA,
+	validateHaikuDropStageInputSchema,
 	validateHaikuSelectModeInputSchema,
 	validateHaikuSelectStageInputSchema,
 	validateHaikuSelectStudioInputSchema,

@@ -4476,6 +4476,56 @@ export function setFrontmatterField(
 	)
 }
 
+/** One stage's PR/MR record inside the `stage_prs` map on intent.md FM.
+ *  Per-stage (NOT a flat `stage_pr_url`) because discrete mode opens one
+ *  draft PR per stage over the intent's life, and a flat field would
+ *  clobber across stages. `status` mirrors the intent-main draft lifecycle
+ *  ("draft" → "ready" | "failed"). Engine-written via setStagePrField;
+ *  deliberately NOT in INTENT_FIELDS (same as draft_pr_*) so it's not
+ *  tamper-checksummed — sealIntentState re-seals it cleanly. */
+export interface StagePrRecord {
+	url?: string
+	status?: "draft" | "ready" | "failed"
+	ready_at?: string
+}
+
+/** Read the whole `stage_prs` map (stage → record) off intent.md FM.
+ *  Empty object when absent or malformed. */
+export function readStagePrs(slug: string): Record<string, StagePrRecord> {
+	const intentFile = join(intentDir(slug), "intent.md")
+	if (!existsSync(intentFile)) return {}
+	const fm = parseFrontmatter(readFileSync(intentFile, "utf8")).data as Record<
+		string,
+		unknown
+	>
+	const map = fm.stage_prs
+	if (!map || typeof map !== "object" || Array.isArray(map)) return {}
+	return map as Record<string, StagePrRecord>
+}
+
+/** Read one stage's PR record, or null if the stage has none. */
+export function readStagePr(slug: string, stage: string): StagePrRecord | null {
+	return readStagePrs(slug)[stage] ?? null
+}
+
+/** Merge one field into a stage's record inside the `stage_prs` map and
+ *  write the whole map back. Read-modify-write of the nested map (not a
+ *  whole-map clobber by callers) so two fields set in sequence don't lose
+ *  each other. setFrontmatterField already serializes nested objects. */
+export function setStagePrField(
+	slug: string,
+	stage: string,
+	field: keyof StagePrRecord,
+	value: string,
+): void {
+	const intentFile = join(intentDir(slug), "intent.md")
+	if (!existsSync(intentFile)) return
+	const map = readStagePrs(slug)
+	const record = { ...(map[stage] ?? {}), [field]: value }
+	const updated = { ...map, [stage]: record }
+	setFrontmatterField(intentFile, "stage_prs", updated)
+}
+
 /** Remove one or more frontmatter fields from a markdown file. Unlike
  *  setFrontmatterField (which writes a value), this drops the key
  *  entirely so downstream readers don't see a stale empty/null. No-op
@@ -4596,11 +4646,30 @@ export function timestamp(): string {
  * unrelated staged work — and crucially never lands inside a state commit or a
  * merge-sensitive window. Best-effort — never throws.
  */
-export function ensureWorktreesGitignored(): void {
+/** The engine-managed `.gitignore` entries, each with the slash-free
+ *  variant we also accept so a hand-ignored repo isn't double-written.
+ *   - worktree pool: linked git worktrees, never commit (gitlink leak).
+ *   - proof dirs: runtime-verification evidence (screenshots, video) is
+ *     regenerated every run — binary churn that has no business in git
+ *     history. The verifier uploads it to the PR instead; the SPA reads
+ *     it live off disk. The ephemeral Playwright driver lives under
+ *     `proof/.driver/`, so the proof globs cover it too. */
+const HAIKU_GITIGNORE_PATTERNS: ReadonlyArray<{
+	entry: string
+	accept: ReadonlyArray<string>
+}> = [
+	{ entry: ".haiku/worktrees/", accept: [".haiku/worktrees"] },
+	{
+		entry: ".haiku/intents/*/stages/*/proof/",
+		accept: [".haiku/intents/*/stages/*/proof"],
+	},
+	{ entry: ".haiku/intents/*/proof/", accept: [".haiku/intents/*/proof"] },
+]
+
+export function ensureHaikuGitignored(): void {
 	if (!isGitRepo()) return
 	try {
 		const gitignorePath = join(primaryRepoRoot(), ".gitignore")
-		const entry = ".haiku/worktrees/"
 		let existing = ""
 		try {
 			if (existsSync(gitignorePath))
@@ -4608,20 +4677,30 @@ export function ensureWorktreesGitignored(): void {
 		} catch {
 			/* unreadable — fall through and (re)write */
 		}
-		// Accept the slash-free variant too so we don't double-write a repo
-		// that ignored `.haiku/worktrees` by hand.
-		const present = existing
+		const lines = existing
 			.split("\n")
 			.map((l) => l.trim())
-			.some((l) => l === entry || l === ".haiku/worktrees")
-		if (present) return
-		const banner =
-			"# H·AI·K·U engine worktree pool — each entry is a linked git worktree; never commit these."
+			.filter(Boolean)
+		const lineSet = new Set(lines)
+		const missing = HAIKU_GITIGNORE_PATTERNS.filter(
+			(p) => !lineSet.has(p.entry) && !p.accept.some((a) => lineSet.has(a)),
+		).map((p) => p.entry)
+		if (missing.length === 0) return
+		// Only emit the banner when no H·AI·K·U-managed line is present yet.
+		// A repo upgraded from the old worktree-only seeder already carries a
+		// banner above `.haiku/worktrees/`; appending a second one when we add
+		// the proof globs leaves two banners stacked (cosmetic, but messy on
+		// upgrade). When some patterns already exist, append just the missing
+		// lines under a short inline note instead.
+		const hasManagedLine = lines.some((l) => l.startsWith(".haiku/"))
+		const banner = hasManagedLine
+			? "# H·AI·K·U engine-managed (proof: regenerated binary churn — uploaded to the PR, never committed)"
+			: "# H·AI·K·U engine-managed: worktree pool (linked git worktrees) + runtime-verification proof (regenerated binary churn — uploaded to the PR, never committed)."
 		const prefix = existing && !existing.endsWith("\n") ? "\n" : ""
 		const separator = existing ? "\n" : ""
 		writeFileSync(
 			gitignorePath,
-			`${existing}${prefix}${separator}${banner}\n${entry}\n`,
+			`${existing}${prefix}${separator}${banner}\n${missing.join("\n")}\n`,
 		)
 		execFileSync("git", ["add", "--", ".gitignore"], {
 			encoding: "utf8",
@@ -4632,14 +4711,14 @@ export function ensureWorktreesGitignored(): void {
 			[
 				"commit",
 				"-m",
-				"chore(haiku): gitignore engine worktree pool (.haiku/worktrees/)",
+				`chore(haiku): gitignore engine artifacts (${missing.join(", ")})`,
 				"--",
 				".gitignore",
 			],
 			{ encoding: "utf8", stdio: "pipe" },
 		)
 	} catch {
-		/* non-fatal — worst case the user sees the worktree pool as untracked */
+		/* non-fatal — worst case the user sees the pool/proof as untracked */
 	}
 }
 
@@ -4655,7 +4734,7 @@ export function ensureWorktreesGitignored(): void {
  *
  * Defense in depth:
  *   1. The repo `.gitignore` excludes the worktree pool (written by
- *      `ensureWorktreesGitignored()` before any worktree is created), so the
+ *      `ensureHaikuGitignored()` before any worktree is created), so the
  *      bare `git add` below skips it natively. We do NOT use a
  *      `:(exclude).haiku/worktrees/**` pathspec: once the dir is ignored, that
  *      pathspec makes `git add` exit non-zero on git's ignored-path guard,
@@ -4728,7 +4807,7 @@ export function gitCommitAll(message: string): {
 	try {
 		// Stage every dirty path with `git add -A`. The worktree pool
 		// (`.haiku/worktrees/**`, linked-worktree trees) is kept out by the
-		// repo `.gitignore` — `ensureWorktreesGitignored()` writes that entry
+		// repo `.gitignore` — `ensureHaikuGitignored()` writes that entry
 		// before any worktree is ever created, so a bare add skips it
 		// natively. We deliberately do NOT pass a `:(exclude).haiku/worktrees/**`
 		// pathspec: once the dir is ignored, combining that exclude with the

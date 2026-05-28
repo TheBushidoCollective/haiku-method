@@ -569,7 +569,7 @@ export function payloadFor(
 			],
 			instructions: isAutopilot
 				? "Autopilot: cursor returns `complete_stage` directly. The engine merges the stage branch into intent main under `withIntentMainLock`."
-				: 'Cursor returns `user_gate { gate_kind: "approval" }`. `haiku_run_next` opens the SPA review session inline and blocks on `haiku_await_gate`. On approve, the cursor advances to `complete_stage`. On request_changes, engine writes feedback and Track B walks the fix loop. **In `discrete` mode, the user gate dispatches differently — the engine opens a real PR/MR for the stage branch and the merge into intent main IS the approval signal.**',
+				: 'Cursor returns `user_gate { gate_kind: "approval" }`. `haiku_run_next` opens the SPA review session inline and blocks on `haiku_await_gate`. On approve, the cursor advances to `complete_stage`. On request_changes, engine writes feedback and Track B walks the fix loop. **In `discrete` / `discrete-hybrid` mode, the user gate dispatches differently — a DRAFT stage PR was already opened at stage start (`stage_prs` map; base `haiku/<slug>/main`) and the gate FLIPS it draft→ready via `markPullRequestReady` (not a second PR); the merge into intent main IS the approval signal. That stage PR is also where the stage runtime-verifier uploaded its (gitignored) proof.**',
 		},
 		"gate-to-next-stage": {
 			injection: [

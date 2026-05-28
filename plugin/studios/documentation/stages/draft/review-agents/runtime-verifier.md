@@ -7,7 +7,7 @@ interpretation: lens
 
 ## Check
 
-Open a view session via `haiku_view({ stage: "draft" })`. When the project includes a docs site (Astro / Hugo / Docusaurus / Next.js etc.) with a `dev` script in package.json, `auto` mode boots it; navigate to each drafted page. Otherwise viewer mode renders each markdown file through the SPA's artifact browser. Call `browser_take_screenshot` for every page and assertion. **Save each screenshot** to disk under `.haiku/intents/<intent>/stages/draft/proof/<page-slug>-<viewport>.png` using the `Write` tool.
+Open a view session via `haiku_view({ stage: "draft" })`. When the project includes a docs site (Astro / Hugo / Docusaurus / Next.js etc.) with a `dev` script in package.json, `auto` mode boots it; navigate to each drafted page. Otherwise viewer mode renders each markdown file through the SPA's artifact browser. Drive the page from your Playwright script (per the runtime-verification doctrine — records video + screenshots) and screenshot every page and assertion into `.haiku/intents/<intent>/stages/draft/proof/` (e.g. `<page-slug>-<viewport>.png`). That `proof/` dir is gitignored — upload the captures to this stage's PR per the doctrine.
 
 The agent **MUST** verify each of the following:
 

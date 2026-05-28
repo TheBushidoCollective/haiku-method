@@ -18,7 +18,10 @@
 // self-stamp (`haiku_review_stamp`'s note); the pre-tick drain signs each
 // pending role (or re-dispatches the ones that filed findings).
 
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { Eta } from "eta"
+import { intentDir, parseFrontmatter } from "../../../../../state-tools.js"
 import {
 	readReviewAgentBody,
 	readStudioReviewAgentPaths,
@@ -55,6 +58,19 @@ const ENGINE_REVIEW_BODIES: Record<string, string> = {
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
 const SUBAGENT_TEMPLATE = loadTemplate(import.meta.url, "subagent.eta.md")
+
+/** The intent-main draft PR URL off intent.md FM, or empty string when
+ *  absent (no provider CLI / not a git repo). Proof upload is skipped on
+ *  empty — the captures still land on disk and the SPA serves them live. */
+function intentDraftPrUrl(slug: string): string {
+	const intentFile = join(intentDir(slug), "intent.md")
+	if (!existsSync(intentFile)) return ""
+	const fm = parseFrontmatter(readFileSync(intentFile, "utf8")).data as Record<
+		string,
+		unknown
+	>
+	return (fm.draft_pr_url as string) || ""
+}
 
 /** Fallback mandate for a role that's neither an engine built-in nor a
  *  configured studio agent — reached only on registry drift (a test locks
@@ -115,6 +131,11 @@ function buildRoleBlock(
 		}
 	}
 
+	const prInteraction = PR_INTERACTION_ROLES.has(role)
+	// At intent completion the whole intent is merged onto intent main, so
+	// proof uploads always target the single intent-main draft PR (there is
+	// no per-stage PR at this scope).
+	const proofTargetPrUrl = prInteraction ? intentDraftPrUrl(slug) : ""
 	const promptBody = mandateRef
 		? eta.renderString(SUBAGENT_TEMPLATE, {
 				slug,
@@ -123,7 +144,8 @@ function buildRoleBlock(
 				doctrineRef: RUNTIME_OBSERVATION_ROLES.has(role)
 					? sharedBlockRef("runtime-verification")
 					: "",
-				prInteraction: PR_INTERACTION_ROLES.has(role),
+				prInteraction,
+				proofTargetPrUrl,
 				existingFeedback: buildExistingFeedbackBlock(slug, ""),
 				decisions: buildDecisionsBlock(slug),
 			})

@@ -18,12 +18,18 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { Eta } from "eta"
 import matter from "gray-matter"
-import { stageDir } from "../../../../../state-tools.js"
+import {
+	intentDir,
+	parseFrontmatter,
+	readStagePr,
+	stageDir,
+} from "../../../../../state-tools.js"
 import {
 	readReviewAgentBody,
 	resolveReviewAgentPath,
 } from "../../../../../studio-reader.js"
 import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
+import { PER_STAGE_PR_MODES } from "../../../../workflow/delivery-modes.js"
 import {
 	buildDecisionsBlock,
 	buildExistingFeedbackBlock,
@@ -33,10 +39,31 @@ import {
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import {
+	PR_INTERACTION_ROLES,
 	RUNTIME_OBSERVATION_ROLES,
 	sharedBlockRef,
 } from "../../../_shared/index.js"
 import { definePromptBuilder } from "../../../define.js"
+
+/** The PR/MR a runtime-verifier uploads this stage's proof to. In
+ *  per-stage delivery modes that's the stage's own draft PR (base =
+ *  intent main); otherwise the single intent-main draft PR. Empty string
+ *  when no PR exists (no provider CLI / not a git repo) — the proof still
+ *  lands on disk and the SPA serves it live; upload is just skipped. */
+function resolveProofTargetPrUrl(slug: string, stage: string): string {
+	const intentFile = join(intentDir(slug), "intent.md")
+	if (!existsSync(intentFile)) return ""
+	const fm = parseFrontmatter(readFileSync(intentFile, "utf8")).data as Record<
+		string,
+		unknown
+	>
+	const mode = (fm.mode as string) || ""
+	if (stage && PER_STAGE_PR_MODES.has(mode)) {
+		const stagePr = readStagePr(slug, stage)?.url
+		if (stagePr) return stagePr
+	}
+	return (fm.draft_pr_url as string) || ""
+}
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
@@ -128,6 +155,10 @@ function buildRoleBlock(opts: {
 	const doctrineRef = RUNTIME_OBSERVATION_ROLES.has(role)
 		? sharedBlockRef("runtime-verification")
 		: ""
+	const prInteraction = PR_INTERACTION_ROLES.has(role)
+	const proofTargetPrUrl = prInteraction
+		? resolveProofTargetPrUrl(slug, stage)
+		: ""
 
 	const subagentPrompt = eta.renderString(SUBAGENT_TEMPLATE, {
 		slug,
@@ -138,6 +169,8 @@ function buildRoleBlock(opts: {
 		units,
 		outputPaths,
 		doctrineRef,
+		prInteraction,
+		proofTargetPrUrl,
 		existingFeedback: buildExistingFeedbackBlock(slug, stage),
 		decisions: buildDecisionsBlock(slug),
 	})

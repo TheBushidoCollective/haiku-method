@@ -262,7 +262,9 @@ export function GateDecisionBar({
 							: awaitActive
 								? "Engine is waiting on your decision. Approve to advance, or leave feedback to request changes."
 								: "No engine call is awaiting a decision right now. Leave feedback to force one on the next tick, or wait for the agent to drive back to a gate."
-						: `Type a comment above or click into another stage.`
+						: composer
+							? "Type a comment above to leave feedback on this stage. Only the active stage can be approved — select it to approve."
+							: "Open the feedback panel to leave a comment on this stage. Only the active stage can be approved — select it to approve."
 
 	return (
 		<>

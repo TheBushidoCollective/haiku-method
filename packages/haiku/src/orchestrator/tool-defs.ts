@@ -21,7 +21,10 @@ import {
 	HAIKU_AWAIT_GATE_INPUT_SCHEMA,
 	HAIKU_DEBUG_INPUT_SCHEMA,
 	HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA,
+	HAIKU_DROP_STAGE_INPUT_SCHEMA,
+	HAIKU_INTENT_CREATE_INPUT_SCHEMA,
 	HAIKU_INTENT_SEAL_INPUT_SCHEMA,
+	HAIKU_REVIEW_STAMP_INPUT_SCHEMA,
 	HAIKU_SELECT_MODE_INPUT_SCHEMA,
 	HAIKU_SELECT_STAGE_INPUT_SCHEMA,
 	HAIKU_SELECT_STUDIO_INPUT_SCHEMA,
@@ -29,6 +32,7 @@ import {
 	HAIKU_STAGE_ELABORATION_RECORD_INPUT_SCHEMA,
 	HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA,
 	HAIKU_STAGE_RESET_INPUT_SCHEMA,
+	HAIKU_UNIT_RESET_INPUT_SCHEMA,
 } from "../state/schemas/index.js"
 import { jsonSchemaOf } from "../state/schemas/inputs/_validate.js"
 
@@ -57,6 +61,16 @@ export const orchestratorToolDefs = [
 					type: "string",
 					description: "URL where stage was submitted for external review",
 				},
+				state_file: {
+					type: "string",
+					description:
+						"Override path to the engine state file (testing / foreign callers). Omit in normal use.",
+				},
+				pickup: {
+					type: "boolean" as const,
+					description:
+						"Set true when invoked from /haiku:haiku-pickup. The engine fetches origin and materializes the active stage branch locally so the user can `git switch` into in-flight work, then appends a pickup hint to the response.",
+				},
 			},
 		},
 	},
@@ -78,34 +92,8 @@ export const orchestratorToolDefs = [
 	{
 		name: "haiku_intent_create",
 		description:
-			'Create a new H·AI·K·U intent. Studio, mode, and (for quick) stage are selected separately via the engine-controlled elicitation chain (haiku_select_studio → haiku_select_mode → optional haiku_select_stage). You must provide BOTH a crisp `title` (3–8 words, ≤80 chars, single line, no trailing punctuation — e.g. "Add archivable intents") AND a richer `description` (2–5 sentences covering scope, motivation, and constraints). The title is NOT derived from the description — write it deliberately as a human-readable summary. The agent never sets `mode` or `stages` — those flow through elicitation tools so the user picks them.',
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				title: {
-					type: "string",
-					description:
-						'Short human-readable title (3–8 words, max 80 chars, single line, no trailing period). Must be a deliberate summary — NOT the first 80 chars of the description. Good: "Add archivable intents". Bad: "Add archivable intents to H·AI·K·U. Users need a way to soft-hide…".',
-				},
-				description: {
-					type: "string",
-					description:
-						"Full description of what the intent is about (2–5 sentences covering scope, motivation, and constraints). Stored verbatim in the intent body.",
-				},
-				slug: {
-					type: "string",
-					description:
-						"URL-friendly slug for the intent (auto-generated from title if not provided)",
-				},
-				context: {
-					type: "string",
-					description:
-						"Conversation context summary — highlights from the conversation that led to this intent",
-				},
-			},
-			required: ["title", "description"],
-			additionalProperties: false,
-		},
+			'Create a new H·AI·K·U intent. Studio, mode, and (for quick) stage are selected separately via the engine-controlled elicitation chain (haiku_select_studio → haiku_select_mode → optional haiku_select_stage). You must provide a crisp `title` (3–8 words, ≤80 chars, single line, no trailing punctuation — e.g. "Add archivable intents"), a richer `description` (2–5 sentences covering scope, motivation, and constraints), AND `studio_candidates` — the 2–4 studios (from `haiku_studio_list`) that best fit, which pre-narrow the studio picker so the user is not scrolling the whole registry. The title is NOT derived from the description — write it deliberately as a human-readable summary. The agent never sets `mode` or `stages` — those flow through elicitation tools so the user picks them.',
+		inputSchema: jsonSchemaOf(HAIKU_INTENT_CREATE_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_select_studio",
@@ -126,6 +114,12 @@ export const orchestratorToolDefs = [
 		inputSchema: jsonSchemaOf(HAIKU_SELECT_STAGE_INPUT_SCHEMA),
 	},
 	{
+		name: "haiku_drop_stage",
+		description:
+			"Drop an OPTIONAL stage from an intent's plan when the elaborate-loop offered a keep-or-drop decision and this intent doesn't need the stage. Removes it from the plan so the next haiku_run_next advances. Only the active, not-yet-started stage can be dropped (drop_stage_not_active / drop_stage_not_optional / drop_stage_already_started).",
+		inputSchema: jsonSchemaOf(HAIKU_DROP_STAGE_INPUT_SCHEMA),
+	},
+	{
 		name: "haiku_intent_reset",
 		description:
 			"Reset an intent — preserves the description, deletes all state, and recreates the intent from scratch. Asks for confirmation via elicitation before proceeding.",
@@ -142,6 +136,12 @@ export const orchestratorToolDefs = [
 		description:
 			"Reset ONE stage of an intent: wipe its units, outputs, artifacts, elaboration, feedback, and stage branch. The intent's other stages are untouched. Use after fixing the stage's hat instructions or studio config when the user wants the agent to re-run that stage cleanly. Requires user confirmation via the SPA picker.",
 		inputSchema: jsonSchemaOf(HAIKU_STAGE_RESET_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_unit_reset",
+		description:
+			"Reset ONE unit back to pending: clear its iterations/reviews/approvals so it can be re-authored or re-run, and discard its worktree + branch (rolling its in-progress code back to the stage baseline). Sibling units and the stage branch are untouched. Use when a unit hits the bolt cap or its spec premise was wrong from the start — the recovery path the escalation message points to. Requires user confirmation via the SPA picker.",
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_RESET_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_intent_archive",
@@ -167,33 +167,10 @@ export const orchestratorToolDefs = [
 			required: ["intent"],
 		},
 	},
-	{
-		name: "haiku_baseline_init",
-		description:
-			"Establish drift-detection baselines for an intent. Used by haiku_repair, the kill-switch re-arm flow, and the manual rollout path. 'establish-all' mode baselines every tracked file across all stages; 'establish-paths' mode baselines only the listed paths. Idempotent — files whose SHA already matches the stored baseline are skipped.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent_slug: {
-					type: "string",
-					description: "Slug of the intent to baseline.",
-				},
-				mode: {
-					type: "string",
-					enum: ["establish-all", "establish-paths"],
-					description:
-						"'establish-all': scan all tracked files for every stage. 'establish-paths': baseline only the listed paths.",
-				},
-				paths: {
-					type: "array",
-					items: { type: "string" },
-					description:
-						"Required when mode === 'establish-paths'. Paths relative to the intent directory to baseline.",
-				},
-			},
-			required: ["intent_slug", "mode"],
-		},
-	},
+	// v9: haiku_baseline_init removed. The premise-witness model has no
+	// baseline.json — witnesses live on the signed slot's FM, and there's
+	// nothing to "establish" out-of-band. The /haiku:haiku-repair flow loses
+	// its --confirm-baseline-reset path along with this tool.
 	{
 		name: "haiku_coverage_acknowledge",
 		description:
@@ -237,10 +214,16 @@ export const orchestratorToolDefs = [
 				units: {
 					type: "array",
 					items: { type: "string" },
-					description: "Unit names to run gates for",
+					description: "Unit names to run gates for (stage scope)",
+				},
+				scope: {
+					type: "string",
+					enum: ["intent", "stage"],
+					description:
+						"Which scope to run. Defaults to 'intent' when stage is empty, else 'stage'.",
 				},
 			},
-			required: ["intent", "stage", "units"],
+			required: ["intent"],
 		},
 	},
 	{
@@ -332,6 +315,12 @@ export const orchestratorToolDefs = [
 		description:
 			"Discovery subagent's completion hand-off. Merges the discovery worktree's branch back into its stage branch under a per-stage lock. Call AFTER committing your artifact inside the isolation worktree. Returns `{ ok: true }` on clean merge, `discovery_merge_conflict` with `conflict_files` on a real conflict, `discovery_merge_failed` with the git error on other failures, `intent_not_found` when the intent dir is missing, `worktree_not_found` when the discovery worktree doesn't exist (already merged or never created).",
 		inputSchema: jsonSchemaOf(HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_review_stamp",
+		description:
+			"Review/approval/intent-review subagent CLOSURE. Records your own `reviews.<role>` / `approvals.<role>` witness and returns a terminal ack — call this INSTEAD of `haiku_run_next` when you finish reviewing. `kind: review|approval` requires `stage`; `kind: intent_review` omits it. Returns `{ ok: true, stamped: [...], skipped: [...] }` (skipped = units you flagged with an open finding; they stay un-stamped so the cursor reroutes through them on close), or `{ ok: true, found: false }` when nothing was pending for your role (already stamped — clean no-op). Never walks the cursor and never returns a fix dispatch, so it can't trip the inter-tick loop guard.",
+		inputSchema: jsonSchemaOf(HAIKU_REVIEW_STAMP_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_record_agent_write",

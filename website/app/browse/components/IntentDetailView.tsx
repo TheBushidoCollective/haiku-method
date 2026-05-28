@@ -1,7 +1,9 @@
 "use client"
 
+import type { ProgressStep } from "@haiku/shared/progress-milestones"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { isBookkeepingArtifact, isV4Intent } from "@/lib/browse/intent-parsing"
 import type { ProviderLink } from "@/lib/browse/resolve-links"
 import { resolveLinks } from "@/lib/browse/resolve-links"
 import type {
@@ -20,7 +22,11 @@ import { buildBrowseUrl } from "@/lib/browse/url"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
 import { BrowseMarkdown } from "./BrowseMarkdown"
+import { FilePreview, isTextFile } from "./FilePreview"
+import { RESOLUTION_BADGES, SEVERITY_BADGES } from "./feedback-badges"
+import { FixHistory } from "./IterationHistory"
 import { IntentKanban } from "./KanbanView"
+import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
 import { UnitDetailView } from "./UnitDetailView"
 
 function titleCase(s: string): string {
@@ -30,6 +36,15 @@ function titleCase(s: string): string {
 		.join(" ")
 }
 
+/** Split a `unit-NNN-slug` name into a "Unit NNN" badge label + a
+ *  title-cased name. Falls back to the whole name title-cased when it
+ *  doesn't match the unit-number convention. */
+function splitUnitName(name: string): { badge: string | null; title: string } {
+	const m = name.match(/^unit-(\d+)-(.+)$/)
+	if (m) return { badge: `Unit ${m[1]}`, title: titleCase(m[2]) }
+	return { badge: null, title: titleCase(name) }
+}
+
 const stageStatusColors: Record<string, { bg: string; dot: string }> = {
 	complete: {
 		bg: "border-green-200 dark:border-green-900",
@@ -37,7 +52,7 @@ const stageStatusColors: Record<string, { bg: string; dot: string }> = {
 	},
 	active: {
 		bg: "border-teal-300 dark:border-teal-700",
-		dot: "bg-teal-500 animate-pulse",
+		dot: "bg-amber-500 animate-pulse",
 	},
 	pending: {
 		bg: "border-stone-200 dark:border-stone-700",
@@ -73,8 +88,12 @@ export function IntentDetailView({
 		unit: HaikuUnit
 		stage: string
 	} | null>(null)
+	// Land on the intent overview (pipeline, feedback, knowledge) rather than
+	// jumping straight into the active stage — only expand a stage when one is
+	// explicitly deep-linked. The active stage is one click away and carries
+	// the amber dot in the pipeline.
 	const [expandedStage, setExpandedStage] = useState<string | null>(
-		initialStage || intent.activeStage || null,
+		initialStage || null,
 	)
 	const stageRefs = useRef<Record<string, HTMLElement | null>>({})
 	const [viewMode, setViewMode] = useState<"pipeline" | "board">("pipeline")
@@ -188,6 +207,16 @@ export function IntentDetailView({
 		}
 	}
 
+	// Jump to the intent overview from anywhere inside it — deselect any unit
+	// and collapse the open stage so the pipeline + intent feedback show.
+	const handleBackToIntent = () => {
+		setSelectedUnit(null)
+		setExpandedStage(null)
+		if (hasPathNav) {
+			window.history.pushState({}, "", browseUrl())
+		}
+	}
+
 	const handleViewModeChange = (mode: "pipeline" | "board") => {
 		setViewMode(mode)
 	}
@@ -202,11 +231,15 @@ export function IntentDetailView({
 				unit={selectedUnit.unit}
 				stageName={selectedUnit.stage}
 				intentSlug={intent.slug}
+				intentTitle={intent.title}
+				intentMode={intent.mode}
+				schemaIsV4={isV4Intent(intent.raw)}
 				provider={provider}
 				assets={intent.assets}
 				host={host || undefined}
 				feedback={unitFeedback}
 				onBack={handleBackFromUnit}
+				onBackToIntent={handleBackToIntent}
 			/>
 		)
 	}
@@ -221,14 +254,34 @@ export function IntentDetailView({
 		<div
 			className={`mx-auto px-4 py-8 lg:py-12 ${viewMode === "board" ? "max-w-full" : "max-w-5xl"}`}
 		>
-			{/* Header */}
-			<button
-				type="button"
-				onClick={onBack}
-				className="mb-4 text-sm text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white"
-			>
-				&larr; Back to Portfolio
-			</button>
+			{/* Header breadcrumb — Portfolio › Intent › Stage. When a stage is
+			    expanded the intent title collapses back to the overview, so
+			    you're never stranded with only "Back to Portfolio". */}
+			<nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-stone-500 dark:text-stone-400">
+				<button
+					type="button"
+					onClick={onBack}
+					className="hover:text-stone-900 dark:hover:text-white"
+				>
+					&larr; Portfolio
+				</button>
+				{expandedStage && (
+					<>
+						<span className="text-stone-300 dark:text-stone-600">›</span>
+						<button
+							type="button"
+							onClick={handleBackToIntent}
+							className="hover:text-stone-900 dark:hover:text-white"
+						>
+							{intent.title}
+						</button>
+						<span className="text-stone-300 dark:text-stone-600">›</span>
+						<span className="text-stone-700 dark:text-stone-300">
+							{titleCase(expandedStage)}
+						</span>
+					</>
+				)}
+			</nav>
 
 			<header className="mb-8">
 				<h1 className="mb-2 text-3xl font-bold tracking-tight">
@@ -237,9 +290,25 @@ export function IntentDetailView({
 				<div className="flex flex-wrap gap-4 text-sm text-stone-500 dark:text-stone-400">
 					<span>
 						Studio:{" "}
-						<strong className="text-stone-700 dark:text-stone-300">
+						<a
+							href={`/studios/${intent.studio}/`}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="font-semibold text-teal-600 hover:underline dark:text-teal-400"
+							title={`Open the ${titleCase(intent.studio)} studio definition`}
+						>
 							{titleCase(intent.studio)}
-						</strong>
+							<span aria-hidden="true"> ↗</span>
+						</a>{" "}
+						<a
+							href={`/studios/${intent.studio}/architecture/`}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-xs text-stone-400 hover:text-teal-600 hover:underline dark:hover:text-teal-400"
+							title="Open the runtime architecture map"
+						>
+							(architecture)
+						</a>
 					</span>
 					<span>
 						Mode:{" "}
@@ -259,6 +328,24 @@ export function IntentDetailView({
 							{intent.status}
 						</strong>
 					</span>
+					{(() => {
+						// Total open feedback across every stage + intent scope, so
+						// you can see at a glance whether anything's outstanding
+						// without opening each stage.
+						const openFb = [
+							...intent.stages.flatMap((s) => s.feedback ?? []),
+							...(intent.intentFeedback ?? []),
+						].filter((f) => f.closedAt == null).length
+						if (openFb === 0) return null
+						return (
+							<span>
+								Feedback:{" "}
+								<strong className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+									{openFb} open
+								</strong>
+							</span>
+						)
+					})()}
 					{(() => {
 						// Schema indicator chip — mirrors the SPA's Schema
 						// badge. v4 stamps `plugin_version` on intent.md;
@@ -331,8 +418,22 @@ export function IntentDetailView({
 						</h2>
 						<div className="flex flex-wrap items-center gap-1">
 							{intent.stages.map((stage, i) => {
+								// The active stage (where the cursor sits) gets the amber
+								// "active" treatment even when its units haven't started
+								// yet — in pre-execute review a stage derives as "pending"
+								// (no started_at / iterations) though it IS the live stage.
+								const effectiveStatus =
+									stage.status === "complete"
+										? "complete"
+										: stage.name === intent.activeStage
+											? "active"
+											: stage.status
 								const colors =
-									stageStatusColors[stage.status] || stageStatusColors.pending
+									stageStatusColors[effectiveStatus] ||
+									stageStatusColors.pending
+								const openFb = (stage.feedback ?? []).filter(
+									(f) => f.closedAt == null,
+								).length
 								return (
 									<div key={stage.name} className="flex items-center">
 										<button
@@ -361,6 +462,14 @@ export function IntentDetailView({
 												<span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
 													{titleCase(stage.name)}
 												</span>
+												{openFb > 0 && (
+													<span
+														className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+														title={`${openFb} open feedback item${openFb !== 1 ? "s" : ""} in this stage`}
+													>
+														{openFb} feedback
+													</span>
+												)}
 											</div>
 											<div className="mt-0.5 text-xs text-stone-400">
 												{stage.units.length} unit
@@ -405,7 +514,10 @@ export function IntentDetailView({
 								>
 									<StageDetail
 										stage={expandedStageData}
+										provider={provider}
 										providerName={provider.name}
+										slug={intent.slug}
+										studio={intent.studio}
 										host={host || undefined}
 										project={location?.project || ""}
 										onSelectUnit={(unit) =>
@@ -417,8 +529,10 @@ export function IntentDetailView({
 							)
 						})()}
 
-					{/* Intent Content */}
-					{intent.content && (
+					{/* Intent Content — only render when no stage is expanded,
+					    so the stage view stays focused on the stage's units
+					    and feedback without the intent prose underneath. */}
+					{intent.content && !expandedStage && (
 						<section className="mb-8">
 							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
 								Intent Description
@@ -439,102 +553,98 @@ export function IntentDetailView({
 				</>
 			)}
 
-			{/* Intent-scope Approvals — surfaces the engine's
+			{/* Intent-overview sections — only on the overview, never under an
+			    expanded stage (the stage view stays scoped to its own units,
+			    artifacts, and stage feedback). */}
+			{!expandedStage && (
+				<>
+					{/* Intent-scope Approvals — surfaces the engine's
 			    intent-completion approval roles so a viewer can see
 			    which gates have signed (spec / continuity / user /
 			    intent_quality_gates plus any studio-defined intent-review
 			    roles). The engine writes these to intent.md.approvals
 			    when each completion gate fires. */}
-			{intent.intentApprovals && intent.intentApprovals.length > 0 && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Intent Approvals
-					</h2>
-					<IntentApprovalsCard approvals={intent.intentApprovals} />
-				</section>
-			)}
+					{intent.intentApprovals && intent.intentApprovals.length > 0 && (
+						<section className="mb-8">
+							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+								Intent Approvals
+							</h2>
+							<IntentApprovalsCard approvals={intent.intentApprovals} />
+						</section>
+					)}
 
-			{/* Intent-scope Feedback */}
-			{intent.intentFeedback && intent.intentFeedback.length > 0 && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Intent Feedback
-					</h2>
-					<FeedbackList
-						feedback={intent.intentFeedback}
-						scope="intent"
-						title={null}
-					/>
-				</section>
-			)}
+					{/* Intent-scope Feedback (with an All toggle that folds in stage FB) */}
+					<IntentFeedbackSection intent={intent} />
 
-			{/* Knowledge Artifacts */}
-			{intent.knowledge.length > 0 && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Knowledge Artifacts
-					</h2>
-					<div className="space-y-2">
-						{intent.knowledge.map((kf) => (
-							<KnowledgeFileCard
-								key={kf.name}
-								file={kf}
-								assets={intent.assets}
-								host={host || undefined}
-								basePath={`.haiku/intents/${intent.slug}/knowledge`}
-							/>
-						))}
-					</div>
-				</section>
-			)}
+					{/* Knowledge Artifacts */}
+					{intent.knowledge.length > 0 && (
+						<section className="mb-8">
+							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+								Knowledge Artifacts
+							</h2>
+							<div className="space-y-2">
+								{intent.knowledge.map((kf) => (
+									<KnowledgeFileCard
+										key={kf.name}
+										file={kf}
+										assets={intent.assets}
+										host={host || undefined}
+										basePath={`.haiku/intents/${intent.slug}/knowledge`}
+									/>
+								))}
+							</div>
+						</section>
+					)}
 
-			{/* Operations */}
-			{intent.operations.length > 0 && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Operations
-					</h2>
-					<div className="space-y-2">
-						{intent.operations.map((kf) => (
-							<KnowledgeFileCard
-								key={kf.name}
-								file={kf}
-								assets={intent.assets}
-								host={host || undefined}
-								basePath={`.haiku/intents/${intent.slug}/operations`}
-							/>
-						))}
-					</div>
-				</section>
-			)}
+					{/* Operations */}
+					{intent.operations.length > 0 && (
+						<section className="mb-8">
+							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+								Operations
+							</h2>
+							<div className="space-y-2">
+								{intent.operations.map((kf) => (
+									<KnowledgeFileCard
+										key={kf.name}
+										file={kf}
+										assets={intent.assets}
+										host={host || undefined}
+										basePath={`.haiku/intents/${intent.slug}/operations`}
+									/>
+								))}
+							</div>
+						</section>
+					)}
 
-			{/* Reflection */}
-			{intent.reflection && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Reflection
-					</h2>
-					<div className="rounded-xl border border-stone-200 p-6 dark:border-stone-700">
-						<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
-							<BrowseMarkdown
-								assets={intent.assets}
-								host={host || undefined}
-								basePath={`.haiku/intents/${intent.slug}`}
-							>
-								{intent.reflection}
-							</BrowseMarkdown>
-						</div>
-					</div>
-				</section>
-			)}
+					{/* Reflection */}
+					{intent.reflection && (
+						<section className="mb-8">
+							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+								Reflection
+							</h2>
+							<div className="rounded-xl border border-stone-200 p-6 dark:border-stone-700">
+								<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
+									<BrowseMarkdown
+										assets={intent.assets}
+										host={host || undefined}
+										basePath={`.haiku/intents/${intent.slug}`}
+									>
+										{intent.reflection}
+									</BrowseMarkdown>
+								</div>
+							</div>
+						</section>
+					)}
 
-			{/* Assets */}
-			{intent.assets.length > 0 && host && (
-				<AssetsSection
-					assets={intent.assets}
-					host={host}
-					onSelect={setLightboxAsset}
-				/>
+					{/* Assets */}
+					{intent.assets.length > 0 && host && (
+						<AssetsSection
+							assets={intent.assets}
+							host={host}
+							onSelect={setLightboxAsset}
+						/>
+					)}
+				</>
 			)}
 
 			{/* Asset Lightbox */}
@@ -752,11 +862,17 @@ function ArtifactFullscreenModal({
 	assets,
 	host,
 	onClose,
+	provider,
+	baseDir,
 }: {
 	artifact: HaikuArtifact
 	assets?: HaikuAsset[]
 	host?: string
 	onClose: () => void
+	/** When present, HTML artifacts render with relative assets (CSS/images)
+	 *  resolved against the provider; otherwise they fall back to raw srcDoc. */
+	provider?: BrowseProvider
+	baseDir?: string
 }) {
 	const handleKeyDown = useCallback(
 		(e: KeyboardEvent) => {
@@ -793,13 +909,25 @@ function ArtifactFullscreenModal({
 				    less trusted than SPA review content. allow-scripts is
 				    enough for the Tailwind CDN script the artifacts use;
 				    deliberately omitting allow-same-origin so a malicious
-				    artifact can't reach this page's origin. */}
-				<iframe
-					srcDoc={artifact.content}
-					title={artifact.name}
-					className="flex-1 border-0"
-					sandbox="allow-scripts"
-				/>
+				    artifact can't reach this page's origin. When the provider
+				    can resolve assets, relative CSS/images are inlined so a
+				    wireframe authored as index.html + ./styles.css renders. */}
+				{provider && baseDir ? (
+					<RenderedHtmlFrame
+						html={artifact.content}
+						baseDir={baseDir}
+						provider={provider}
+						title={artifact.name}
+						className="flex-1 border-0"
+					/>
+				) : (
+					<iframe
+						srcDoc={artifact.content}
+						title={artifact.name}
+						className="flex-1 border-0"
+						sandbox="allow-scripts"
+					/>
+				)}
 			</div>
 		)
 	}
@@ -935,10 +1063,14 @@ function ArtifactThumbnail({
 	artifact,
 	host,
 	onClick,
+	provider,
+	baseDir,
 }: {
 	artifact: HaikuArtifact
 	host?: string
 	onClick: () => void
+	provider?: BrowseProvider
+	baseDir?: string
 }) {
 	if (artifact.type === "html" && artifact.content) {
 		return (
@@ -950,15 +1082,31 @@ function ArtifactThumbnail({
 				<div className="relative aspect-[4/3] w-full overflow-hidden bg-white dark:bg-stone-900">
 					{/* See note in ArtifactFullscreenModal — sandbox is
 					    deliberately allow-scripts only (no allow-same-origin)
-					    because artifacts come from arbitrary remote repos. */}
-					<iframe
-						srcDoc={artifact.content}
-						title={artifact.name}
-						className="absolute inset-0 h-[300%] w-[300%] origin-top-left border-0"
+					    because artifacts come from arbitrary remote repos.
+					    Relative assets are inlined when the provider can
+					    resolve them so the preview matches the full render. */}
+					<div
+						className="absolute inset-0 h-[300%] w-[300%] origin-top-left"
 						style={{ transform: "scale(0.3333)", pointerEvents: "none" }}
-						tabIndex={-1}
-						sandbox="allow-scripts"
-					/>
+					>
+						{provider && baseDir ? (
+							<RenderedHtmlFrame
+								html={artifact.content}
+								baseDir={baseDir}
+								provider={provider}
+								title={artifact.name}
+								className="h-full w-full border-0"
+							/>
+						) : (
+							<iframe
+								srcDoc={artifact.content}
+								title={artifact.name}
+								className="h-full w-full border-0"
+								tabIndex={-1}
+								sandbox="allow-scripts"
+							/>
+						)}
+					</div>
 				</div>
 				<div className="border-t border-stone-100 px-3 py-2 dark:border-stone-800">
 					<p className="truncate text-xs font-medium text-stone-700 group-hover:text-teal-600 dark:text-stone-300 dark:group-hover:text-teal-400">
@@ -1023,92 +1171,333 @@ function ArtifactThumbnail({
 	return null
 }
 
-/** Renders a markdown artifact as collapsible with a fullscreen option. */
-function MarkdownArtifactCard({
-	artifact,
-	assets,
-	host,
-}: {
-	artifact: HaikuArtifact
-	assets?: HaikuAsset[]
-	host?: string
-}) {
-	const [expanded, setExpanded] = useState(false)
-	const [fullscreen, setFullscreen] = useState(false)
 
+/** Group a stage's artifacts by their top-level directory (`proof`, `artifacts`,
+ *  …). Files that sit directly at the stage root (no slash in the name) land in
+ *  the `(other)` group. Groups are sorted by name with `(other)` last so the
+ *  catch-all reads as a footer, not a lead. */
+function groupArtifactsByDir(
+	artifacts: HaikuArtifact[],
+): Array<{ dir: string; artifacts: HaikuArtifact[] }> {
+	const byDir = new Map<string, HaikuArtifact[]>()
+	for (const a of artifacts) {
+		const slash = a.name.indexOf("/")
+		const dir = slash >= 0 ? a.name.slice(0, slash) : "(other)"
+		const list = byDir.get(dir)
+		if (list) list.push(a)
+		else byDir.set(dir, [a])
+	}
+	return Array.from(byDir.entries())
+		.map(([dir, list]) => ({ dir, artifacts: list }))
+		.sort((x, y) => {
+			if (x.dir === "(other)") return 1
+			if (y.dir === "(other)") return -1
+			return x.dir.localeCompare(y.dir)
+		})
+}
+
+/** One per-directory section of stage files. Image/HTML files render as a
+ *  clickable thumbnail grid (opening the existing fullscreen modal); everything
+ *  else renders inline via the type-dispatching FilePreview. */
+function StageDirSection({
+	dir,
+	artifacts,
+	host,
+	provider,
+	assets,
+	baseDir,
+	onOpenFullscreen,
+}: {
+	dir: string
+	artifacts: HaikuArtifact[]
+	host?: string
+	provider?: BrowseProvider
+	assets?: HaikuAsset[]
+	baseDir: (name: string) => string
+	onOpenFullscreen: (a: HaikuArtifact) => void
+}) {
+	const thumbnails = artifacts.filter(
+		(a) => a.type === "image" || (a.type === "html" && a.content),
+	)
+	const inline = artifacts.filter((a) => !thumbnails.includes(a))
 	return (
-		<>
-			<div className="rounded-lg border border-stone-200 dark:border-stone-700">
-				<div className="flex w-full items-center justify-between px-4 py-3 text-left text-sm">
-					<button
-						type="button"
-						onClick={() => setExpanded(!expanded)}
-						className="flex flex-1 items-center gap-2 hover:text-stone-900 dark:hover:text-stone-100"
-					>
-						<svg
-							className={`h-4 w-4 text-stone-400 transition ${expanded ? "rotate-180" : ""}`}
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-							aria-hidden="true"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M19 9l-7 7-7-7"
-							/>
-						</svg>
-						<span className="font-mono text-stone-600 dark:text-stone-400">
-							{artifact.name}
-						</span>
-					</button>
-					<button
-						type="button"
-						onClick={() => setFullscreen(true)}
-						className="ml-2 rounded px-2 py-1 text-xs text-stone-500 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-300"
-					>
-						Full Screen
-					</button>
-				</div>
-				{expanded && (
-					<div className="border-t border-stone-100 px-4 py-4 dark:border-stone-800">
-						<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
-							<BrowseMarkdown assets={assets} host={host}>
-								{artifact.content || "(empty)"}
-							</BrowseMarkdown>
-						</div>
-					</div>
-				)}
+		<div className="space-y-2">
+			<div className="flex items-center gap-2">
+				<span className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[11px] text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+					{dir === "(other)" ? "(other)" : `${dir}/`}
+				</span>
+				<span className="text-[11px] text-stone-400">
+					{artifacts.length} file{artifacts.length === 1 ? "" : "s"}
+				</span>
 			</div>
-			{fullscreen && (
-				<ArtifactFullscreenModal
-					artifact={artifact}
-					assets={assets}
-					host={host}
-					onClose={() => setFullscreen(false)}
-				/>
+			{thumbnails.length > 0 && (
+				<div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+					{thumbnails.map((artifact) => (
+						<ArtifactThumbnail
+							key={artifact.name}
+							artifact={artifact}
+							host={host}
+							provider={provider}
+							baseDir={baseDir(artifact.name)}
+							onClick={() => onOpenFullscreen(artifact)}
+						/>
+					))}
+				</div>
 			)}
-		</>
+			{inline.map((artifact) => (
+				<CollapsibleFile
+					key={artifact.name}
+					name={artifact.name}
+					content={artifact.content}
+					rawUrl={artifact.rawUrl}
+					host={host}
+					assets={assets}
+					provider={provider}
+					baseDir={baseDir(artifact.name)}
+				/>
+			))}
+		</div>
 	)
 }
 
-/** Renders an "other" artifact type as a simple row. */
-function OtherArtifactCard({ artifact }: { artifact: HaikuArtifact }) {
+/** A collapsible row that previews any single file by type when expanded.
+ *  Used for both stage files and unit outputs. Header shows the name; the
+ *  body lazy-renders only once opened so a stage with many files stays light. */
+function CollapsibleFile({
+	name,
+	content,
+	rawUrl,
+	host,
+	assets,
+	provider,
+	baseDir,
+}: {
+	name: string
+	content?: string | null
+	rawUrl?: string | null
+	host?: string
+	assets?: HaikuAsset[]
+	provider?: BrowseProvider
+	baseDir?: string
+}) {
+	const [open, setOpen] = useState(false)
 	return (
-		<div className="rounded-lg border border-stone-200 px-4 py-3 dark:border-stone-700">
-			<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
-				{artifact.name}
-			</span>
-			{artifact.rawUrl && (
-				<a
-					href={artifact.rawUrl}
-					target="_blank"
-					rel="noopener noreferrer"
-					className="ml-2 text-xs text-teal-600 hover:underline dark:text-teal-400"
-				>
-					Download
-				</a>
+		<div className="rounded-lg border border-stone-200 dark:border-stone-700">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left"
+			>
+				<span className="truncate font-mono text-xs text-stone-600 dark:text-stone-400">
+					{name}
+				</span>
+				<span className="text-stone-400">{open ? "▾" : "▸"}</span>
+			</button>
+			{open && (
+				<div className="border-t border-stone-100 p-4 dark:border-stone-800">
+					<FilePreview
+						name={name}
+						content={content}
+						rawUrl={rawUrl}
+						host={host}
+						assets={assets}
+						provider={provider}
+						baseDir={baseDir}
+					/>
+				</div>
+			)}
+		</div>
+	)
+}
+
+/** The stage's unit outputs. Collects the union of every unit's `outputs:`
+ *  frontmatter, dedupes, and previews each one — lazily fetching the file's
+ *  bytes from the provider on expand. Each row links the unit(s) that declared
+ *  the output, so a viewer can trace a deliverable back to its producing unit.
+ *  Text files preview inline (syntax-highlighted); binaries resolve to a media
+ *  URL via the provider. */
+function UnitOutputsSection({
+	units,
+	host,
+	provider,
+	slug,
+}: {
+	units: HaikuUnit[]
+	host?: string
+	provider?: BrowseProvider
+	slug: string
+}) {
+	// path → set of unit names that declare it
+	const byOutput = new Map<string, string[]>()
+	for (const u of units) {
+		for (const out of u.outputs ?? []) {
+			if (typeof out !== "string" || !out.trim()) continue
+			// Engine bookkeeping (action-log.jsonl, decisions.jsonl, …) is not a
+			// user-facing deliverable — hide it from the outputs list.
+			if (isBookkeepingArtifact(out)) continue
+			const list = byOutput.get(out)
+			if (list) {
+				if (!list.includes(u.name)) list.push(u.name)
+			} else {
+				byOutput.set(out, [u.name])
+			}
+		}
+	}
+	const outputs = Array.from(byOutput.entries()).sort((a, b) =>
+		a[0].localeCompare(b[0]),
+	)
+	if (outputs.length === 0) return null
+
+	return (
+		<div className="space-y-2">
+			<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+				Unit Outputs
+			</h4>
+			<p className="-mt-1 text-[11px] text-stone-400">
+				Deliverables this stage's units declared in their{" "}
+				<code className="font-mono">outputs:</code> frontmatter. Expand to
+				preview; each is linked to the unit(s) that produced it.
+			</p>
+			{outputs.map(([path, unitNames]) => (
+				<LazyOutputPreview
+					key={path}
+					path={path}
+					unitNames={unitNames}
+					host={host}
+					provider={provider}
+					slug={slug}
+				/>
+			))}
+		</div>
+	)
+}
+
+/** A single unit-output row. Fetches the file's content (text) or a media URL
+ *  (binary) from the provider the first time it's expanded, then renders it via
+ *  FilePreview. Read failures (e.g. the output lives on a branch the provider
+ *  can't see, or hasn't been produced yet) surface a plain "couldn't load" note
+ *  rather than a blank. */
+function LazyOutputPreview({
+	path,
+	unitNames,
+	host,
+	provider,
+	slug,
+}: {
+	path: string
+	unitNames: string[]
+	host?: string
+	provider?: BrowseProvider
+	slug: string
+}) {
+	const [open, setOpen] = useState(false)
+	const [state, setState] = useState<{
+		loading: boolean
+		content: string | null
+		rawUrl: string | null
+		error: string | null
+	}>({ loading: false, content: null, rawUrl: null, error: null })
+	// One-shot fetch latch. Must NOT live in the effect deps: an earlier
+	// version keyed the effect on `state.loading`, so flipping it to `true`
+	// re-ran the effect, whose cleanup cancelled the in-flight read — the
+	// fetch never resolved and the row hung on "Loading…" forever (only
+	// surfaced with a real provider whose readFile is slow enough to lose the
+	// race; a fast fake provider resolved before the re-run, hiding the bug).
+	const startedRef = useRef(false)
+
+	useEffect(() => {
+		if (!open || startedRef.current || !provider) return
+		startedRef.current = true
+		setState((s) => ({ ...s, loading: true }))
+		// An `outputs:` path is either a project-tree path (repo-root-relative,
+		// e.g. `web/apps/.../WorkerDates.tsx`) or intent-relative (resolved
+		// against the intent dir, e.g. `stages/<stage>/artifacts/plan.md`,
+		// `action-log.jsonl`). Try it as-is first, then under the intent dir.
+		const candidates = path.startsWith(".haiku/")
+			? [path]
+			: [path, `.haiku/intents/${slug}/${path}`]
+		;(async () => {
+			try {
+				if (isTextFile(path)) {
+					let text: string | null = null
+					for (const c of candidates) {
+						text = await provider.readFile(c)
+						if (text != null) break
+					}
+					setState({
+						loading: false,
+						content: text,
+						rawUrl: null,
+						error:
+							text == null
+								? "Declared in the unit's outputs, but no file is on disk yet — it may not have been produced, or lives on a branch this view can't reach."
+								: null,
+					})
+				} else {
+					let url: string | null = null
+					if (provider.resolveAssetUrl) {
+						for (const c of candidates) {
+							url = await provider.resolveAssetUrl(c)
+							if (url != null) break
+						}
+					}
+					setState({
+						loading: false,
+						content: null,
+						rawUrl: url,
+						error:
+							url == null
+								? "Declared in the unit's outputs, but no file is on disk yet — it may not have been produced, or lives on a branch this view can't reach."
+								: null,
+					})
+				}
+			} catch (e) {
+				setState({
+					loading: false,
+					content: null,
+					rawUrl: null,
+					error: e instanceof Error ? e.message : "Failed to load.",
+				})
+			}
+		})()
+	}, [open, provider, path, slug])
+
+	return (
+		<div className="rounded-lg border border-stone-200 dark:border-stone-700">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left"
+			>
+				<span className="truncate font-mono text-xs text-stone-600 dark:text-stone-400">
+					{path}
+				</span>
+				<span className="flex items-center gap-2">
+					<span className="text-[10px] text-stone-400">
+						{unitNames.length === 1
+							? unitNames[0]
+							: `${unitNames.length} units`}
+					</span>
+					<span className="text-stone-400">{open ? "▾" : "▸"}</span>
+				</span>
+			</button>
+			{open && (
+				<div className="border-t border-stone-100 p-4 dark:border-stone-800">
+					{state.loading && (
+						<p className="text-xs text-stone-400">Loading…</p>
+					)}
+					{!state.loading && state.error && (
+						<p className="text-xs text-stone-400">{state.error}</p>
+					)}
+					{!state.loading && !state.error && (
+						<FilePreview
+							name={path}
+							content={state.content}
+							rawUrl={state.rawUrl}
+							host={host}
+						/>
+					)}
+				</div>
 			)}
 		</div>
 	)
@@ -1139,8 +1528,7 @@ function IntentApprovalsCard({
 		},
 		user: {
 			label: "User",
-			tooltip:
-				"User approval — the human signs off on the intent as a whole.",
+			tooltip: "User approval — the human signs off on the intent as a whole.",
 		},
 		intent_quality_gates: {
 			label: "Intent quality gates",
@@ -1154,10 +1542,7 @@ function IntentApprovalsCard({
 				const meta = ENGINE_ROLES[a.role]
 				const isDerived = a.role === "intent_quality_gates"
 				return (
-					<div
-						key={a.role}
-						className="flex items-center justify-between gap-3"
-					>
+					<div key={a.role} className="flex items-center justify-between gap-3">
 						<div className="flex items-center gap-2">
 							<span
 								className={`rounded-full w-2 h-2 ${
@@ -1254,19 +1639,36 @@ function phaseChipClass(phase: string): string {
 
 function StageDetail({
 	stage,
+	provider,
 	providerName,
+	slug,
+	studio,
 	host,
 	project,
 	onSelectUnit,
 	assets,
 }: {
 	stage: HaikuStageState
+	provider: BrowseProvider
 	providerName: string
+	slug: string
+	/** Studio slug — links the stage to its definition in the studio browser. */
+	studio: string
 	host?: string
 	project?: string
 	onSelectUnit: (u: HaikuUnit) => void
 	assets?: HaikuAsset[]
 }) {
+	// Repo-root-relative dir a given artifact lives in; relative refs inside an
+	// HTML output (./styles.css, ./img/x.png) resolve against it. Artifact
+	// names are stage-relative paths (`artifacts/foo.html`, `proof/x.png`), so
+	// derive the base from the name's own directory rather than assuming
+	// `artifacts/` — a proof/ HTML or a nested artifact resolves correctly.
+	const stageRoot = `.haiku/intents/${slug}/stages/${stage.name}`
+	const artifactBaseDir = (name: string): string => {
+		const slash = name.lastIndexOf("/")
+		return slash >= 0 ? `${stageRoot}/${name.slice(0, slash + 1)}` : `${stageRoot}/`
+	}
 	const hasUnits = stage.units.length > 0
 	const hasArtifacts = (stage.artifacts?.length ?? 0) > 0
 	const hasFeedback = (stage.feedback?.length ?? 0) > 0
@@ -1281,17 +1683,6 @@ function StageDetail({
 		merged: "Merged",
 		closed: "Closed",
 	}
-
-	// Split artifacts into thumbnailable (html/image) and non-thumbnailable (markdown/other)
-	const thumbnailArtifacts =
-		stage.artifacts?.filter((a) => a.type === "html" || a.type === "image") ??
-		[]
-	const markdownArtifacts =
-		stage.artifacts?.filter((a) => a.type === "markdown") ?? []
-	const otherArtifacts =
-		stage.artifacts?.filter(
-			(a) => a.type !== "html" && a.type !== "image" && a.type !== "markdown",
-		) ?? []
 
 	if (!(hasUnits || hasArtifacts || hasFeedback)) {
 		return (
@@ -1313,12 +1704,43 @@ function StageDetail({
 
 	return (
 		<div className="space-y-4">
+			{/* Phase stepper — mirrors the SPA's stage-banner stepper so
+			    the user can see WHICH phase the stage is currently in at
+			    a glance, not just whether it's awaiting approval. */}
+			<PhaseStepper
+				phase={stage.phase}
+				stageStatus={stage.status}
+				milestones={stage.milestones}
+			/>
 			{/* Stage header with branch/PR info */}
 			<div className="flex flex-wrap items-center gap-3">
 				<h3 className="text-sm font-semibold text-stone-600 dark:text-stone-300">
 					{titleCase(stage.name)} — {stage.units.length} unit
 					{stage.units.length !== 1 ? "s" : ""}
 				</h3>
+				<a
+					href={`/studios/${studio}/stages/${stage.name}/`}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="inline-flex items-center gap-1 rounded bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-500 transition hover:bg-teal-100 hover:text-teal-700 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-teal-900/30 dark:hover:text-teal-300"
+					title={`Open the ${titleCase(stage.name)} stage definition in the studio browser`}
+				>
+					<svg
+						className="h-3 w-3"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						aria-hidden="true"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={2}
+							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</svg>
+					Definition
+				</a>
 				{stage.prUrl && stage.prStatus && (
 					<a
 						href={stage.prUrl}
@@ -1386,6 +1808,27 @@ function StageDetail({
 					</span>
 				)}
 			</div>
+			{/* Per-stage BRIEF — the briefer's plain-language summary, shown
+			    first so a reviewer reads the human-facing framing before the
+			    units. */}
+			{stage.brief && (
+				<div className="space-y-2">
+					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+						Brief
+					</h4>
+					<div className="rounded-xl border border-stone-200 p-5 dark:border-stone-700">
+						<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
+							<BrowseMarkdown
+								assets={assets}
+								host={host}
+								basePath={`.haiku/intents/${slug}/stages/${stage.name}`}
+							>
+								{stage.brief}
+							</BrowseMarkdown>
+						</div>
+					</div>
+				</div>
+			)}
 			{hasUnits && (
 				<div className="space-y-3">
 					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
@@ -1407,9 +1850,21 @@ function StageDetail({
 								>
 									<div className="flex items-center justify-between">
 										<div className="flex items-center gap-3">
-											<span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-												{titleCase(unit.name)}
-											</span>
+											{(() => {
+												const { badge, title } = splitUnitName(unit.name)
+												return (
+													<div className="flex items-center gap-2 min-w-0">
+														{badge && (
+															<span className="flex-shrink-0 rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[10px] font-medium text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+																{badge}
+															</span>
+														)}
+														<span className="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">
+															{title}
+														</span>
+													</div>
+												)
+											})()}
 											<span
 												className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${unitStatusColors[unit.status] || unitStatusColors.pending}`}
 											>
@@ -1444,42 +1899,58 @@ function StageDetail({
 				title="Stage Feedback"
 			/>
 			{hasArtifacts && (
-				<div className="space-y-3">
+				<div className="space-y-4">
 					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-						Stage Artifacts
+						Stage Files
 					</h4>
-					<p className="-mt-1 text-[11px] text-stone-400">
-						Files under{" "}
-						<code className="font-mono">stages/{stage.name}/artifacts/</code> —
-						declared outputs, discovery inputs from upstream stages, and other
-						working files.
+					<p className="-mt-2 text-[11px] text-stone-400">
+						Everything under{" "}
+						<code className="font-mono">stages/{stage.name}/</code> the engine
+						doesn't manage as units or feedback — declared artifacts, runtime
+						verifier <code className="font-mono">proof/</code>, and any working
+						files — grouped by directory.
 					</p>
-					{/* Thumbnail grid for HTML and Image artifacts */}
-					{thumbnailArtifacts.length > 0 && (
-						<div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-							{thumbnailArtifacts.map((artifact) => (
-								<ArtifactThumbnail
-									key={artifact.name}
-									artifact={artifact}
-									host={host}
-									onClick={() => setFullscreenArtifact(artifact)}
-								/>
-							))}
-						</div>
-					)}
-					{/* Collapsible markdown artifacts */}
-					{markdownArtifacts.map((artifact) => (
-						<MarkdownArtifactCard
-							key={artifact.name}
-							artifact={artifact}
-							assets={assets}
+					{groupArtifactsByDir(stage.artifacts ?? []).map((group) => (
+						<StageDirSection
+							key={group.dir}
+							dir={group.dir}
+							artifacts={group.artifacts}
 							host={host}
+							provider={provider}
+							assets={assets}
+							baseDir={artifactBaseDir}
+							onOpenFullscreen={setFullscreenArtifact}
 						/>
 					))}
-					{/* Other artifacts — simple row */}
-					{otherArtifacts.map((artifact) => (
-						<OtherArtifactCard key={artifact.name} artifact={artifact} />
-					))}
+				</div>
+			)}
+			{/* Unit outputs — every path the stage's units declare in their
+			    `outputs:` frontmatter, previewed by type and linked to the
+			    unit(s) that produced them. */}
+			<UnitOutputsSection
+				units={stage.units}
+				host={host}
+				provider={provider}
+				slug={slug}
+			/>
+			{/* Per-stage OBSERVATIONS — the agent's free-form reflection
+			    written at stage close. Shown last; it's a retrospective. */}
+			{stage.observations && (
+				<div className="space-y-2">
+					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+						Observations
+					</h4>
+					<div className="rounded-xl border border-stone-200 p-5 dark:border-stone-700">
+						<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
+							<BrowseMarkdown
+								assets={assets}
+								host={host}
+								basePath={`.haiku/intents/${slug}/stages/${stage.name}`}
+							>
+								{stage.observations}
+							</BrowseMarkdown>
+						</div>
+					</div>
 				</div>
 			)}
 			{/* Fullscreen modal for thumbnail artifacts */}
@@ -1488,6 +1959,8 @@ function StageDetail({
 					artifact={fullscreenArtifact}
 					assets={assets}
 					host={host}
+					provider={provider}
+					baseDir={artifactBaseDir(fullscreenArtifact.name)}
 					onClose={() => setFullscreenArtifact(null)}
 				/>
 			)}
@@ -1498,6 +1971,335 @@ function StageDetail({
 /** Compact list of feedback annotations. Each card is collapsed by default;
  *  clicking reveals the body. Distinguishes user-authored (amber) vs
  *  agent-authored (stone) and shows closed-state with strikethrough title. */
+// Mirrors the SPA's stage-banner phase stepper. Browse-side phases:
+// elaborate → execute → review → approve. The derivation in
+// `intent-parsing.ts` already maps the engine's legacy "gate" name
+// to "approve" so the order matches the canonical 5-phase model
+// (architecture §2.1) minus the terminal "complete" pip.
+const STAGE_PHASE_ORDER: ReadonlyArray<
+	"elaborate" | "execute" | "review" | "approve"
+> = ["elaborate", "execute", "review", "approve"]
+const PHASE_LABELS: Record<(typeof STAGE_PHASE_ORDER)[number], string> = {
+	elaborate: "Elaborate",
+	execute: "Execute",
+	review: "Review",
+	approve: "Approve",
+}
+const PHASE_HINTS: Record<(typeof STAGE_PHASE_ORDER)[number], string> = {
+	elaborate: "Hats plan unit files for the stage.",
+	execute: "Hats land code and artifacts for each unit.",
+	review: "Adversarial agents and quality gates audit the work.",
+	approve: "Final gate. Human or external approval, depending on mode.",
+}
+
+function PhaseStepper({
+	phase,
+	stageStatus,
+	milestones,
+}: {
+	phase:
+		| string
+		| "elaborate"
+		| "execute"
+		| "review"
+		| "approve"
+		| "complete"
+		| ""
+	stageStatus: string
+	/** Granular per-stage milestone track (elaborate → each review role →
+	 *  execute → each approval role), derived browse-side from per-unit FM.
+	 *  When present and non-empty the stepper renders one bubble per
+	 *  milestone instead of the coarse four-phase strip; falls back when
+	 *  absent (legacy state.json stages, no units). */
+	milestones?: ProgressStep[]
+}) {
+	const isStageComplete =
+		stageStatus === "completed" || stageStatus === "complete"
+
+	// ── Granular track ────────────────────────────────────────────────
+	// Labels arrive pre-worded from the shared builder ("spec review",
+	// "quality gates"); we don't re-derive them. Small dots (not the
+	// numbered bubbles the coarse strip uses) so an 8–12 milestone stage
+	// stays compact, with the active milestone's label after the count.
+	if (milestones && milestones.length > 0) {
+		const total = milestones.length
+		const ai = milestones.findIndex((m) => m.status === "active")
+		const allDone = isStageComplete || ai < 0
+		const activeLabel = !allDone ? milestones[ai]?.label : undefined
+		const groupAriaLabel = allDone
+			? "All milestones complete"
+			: `Milestone ${ai + 1} of ${total}`
+		return (
+			// biome-ignore lint/a11y/useSemanticElements: role=group on a div is the right minimal grouping
+			<div
+				className="inline-flex items-center gap-2"
+				role="group"
+				aria-label={groupAriaLabel}
+			>
+				<span className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
+					Phase
+				</span>
+				<ol className="inline-flex items-center gap-1 list-none m-0 p-0">
+					{milestones.map((m, i) => {
+						const done = isStageComplete || m.status === "done"
+						const active = !isStageComplete && m.status === "active"
+						const stateWord = active ? "active" : done ? "done" : "pending"
+						return (
+							<li key={m.key} className="flex items-center gap-1">
+								<span
+									className="relative inline-flex items-center justify-center p-1 -m-1 group rounded-md"
+									role="img"
+									aria-label={`${m.label} — ${stateWord}`}
+									aria-current={active ? "step" : undefined}
+								>
+									<span
+										className={`inline-block w-2.5 h-2.5 rounded-full transition-transform group-hover:scale-125 ${
+											active
+												? "bg-amber-500 ring-2 ring-amber-300 dark:ring-amber-700"
+												: done
+													? "bg-green-500"
+													: "bg-stone-300 dark:bg-stone-700"
+										}`}
+										aria-hidden="true"
+									/>
+									<span
+										role="tooltip"
+										className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-50"
+									>
+										<span className="block text-xs font-bold text-white dark:text-stone-900 leading-tight capitalize">
+											{m.label}
+										</span>
+										<span
+											className={`block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 ${
+												active
+													? "text-amber-300 dark:text-amber-600"
+													: done
+														? "text-green-300 dark:text-green-600"
+														: "text-stone-300 dark:text-stone-600"
+											}`}
+										>
+											{stateWord}
+										</span>
+										<span
+											aria-hidden="true"
+											className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+										/>
+									</span>
+								</span>
+								{i < total - 1 && (
+									<span
+										className={`w-2 h-0.5 transition-colors ${
+											done
+												? "bg-green-400 dark:bg-green-700"
+												: "bg-stone-300 dark:bg-stone-700"
+										}`}
+										aria-hidden="true"
+									/>
+								)}
+							</li>
+						)
+					})}
+				</ol>
+				<span className="text-xs font-mono text-stone-500 dark:text-stone-400">
+					{allDone ? "done" : `${ai + 1}/${total}`}
+				</span>
+				{activeLabel && (
+					<span className="text-xs text-amber-600 dark:text-amber-400 truncate max-w-[12rem] capitalize">
+						{activeLabel}
+					</span>
+				)}
+			</div>
+		)
+	}
+
+	// ── Coarse fallback ───────────────────────────────────────────────
+	const activeIndex =
+		phase && phase !== "complete"
+			? STAGE_PHASE_ORDER.indexOf(phase as (typeof STAGE_PHASE_ORDER)[number])
+			: -1
+	return (
+		<div className="inline-flex items-center gap-2">
+			<span className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
+				Phase
+			</span>
+			<ol className="inline-flex items-center gap-1 list-none m-0 p-0">
+				{STAGE_PHASE_ORDER.map((p, i) => {
+					const isActive = i === activeIndex && !isStageComplete
+					const isDone = isStageComplete || activeIndex > i
+					const stateWord = isActive ? "active" : isDone ? "done" : "pending"
+					return (
+						<li key={p} className="flex items-center gap-1">
+							<span
+								className="relative inline-flex items-center justify-center p-1 -m-1 group rounded-md"
+								role="img"
+								aria-label={`${PHASE_LABELS[p]} — ${stateWord}. ${PHASE_HINTS[p]}`}
+								aria-current={isActive ? "step" : undefined}
+							>
+								<span
+									className={`relative inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold leading-none transition-transform group-hover:scale-110 ${
+										isActive
+											? "bg-amber-500 text-white ring-2 ring-amber-300 dark:ring-amber-700 shadow-sm"
+											: isDone
+												? "bg-green-500 text-white"
+												: "bg-stone-300 dark:bg-stone-700 text-stone-700 dark:text-stone-300"
+									}`}
+									aria-hidden="true"
+								>
+									{isDone ? (
+										<svg
+											viewBox="0 0 16 16"
+											className="w-3 h-3"
+											fill="none"
+											stroke="currentColor"
+											strokeWidth="3"
+										>
+											<title>done</title>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												d="M3 8.5l3 3 7-7"
+											/>
+										</svg>
+									) : (
+										<span>{i + 1}</span>
+									)}
+								</span>
+								<span
+									role="tooltip"
+									className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-50"
+								>
+									<span className="block text-xs font-bold text-white dark:text-stone-900 leading-tight">
+										{PHASE_LABELS[p]}
+									</span>
+									<span
+										className={`block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 ${
+											isActive
+												? "text-amber-300 dark:text-amber-600"
+												: isDone
+													? "text-green-300 dark:text-green-600"
+													: "text-stone-300 dark:text-stone-600"
+										}`}
+									>
+										{stateWord}
+									</span>
+									<span className="block text-xs font-normal text-stone-200 dark:text-stone-700 leading-snug mt-1">
+										{PHASE_HINTS[p]}
+									</span>
+									<span
+										aria-hidden="true"
+										className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+									/>
+								</span>
+							</span>
+							{i < STAGE_PHASE_ORDER.length - 1 && (
+								<span
+									className={`w-3 h-0.5 transition-colors ${
+										isDone
+											? "bg-green-400 dark:bg-green-700"
+											: "bg-stone-300 dark:bg-stone-700"
+									}`}
+									aria-hidden="true"
+								/>
+							)}
+						</li>
+					)
+				})}
+			</ol>
+			<span className="text-xs font-mono text-stone-500 dark:text-stone-400">
+				{isStageComplete
+					? "done"
+					: activeIndex >= 0
+						? `${activeIndex + 1}/${STAGE_PHASE_ORDER.length}`
+						: "—"}
+			</span>
+		</div>
+	)
+}
+
+/**
+ * Intent-level feedback with a scope toggle. "Intent only" shows the
+ * intent-scope findings; "All" folds in every stage's feedback below, each
+ * stage as its own labelled group so cards keep their correct stage scope.
+ * The toggle only appears when there's stage feedback to fold in.
+ */
+function IntentFeedbackSection({ intent }: { intent: HaikuIntentDetail }) {
+	const [scope, setScope] = useState<"intent" | "all">("intent")
+	const intentFb = intent.intentFeedback ?? []
+	const stagesWithFb = intent.stages.filter(
+		(s) => (s.feedback?.length ?? 0) > 0,
+	)
+	const stageFbCount = stagesWithFb.reduce(
+		(n, s) => n + (s.feedback?.length ?? 0),
+		0,
+	)
+	// Nothing anywhere → no section at all.
+	if (intentFb.length === 0 && stageFbCount === 0) return null
+
+	const SCOPES: Array<{ key: "intent" | "all"; label: string; n: number }> = [
+		{ key: "intent", label: "Intent only", n: intentFb.length },
+		{ key: "all", label: "All", n: intentFb.length + stageFbCount },
+	]
+
+	return (
+		<section className="mb-8">
+			<div className="mb-3 flex flex-wrap items-center gap-3">
+				<h2 className="text-sm font-semibold uppercase tracking-wider text-stone-400">
+					Feedback
+				</h2>
+				{stageFbCount > 0 && (
+					<div className="flex flex-wrap gap-1">
+						{SCOPES.map((s) => {
+							const active = scope === s.key
+							return (
+								<button
+									key={s.key}
+									type="button"
+									onClick={() => setScope(s.key)}
+									className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition ${
+										active
+											? "bg-teal-600 text-white"
+											: "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+									}`}
+								>
+									{s.label}
+									<span
+										className={`ml-1.5 ${active ? "text-teal-200" : "text-stone-400 dark:text-stone-500"}`}
+									>
+										{s.n}
+									</span>
+								</button>
+							)
+						})}
+					</div>
+				)}
+			</div>
+			{scope === "intent" ? (
+				intentFb.length > 0 ? (
+					<FeedbackList feedback={intentFb} scope="intent" title={null} />
+				) : (
+					<p className="px-2 py-3 text-xs text-stone-500">
+						No intent-scope feedback. Switch to All to see stage feedback.
+					</p>
+				)
+			) : (
+				<div className="space-y-6">
+					{intentFb.length > 0 && (
+						<FeedbackList feedback={intentFb} scope="intent" title="Intent" />
+					)}
+					{stagesWithFb.map((s) => (
+						<FeedbackList
+							key={s.name}
+							feedback={s.feedback ?? []}
+							scope="stage"
+							title={`${titleCase(s.name)} stage`}
+						/>
+					))}
+				</div>
+			)}
+		</section>
+	)
+}
+
 function FeedbackList({
 	feedback,
 	scope,
@@ -1507,60 +2309,124 @@ function FeedbackList({
 	scope: "stage" | "intent"
 	title: string | null
 }) {
+	const [filter, setFilter] = useState<"open" | "closed" | "all">("open")
+	const [sevFilter, setSevFilter] = useState<
+		"all" | "blocker" | "high" | "medium" | "low"
+	>("all")
 	if (feedback.length === 0) return null
-	const visible = feedback
+	const counts = {
+		open: feedback.filter((f) => f.closedAt == null).length,
+		closed: feedback.filter((f) => f.closedAt != null).length,
+		all: feedback.length,
+	}
+	const statusVisible = feedback.filter((f) => {
+		if (filter === "all") return true
+		if (filter === "open") return f.closedAt == null
+		return f.closedAt != null
+	})
+	const visible = statusVisible.filter(
+		(f) => sevFilter === "all" || f.severity === sevFilter,
+	)
+	const FILTERS: Array<{ key: "open" | "closed" | "all"; label: string }> = [
+		{ key: "open", label: "Open" },
+		{ key: "closed", label: "Closed" },
+		{ key: "all", label: "All" },
+	]
+	// Severity chips reflect the status-filtered pool so the counts track the
+	// Open/Closed/All selection above. Only render when ≥1 finding carries a
+	// severity — unclassified-only scopes get no severity rail.
+	const SEVERITIES: Array<"blocker" | "high" | "medium" | "low"> = [
+		"blocker",
+		"high",
+		"medium",
+		"low",
+	]
+	const sevCounts = Object.fromEntries(
+		SEVERITIES.map((s) => [s, statusVisible.filter((f) => f.severity === s).length]),
+	) as Record<"blocker" | "high" | "medium" | "low", number>
+	const hasSeverities = SEVERITIES.some((s) => sevCounts[s] > 0)
 	return (
 		<div className="space-y-2">
-			{title && (
-				<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-					{title} ({visible.length})
-				</h4>
-			)}
-			<div className="space-y-2">
-				{visible.map((fb) => (
-					<FeedbackCard key={fb.id} fb={fb} scope={scope} />
-				))}
+			<div className="flex flex-wrap items-center gap-2">
+				{title && (
+					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+						{title}
+					</h4>
+				)}
+				<div className="flex flex-wrap gap-1">
+					{FILTERS.map((f) => {
+						const n = counts[f.key]
+						const active = filter === f.key
+						return (
+							<button
+								key={f.key}
+								type="button"
+								onClick={() => setFilter(f.key)}
+								className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition ${
+									active
+										? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
+										: "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+								}`}
+							>
+								{f.label}
+								<span
+									className={`ml-1.5 ${
+										active
+											? "text-stone-300 dark:text-stone-500"
+											: "text-stone-400 dark:text-stone-500"
+									}`}
+								>
+									{n}
+								</span>
+							</button>
+						)
+					})}
+				</div>
+				{hasSeverities && (
+					<div className="flex flex-wrap items-center gap-1">
+						<span className="mr-0.5 text-[10px] uppercase tracking-wider text-stone-400">
+							Severity
+						</span>
+						{(["all", ...SEVERITIES] as const).map((s) => {
+							const active = sevFilter === s
+							const badge = s === "all" ? null : SEVERITY_BADGES[s]
+							const n = s === "all" ? statusVisible.length : sevCounts[s]
+							if (s !== "all" && n === 0) return null
+							return (
+								<button
+									key={s}
+									type="button"
+									onClick={() => setSevFilter(s)}
+									title={badge?.tooltip}
+									className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${
+										active
+											? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
+											: badge
+												? badge.classes
+												: "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+									}`}
+								>
+									{s === "all" ? "All" : badge?.label}
+									<span className="ml-1 opacity-70">{n}</span>
+								</button>
+							)
+						})}
+					</div>
+				)}
 			</div>
+			{visible.length > 0 ? (
+				<div className="space-y-2">
+					{visible.map((fb) => (
+						<FeedbackCard key={fb.id} fb={fb} scope={scope} />
+					))}
+				</div>
+			) : (
+				<p className="px-2 py-3 text-xs text-stone-500 dark:text-stone-500">
+					No {filter === "all" ? "" : filter} feedback in this scope.
+				</p>
+			)}
 		</div>
 	)
-}
-
-/** Resolution chip metadata. The `tooltip` field surfaces the engine's
- *  routing rule for each kind so viewers know what will happen on the
- *  next `run_next`:
- *    - question   → cursor preempts as `feedback_question` (Track-B);
- *                   the agent reads the body and answers, no fix-hat
- *                   chain runs.
- *    - inline_fix → cursor dispatches the stage's `fix_hats:` chain
- *                   against the FB body in place; resolution-of-record
- *                   is the closure_reply written by the terminal hat.
- *    - stage_revisit → cursor walks back to the FB's stage and reopens
- *                      its elaborate phase; corrective units land in the
- *                      next bolt rather than mutating completed work. */
-const RESOLUTION_BADGES: Record<
-	"question" | "inline_fix" | "stage_revisit",
-	{ label: string; classes: string; tooltip: string }
-> = {
-	question: {
-		label: "Question",
-		classes:
-			"bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
-		tooltip:
-			"Question — the cursor pauses on this finding (feedback_question) and asks the agent to answer the body. No fix-hat chain runs.",
-	},
-	inline_fix: {
-		label: "Inline fix",
-		classes: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",
-		tooltip:
-			"Inline fix — the engine dispatches the stage's fix-hat chain against this finding in place. The terminal hat's closure reply is the resolution-of-record.",
-	},
-	stage_revisit: {
-		label: "Stage revisit",
-		classes:
-			"bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-		tooltip:
-			"Stage revisit — the cursor walks back to this finding's stage and reopens its elaborate phase. Corrective units land in the next bolt; completed work isn't mutated.",
-	},
 }
 
 function FeedbackCard({
@@ -1583,6 +2449,7 @@ function FeedbackCard({
 	const resolutionBadge = fb.resolution
 		? RESOLUTION_BADGES[fb.resolution]
 		: null
+	const severityBadge = fb.severity ? SEVERITY_BADGES[fb.severity] : null
 	return (
 		<div
 			className={`rounded-lg border ${
@@ -1607,6 +2474,14 @@ function FeedbackCard({
 					>
 						{statusLabel}
 					</span>
+					{severityBadge && (
+						<span
+							className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${severityBadge.classes}`}
+							title={severityBadge.tooltip}
+						>
+							{severityBadge.label}
+						</span>
+					)}
 					{resolutionBadge && (
 						<span
 							className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${resolutionBadge.classes}`}
@@ -1641,9 +2516,7 @@ function FeedbackCard({
 				<div className="border-t border-stone-100 dark:border-stone-800 px-4 py-3 text-sm text-stone-700 dark:text-stone-300">
 					{fb.body ? (
 						<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
-							<pre className="whitespace-pre-wrap font-sans text-sm">
-								{fb.body}
-							</pre>
+							<BrowseMarkdown>{fb.body}</BrowseMarkdown>
 						</div>
 					) : (
 						<p className="text-stone-400 italic">No body.</p>
@@ -1663,6 +2536,7 @@ function FeedbackCard({
 							Invalidates: {fb.invalidates.join(", ")}
 						</div>
 					)}
+					<FixHistory iterations={fb.raw.iterations} />
 				</div>
 			)}
 		</div>

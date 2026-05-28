@@ -104,6 +104,77 @@ function Pill({ children }: { children: ReactNode }) {
 	)
 }
 
+type CompareVerdict = "match" | "diverge" | "gap" | "win"
+
+interface CompareProps {
+	verdict?: CompareVerdict
+	title: string
+	children: ReactNode
+}
+
+const COMPARE_VERDICT_LABELS: Record<CompareVerdict, string> = {
+	match: "Match",
+	diverge: "Diverge",
+	gap: "Gap",
+	win: "Ours",
+}
+
+const COMPARE_VERDICT_PILL: Record<CompareVerdict, string> = {
+	match:
+		"border-green-400/40 bg-green-500/10 text-green-700 dark:border-green-500/40 dark:bg-green-500/15 dark:text-green-300",
+	diverge:
+		"border-amber-400/40 bg-amber-500/10 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300",
+	gap: "border-red-400/40 bg-red-500/10 text-red-700 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300",
+	win: "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/15 dark:text-sky-300",
+}
+
+/**
+ * Side-by-side comparison block. Carries a verdict pill + title and
+ * wraps one or more <Side label="…"> children. With two Sides the
+ * layout is a two-column grid (stacks on mobile); with one Side the
+ * grid collapses to a single column — useful for the "Ours" sections
+ * that don't have a counterpart.
+ */
+function Compare({ verdict = "match", title, children }: CompareProps) {
+	const pillCls = COMPARE_VERDICT_PILL[verdict]
+	const label = COMPARE_VERDICT_LABELS[verdict]
+	return (
+		<div className="not-prose my-10">
+			<h3 className="mb-3 flex items-center gap-3 text-lg font-semibold text-stone-900 dark:text-white">
+				<span
+					className={`inline-block rounded-full border px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-wider ${pillCls}`}
+				>
+					{label}
+				</span>
+				<span>{title}</span>
+			</h3>
+			<div className="grid gap-0 overflow-hidden rounded-lg border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900 sm:grid-cols-[repeat(auto-fit,minmax(0,1fr))] [&>div+div]:border-t [&>div+div]:border-stone-200 dark:[&>div+div]:border-stone-800 sm:[&>div+div]:border-t-0 sm:[&>div+div]:border-l">
+				{children}
+			</div>
+		</div>
+	)
+}
+
+interface SideProps {
+	label?: string
+	children: ReactNode
+}
+
+function Side({ label, children }: SideProps) {
+	return (
+		<div className="px-5 py-4">
+			{label ? (
+				<div className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+					{label}
+				</div>
+			) : null}
+			<div className="text-sm leading-relaxed text-stone-700 dark:text-stone-200 [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-2 hover:[&_a]:text-blue-700 dark:[&_a]:text-blue-400 [&_code]:rounded [&_code]:bg-stone-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[12px] dark:[&_code]:bg-stone-800 [&_strong]:font-semibold [&_strong]:text-stone-900 dark:[&_strong]:text-white">
+				{children}
+			</div>
+		</div>
+	)
+}
+
 /**
  * Base MDX components — maps standard markdown elements to prose-styled
  * Tailwind output plus exposes custom components by name.
@@ -156,10 +227,12 @@ export const mdxComponents: MDXComponents = {
 	Mermaid,
 	Callout,
 	Card,
+	Compare,
 	CursorCascade,
 	Grid,
 	KeyPoints,
 	Pill,
+	Side,
 	TickCard,
 	TickSequence,
 }

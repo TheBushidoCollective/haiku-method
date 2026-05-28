@@ -25,7 +25,10 @@ export function TickSequence({ title, caption, children }: TickSequenceProps) {
 }
 
 interface TickCardProps {
-	n: number | string
+	/** Pill content. Accepts either `n` (legacy) or `label` (current
+	 *  blog/MDX convention). When both are set, `label` wins. */
+	n?: number | string
+	label?: string
 	title: string
 	action?: string
 	dispatch?: string
@@ -34,16 +37,19 @@ interface TickCardProps {
 
 export function TickCard({
 	n,
+	label,
 	title,
 	action,
 	dispatch,
 	children,
 }: TickCardProps) {
+	const pill =
+		label ?? (typeof n === "number" ? `tick ${n}` : (n ?? ""))
 	return (
 		<div className="rounded-lg border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
 			<div className="flex flex-wrap items-center gap-3 border-b border-stone-200 bg-stone-50 px-4 py-2.5 dark:border-stone-800 dark:bg-stone-900/60">
 				<span className="flex h-7 min-w-[2.25rem] items-center justify-center rounded-full bg-stone-900 px-2 font-mono text-xs font-semibold text-white dark:bg-stone-700">
-					{typeof n === "number" ? `tick ${n}` : n}
+					{pill}
 				</span>
 				<span className="font-semibold text-stone-900 dark:text-white">
 					{title}

@@ -2,7 +2,7 @@
 name: enumeration
 description: Service discovery, version detection, vulnerability scanning, and attack surface mapping
 hats: [enumerator, vulnerability-scanner, verifier]
-fix_hats: [classifier, enumerator, feedback-assessor]
+fix_hats: [classifier, enumerator, vulnerability-scanner, feedback-assessor]
 review: ask
 elaboration: autonomous
 inputs:
@@ -15,22 +15,22 @@ outputs:
 
 # Enumeration
 
-Service discovery, version detection, vulnerability scanning, and attack surface mapping. Reconnaissance answered "what's there?"; enumeration answers "what's there in detail, and what could be wrong with it?" Units are **knowledge artifacts**: one unit per asset class or service category from the upstream target profile.
+Service discovery, version detection, vulnerability scanning, and attack-surface mapping. Reconnaissance answered "what's there?"; enumeration answers "what's there in detail, and what could be wrong with it?" — producing the vulnerability catalog that exploitation draws its candidate surfaces from.
 
-## Per-unit baton
+## Scope
 
-The three hats execute in `plan → do → verify` order:
+Detailed service interrogation and vulnerability correlation: protocols, versions, auth mechanisms, exposed functionality, and the known-vulnerability classes (OWASP categories, CWE families, version-pinned CVEs) that map onto them. Enumeration decides *what's potentially wrong with each service* — not what the surface is (reconnaissance) or whether a vulnerability is actually exploitable (exploitation).
 
-- **`enumerator`** (plan): deep-dives into the unit's services — protocols, versions, authentication mechanisms, exposed functionality, configuration tells. Produces a structured service inventory grounded in observed behavior.
-- **`vulnerability-scanner`** (do): correlates the inventory against known vulnerability classes (OWASP Top 10 categories for web, CWE families for code-adjacent surfaces, version-pinned CVEs where applicable) and produces the vulnerability catalog entry for the unit.
-- **`verifier`** (verify): validates the artifact's substance, citation, and false-positive triage. Body-only per architecture §3.4.
+## What to do
 
-The baton: target profile slice → service inventory → triaged vulnerability catalog → validated catalog.
+- Deep-dive each service to a structured inventory grounded in observed behavior, not assumed configuration.
+- Correlate the inventory against known vulnerability classes and pin findings to the right CWE/CVE where applicable.
+- Triage false positives before they enter the catalog — an unconfirmed finding wastes the most expensive cycles downstream.
+- Cite the evidence behind each catalog entry so a human can decide what's worth attempting.
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes `reconnaissance/target-profile`. Produces `VULNERABILITY-CATALOG.md` per unit, which feeds exploitation's unit chain — each catalog entry becomes a candidate attack surface in the next stage.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, enumerator, feedback-assessor]` dispatches per finding — typical findings are false positives, missed services, or unconfirmed version detections. Gate is `ask` because human triage of "what's worth attempting to exploit" is the most expensive cost in pentest engagements; the catalog needs human sign-off before the next stage spends time building PoCs.
+- Don't attempt exploitation or build proof-of-concept code — that's exploitation.
+- Don't re-run reconnaissance; missing surfaces are feedback upstream, not a fresh recon pass here.
+- Don't ship a vulnerability catalog full of untriaged or unconfirmed findings.
+- Don't claim a version or vulnerability you couldn't observe.

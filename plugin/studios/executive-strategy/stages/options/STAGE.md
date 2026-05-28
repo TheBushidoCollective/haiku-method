@@ -12,22 +12,22 @@ inputs:
 
 # Options
 
-Take the landscape view and produce a deliberately wide set of strategic options. The job is to expand the decision space, not to narrow it — that's the next stage's role. Skipping this widening step is the single most common failure mode in strategic decisions: the team locks onto the first plausible option, models it carefully, and never seriously considers alternatives.
+Take the landscape view and produce a deliberately wide set of strategic options. The job here is to expand the decision space, not to narrow it — locking onto the first plausible option and never seriously considering alternatives is the single most common failure mode in strategic decisions.
 
-Units in this stage are **option families** — each unit defines one distinct strategic direction (e.g. "build vs. partner vs. acquire", "geographic expansion variants", "pivot vs. extend"). The stage output `OPTIONS-MATRIX.md` aggregates every unit's option(s) into a comparable matrix with consistent dimensions.
+## Scope
 
-## Per-unit baton
+Generating distinct strategic directions and modeling each one into a comparable shape. Options decides *what the realistic choices are* — it does not analyze the context (landscape), pick a winner among the choices (evaluate, decide). Each option family is one direction: build vs. partner vs. acquire, expansion variants, pivot vs. extend.
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`ideator`** (plan) generates the option set for this unit's strategic axis — including unconventional alternatives
-- **`modeler`** (do) builds the financial and operational model for each option with explicit assumptions
-- **`verifier`** (verify) checks differentiation, traceability to landscape, and decision-register consistency
+- Generate a genuinely wide set per strategic axis, including the unconventional alternatives worth considering.
+- Model each option with explicit assumptions: value proposition, theory of change, financials, resource needs, risk/reward.
+- Keep the options differentiated — each one should represent a real, distinct bet.
+- Trace every option back to the landscape forces that make it plausible.
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes `landscape/landscape-analysis`. Produces `options-matrix` at intent scope. Each option in the matrix carries: value proposition, theory of change, financial model (investment, returns, break-even), resource requirements, and risk/reward profile.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, ideator, feedback-assessor]` dispatches per finding. The gate is `ask` — local human approval via the review UI, because the option set frames everything that follows; the user needs to confirm the space before evaluation begins. Project overlays may add house-style modeling conventions (currency, time-horizon defaults, sensitivity ranges) without modifying the plugin defaults.
+- Don't narrow toward a favorite or pre-select a winner — that's the evaluate and decide stages.
+- Don't re-analyze the market or capability picture — carry forward what landscape established.
+- Don't pad the matrix with near-duplicate options that collapse the decision space.
+- Don't model an option on assumptions you leave unstated.

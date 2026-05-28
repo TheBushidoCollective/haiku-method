@@ -282,17 +282,23 @@ function buildStageConfig(
 			required: a.required,
 		}))
 
-	// Phase overrides.
+	// Stage elaboration guidance (additive prompt content, not an engine
+	// override — spliced into the elaborate prompt by the decompose builder).
 	const elaborationOverride = readPhaseOverride(
 		studioDir,
 		stageName,
 		"ELABORATION",
 	)
-	const executionOverride = readPhaseOverride(studioDir, stageName, "EXECUTION")
-	const reviewOverride = readPhaseOverride(studioDir, stageName, "REVIEW")
 
 	return {
 		name: stageName,
+		// `produces: build` opts the stage into the build-class unit contract
+		// (producing units must declare `quality_gates:`). Anything else —
+		// including absent — is the lenient `knowledge` default.
+		produces: data.produces === "build" ? "build" : "knowledge",
+		// `optional: true` opts the stage into the keep-or-drop entry gate.
+		// Absent / anything-else is the mandatory default.
+		optional: data.optional === true,
 		hats,
 		fixHats,
 		reviewAgents,
@@ -301,8 +307,6 @@ function buildStageConfig(
 		gate: parseGate(data.review),
 		defaultModel: parseModel(data.default_model),
 		elaborationOverride: elaborationOverride?.body,
-		executionOverride: executionOverride?.body,
-		reviewOverride: reviewOverride?.body,
 		discoveryTemplates,
 		outputTemplates,
 		body,
@@ -352,6 +356,9 @@ export function buildStudioConfig(
 		slug: info.slug,
 		dir: studioDir,
 		description: info.description,
+		// `deprecated: true` hides the studio from new-intent pickers but
+		// keeps it resolvable for in-flight intents. Absent = active.
+		deprecated: data.deprecated === true,
 		defaultStages,
 		stages,
 		studioReviewAgents,

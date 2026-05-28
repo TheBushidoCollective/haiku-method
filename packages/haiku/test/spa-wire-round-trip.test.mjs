@@ -2,22 +2,24 @@
 // Test suite for the haiku_review_open SPA wire round-trip.
 //
 // Coverage:
-//   1. Approve round-trip — handleToolCall("haiku_review_open") creates a
-//      session, blocks on waitForSession, then returns the canonical
-//      "no changes requested" copy when the session decides "approved".
-//   2. Request-changes round-trip — same setup, decision flips to
-//      "changes_requested", tool return nudges the agent toward
-//      `haiku_run_next` so durable feedback flows into the fix loop.
+//   1. Open round-trip (Done) — handleToolCall("haiku_review_open") creates an
+//      ad-hoc session and returns IMMEDIATELY (non-blocking) with a
+//      pane-open / "non-blocking, keep working" message carrying the review
+//      URL. A subsequent /decide POST (the SPA's Done) reaps the session
+//      server-side, since nothing is awaiting it.
+//   2. Request-changes round-trip — same non-blocking open; the return points
+//      the agent at `haiku_run_next` (durable feedback flows into the fix loop
+//      on the next tick), and a `changes_requested` /decide POST likewise reaps
+//      the ad-hoc session.
 //   3. Schema rejection — bad args return the stable named code
 //      `haiku_review_open_input_invalid`.
 //
-// Wire round-trip: schema → session creation → HTTP server →
-// /review/:id/decide POST → handler drainPending → tool return.
-//
-// 2026-05-07: ad-hoc review handler now consumes `pending_decision`
-// the same way awaitGateReviewSession does, so the wire POST naturally
-// wakes the handler — no short-circuit needed. The wire writes
-// pending_decision; the handler's drainPending pattern picks it up.
+// Non-blocking contract (2026-05-22): /haiku:haiku-show is a browse surface,
+// not a gate. `haiku_review_open` no longer blocks on `waitForSession` — it
+// returns the moment the pane is open so the agent keeps working. Only an
+// ACTUAL gate blocks (via `gate_kind` + `haiku_await_gate`). The decide route
+// reaps ad-hoc sessions on Done / Request Changes instead of resolving a
+// blocked handler.
 //
 // Run: npx tsx test/spa-wire-round-trip.test.mjs
 
@@ -172,36 +174,35 @@ function _resetCapture() {
 
 console.log("\n=== haiku_review_open: SPA wire round-trip ===")
 
-await test("approve round-trip — wire POST /decide queues + status flip resolves with 'no changes requested' copy", async () => {
+await test("open round-trip (Done) — non-blocking return + /decide reaps the ad-hoc session", async () => {
 	_resetCapture()
-	const reviewPromise = callReviewOpen({ intent: intentSlug, stage: stageName })
-
-	// Wait for the handler to mint the session and start blocking on
-	// waitForSession. The createSession spy captures the id the moment
-	// it's minted.
-	for (let i = 0; i < 100 && !_capturedSessionId; i++) {
-		await delay(10)
-	}
+	// Non-blocking: the call resolves immediately — no decide POST needed
+	// first, and no spin-wait for the session to be minted.
+	const result = await callReviewOpen({ intent: intentSlug, stage: stageName })
+	assert.ok(result.content?.length > 0, "result must have content")
+	assert.ok(!result.isError, "ad-hoc open must not be flagged isError")
+	const body = result.content[0].text
 	assert.ok(
-		_capturedSessionId,
-		`session id not captured from console.error in time. Buffered lines: ${_consoleErrorBuffer.slice(-3).join(" | ")}`,
+		/non-blocking/i.test(body),
+		`return must signal the pane is non-blocking; got: ${body.slice(0, 300)}`,
 	)
-	const sessionId = _capturedSessionId
+	// The review URL (carrying the session id) is in the return.
+	const m = body.match(/\/review\/([A-Za-z0-9_-]+)/)
+	assert.ok(m, `return must include the review URL; got: ${body.slice(0, 300)}`)
+	const sessionId = m[1]
 
-	// Confirm the session is registered as ad_hoc + pending — the wire
-	// is up.
+	// Session is registered as ad_hoc + pending while the pane is open.
 	const initial = getSession(sessionId)
-	assert.ok(initial, "session must exist in registry after handler creation")
+	assert.ok(initial, "session must exist in registry after open")
 	assert.strictEqual(initial.session_type, "review")
 	assert.strictEqual(initial.ad_hoc, true)
 	assert.strictEqual(initial.status, "pending")
 
-	// Real wire: POST /review/:id/decide. This is the actual SPA
-	// submit path used in production. It writes pending_decision —
-	// the canonical live-session channel — and broadcasts the queued
-	// signal.
+	// Done → real SPA wire POST /review/:id/decide (approved). Nothing is
+	// awaiting it (non-blocking open already returned); the decide route
+	// reaps the ad-hoc session server-side.
 	const port = getActualPort()
-	assert.ok(port, "http server must be listening after handler started")
+	assert.ok(port, "http server must be listening")
 	const wireRes = await fetch(
 		`http://127.0.0.1:${port}/review/${sessionId}/decide`,
 		{
@@ -218,32 +219,28 @@ await test("approve round-trip — wire POST /decide queues + status flip resolv
 	const wireBody = await wireRes.json()
 	assert.strictEqual(wireBody.ok, true)
 	assert.strictEqual(wireBody.decision, "approved")
-
-	// The wire writes pending_decision and broadcasts a session
-	// update. The handler's drainPending picks it up on the next
-	// loop iteration — no short-circuit needed (2026-05-07 fix).
-	const result = await reviewPromise
-	assert.ok(result.content?.length > 0, "result must have content")
-	const body = result.content[0].text
-	assert.ok(
-		/no changes requested/i.test(body) || /Done/.test(body),
-		`approve return must signal no-changes; got: ${body.slice(0, 300)}`,
+	assert.strictEqual(
+		getSession(sessionId),
+		undefined,
+		"ad-hoc session must be reaped after Done",
 	)
-	assert.ok(!result.isError, "approve return must not be flagged isError")
 })
 
-await test("request-changes round-trip — return nudges agent toward haiku_run_next", async () => {
+await test("request-changes round-trip — non-blocking return points at haiku_run_next; /decide reaps", async () => {
 	_resetCapture()
-	const reviewPromise = callReviewOpen({ intent: intentSlug, stage: stageName })
-
-	for (let i = 0; i < 100 && !_capturedSessionId; i++) {
-		await delay(10)
-	}
+	const result = await callReviewOpen({ intent: intentSlug, stage: stageName })
+	assert.ok(result.content?.length > 0)
+	assert.ok(!result.isError, "request-changes open must not be flagged isError")
+	const body = result.content[0].text
+	// The pane is open before any decision is made, so the return can't name
+	// the outcome — instead it points the agent at haiku_run_next, which is
+	// what routes any feedback the user leaves into the fix loop.
 	assert.ok(
-		_capturedSessionId,
-		"session id not captured from console.error in time",
+		/haiku_run_next/.test(body),
+		`return must point at haiku_run_next so feedback flows into the fix-loop; got: ${body.slice(0, 300)}`,
 	)
-	const sessionId = _capturedSessionId
+	const sessionId = body.match(/\/review\/([A-Za-z0-9_-]+)/)?.[1]
+	assert.ok(sessionId, `return must include the review URL; got: ${body.slice(0, 300)}`)
 
 	const port = getActualPort()
 	const wireRes = await fetch(
@@ -260,23 +257,10 @@ await test("request-changes round-trip — return nudges agent toward haiku_run_
 	assert.strictEqual(wireRes.status, 200)
 	const wireBody = await wireRes.json()
 	assert.strictEqual(wireBody.decision, "changes_requested")
-
-	// Handler's drainPending wakes on the broadcast and consumes
-	// pending_decision. No short-circuit needed.
-	const result = await reviewPromise
-	assert.ok(result.content?.length > 0)
-	const body = result.content[0].text
-	assert.ok(
-		/Request Changes|changes_requested/i.test(body),
-		`return must mention the request-changes outcome; got: ${body.slice(0, 300)}`,
-	)
-	assert.ok(
-		/haiku_run_next/.test(body),
-		`return must nudge toward haiku_run_next so feedback flows into fix-loop; got: ${body.slice(0, 300)}`,
-	)
-	assert.ok(
-		!result.isError,
-		"request-changes return must not be flagged isError",
+	assert.strictEqual(
+		getSession(sessionId),
+		undefined,
+		"ad-hoc session must be reaped after Request Changes",
 	)
 })
 

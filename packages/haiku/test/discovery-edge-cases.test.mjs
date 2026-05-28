@@ -264,6 +264,16 @@ test("discovery: optional template (required: false) does not block the cursor",
 		writeUnit(intentDir, "design", "unit-01", {
 			title: "u1",
 			depends_on: [],
+			// Pre-execute reviews signed so the cursor walks past the
+			// PRE-execute review track (2026-05-17 split) and reaches
+			// start_unit_hat as the test expects.
+			reviews: {
+				spec: { at: "t" },
+				continuity: { at: "t" },
+				"cross-stage-consistency": { at: "t" },
+				"code-reviewer": { at: "t" },
+				user: { at: "t" },
+			},
 		})
 
 		const action = await runTick(repoRoot, slug)

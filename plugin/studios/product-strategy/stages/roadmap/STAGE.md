@@ -12,20 +12,22 @@ inputs:
 
 # Roadmap
 
-Translate the priority order into a coherent plan — sequencing, dependencies, milestones, and a narrative that explains why this order. The output is the artifact stakeholders will actually use to make commitments and resource decisions, so the bar is "defensible under questioning," not "pretty."
+Translate the priority order into a coherent plan — sequencing, dependencies, milestones, and a narrative that explains why this order. The output is the artifact stakeholders use to make commitments and resource decisions, so the bar is "defensible under questioning," not "pretty."
 
-## Per-unit baton
+## Scope
 
-Each roadmap unit walks `plan → do → verify`:
+Sequencing, dependencies, milestones, and the strategic narrative. Roadmap decides *what gets built when and in what order* — not why one opportunity outranks another (prioritization) or whether stakeholders commit to it (stakeholder-review). It reality-checks the sequence against the capacity available to deliver it.
 
-- **`roadmap-architect`** (plan / sequence) takes the priority matrix and constructs the roadmap structure for the unit's topic — typically `now / next / later`, theme-based, or outcomes-based, depending on the framing chosen during elaboration. Names dependencies, milestones, and the strategic narrative.
-- **`capacity-planner`** (do / reality-check) pressure-tests the sequence against team capacity, skill mix, infrastructure constraints, and ongoing operational load. Updates the artifact with capacity callouts and proposed mitigations where the plan exceeds what's realistic.
-- **`verifier`** (verify) validates the artifact body-only — dependency chains resolve, every milestone has measurable completion criteria, capacity assumptions are explicit — and advances or rejects.
+## What to do
 
-## Inputs and outputs
+- Construct the roadmap structure for each topic (now/next/later, theme-based, or outcomes-based, per the framing chosen during elaboration) and name its dependencies and milestones.
+- Pressure-test the sequence against team capacity, skill mix, infrastructure constraints, and operational load, and call out where the plan exceeds what's realistic.
+- Give every milestone measurable completion criteria, not a vague label.
+- Make the strategic narrative explicit so the order is defensible under questioning.
 
-Consumes `prioritization/priority-matrix` directly. Produces `discovery/ROADMAP-DOC.md` per topic, which feeds `stakeholder-review`.
+## What NOT to do
 
-## Fix loop and gate
-
-`fix_hats: [classifier, roadmap-architect, feedback-assessor]` reopens the sequence when feedback lands. The gate is `ask` — roadmap commitments are visible to the rest of the org and the user owns the final shape. Project overlays at `.haiku/studios/product-strategy/stages/roadmap/` may pin the team's roadmap-tool conventions, milestone-naming style, or theme taxonomy without altering the plugin defaults.
+- Don't re-rank the opportunities — roadmap sequences the priority order, it doesn't relitigate it.
+- Don't present the plan to stakeholders or capture their decisions; that's stakeholder-review.
+- Don't sequence past known capacity without flagging the gap and a mitigation.
+- Don't ship a milestone with no measurable completion criteria.

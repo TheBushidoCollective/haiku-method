@@ -1,7 +1,7 @@
 ---
 name: design-tokens
-location: .haiku/intents/{intent-slug}/knowledge/DESIGN-TOKENS.md
-scope: intent
+location: .haiku/knowledge/DESIGN-TOKENS.md
+scope: project
 format: text
 required: true
 ---
@@ -9,6 +9,8 @@ required: true
 # Design Tokens
 
 Named design values that downstream stages must use instead of raw values. All colors, spacing, typography, and other visual properties should be referenced by token name throughout the project.
+
+This is **long-lived repo knowledge** (`scope: project`) — it persists across intents at `.haiku/knowledge/DESIGN-TOKENS.md`. When it already exists, read it as your prior and add or correct tokens only where the design system has actually changed; don't redefine the whole token set every intent.
 
 ## Content Guide
 

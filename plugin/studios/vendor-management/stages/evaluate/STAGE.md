@@ -1,7 +1,7 @@
 ---
 name: evaluate
 description: Assess vendors and score against criteria
-hats: [evaluator, technical-reviewer]
+hats: [evaluator, technical-reviewer, verifier]
 fix_hats: [classifier, evaluator, feedback-assessor]
 review: ask
 elaboration: collaborative
@@ -12,21 +12,22 @@ inputs:
 
 # Evaluate
 
-Score and shortlist vendor responses against the RFP's evaluation criteria. This stage takes the RFP and the scoring methodology produced by `requirements` and produces a comparative scorecard that the negotiation stage will use to drive its counter-positions.
+Score and shortlist vendor responses against the RFP's evaluation criteria. This stage takes the solicitation and scoring methodology from requirements and produces a comparative scorecard that negotiate uses to drive its counter-positions.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the hat chain in order:
+Comparative vendor assessment: scoring each response against the established criteria, documenting rationale, running TCO analysis, and producing a defensible ranking and shortlist. Evaluate decides *which vendors advance and why* — not what was asked for (requirements) or what terms get agreed (negotiate).
 
-- **`evaluator`** (plan / do) applies the pre-defined scoring methodology to every vendor response, calculates total cost of ownership, and produces a comparative ranking with documented rationale per score
-- **`technical-reviewer`** (verify lens) validates the technical claims through proof-of-concept testing, reference checks with actual customers, and integration / architecture compatibility assessment — flags any vendor whose scored capabilities don't survive hands-on verification
+## What to do
 
-The baton between the two is the scorecard plus the score rationale. The technical reviewer either confirms scores stand or files findings against the entries the verification couldn't support.
+- Score every vendor against the criteria requirements defined, applying them consistently across responses.
+- Document the rationale for each score so the shortlist would survive a stakeholder challenge.
+- Run TCO analysis that captures the real cost of ownership, not just headline price.
+- Ground technical assessments in verification, not vendor claims taken at face value.
 
-## Inputs and outputs
+## What NOT to do
 
-`requirements/rfp-document` feeds in. The output is the vendor scorecard (`outputs/VENDOR-SCORECARD.md`) — a per-vendor ranking with documented rationale, TCO analysis, and verified technical assessment — which feeds `negotiate`.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, evaluator, feedback-assessor]` dispatches per finding — the classifier routes, the evaluator re-runs the affected scoring or rationale, and the assessor independently decides closure. The gate is `ask` — a human stakeholder approves the shortlist locally before negotiation contact begins. Project overlays may add house-style scoring schemes, organization-specific TCO categories, or industry-specific verification protocols without modifying the plugin defaults.
+- Don't change the evaluation criteria mid-scoring — a wrong criterion is a revisit to requirements.
+- Don't open negotiation or make commitments to vendors; that's negotiate.
+- Don't rank a vendor on an unverified technical claim.
+- Don't ship a shortlist whose ranking you can't justify from documented rationale.

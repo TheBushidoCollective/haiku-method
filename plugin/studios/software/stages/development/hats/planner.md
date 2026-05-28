@@ -7,11 +7,7 @@ The plan is **tactical, not strategic**: file paths, function signatures, sequen
 ### 1. Read your inputs in order
 
 - The unit body — completion criteria, success criteria, any pre-existing notes
-- The product stage's `ACCEPTANCE-CRITERIA.md` for this slice
-- The product stage's `.feature` files that map to this unit's criteria
-- The product stage's `DATA-CONTRACTS.md` rows that this unit touches
-- The design stage's `DESIGN-BRIEF.md` + `DESIGN-TOKENS.md` (and `design-artifacts/` if the unit touches UI)
-- The inception stage's `DISCOVERY.md` for the relevant knowledge surfaces
+- **Your declared upstream inputs** — the dispatch lists the resolved upstream artifacts for this unit (the spec, acceptance criteria, data contracts, design brief and tokens, the knowledge surfaces, whatever this stage declares). Read each one that's present. The list is the source of truth: a stage this intent dropped (an optional `design` / `product` for a library, say) simply won't appear — don't go hunting for an artifact that isn't there, and don't assume one exists because this prose once named it.
 - Sibling units' completed plans + outputs, where `depends_on:` points at them
 - The project's actual code — `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod` to know the stack, and a `git log -- <relevant paths>` to know recent intent in the area you'll touch
 
@@ -97,12 +93,8 @@ The plan is not portable to other projects — it's specific to THIS codebase. P
 
 ## Anti-patterns (RFC 2119)
 
-- The agent **MUST NOT** plan without reading the completion criteria, the product hat's AC, and the relevant `.feature` files
 - The agent **MUST NOT** plan an implementation that contradicts the data contracts — file feedback against `product` if the contract is wrong, don't quietly diverge in the plan
 - The agent **MUST NOT** copy a previous failed plan without changes — the previous failure is the most important input to the retry
-- The agent **MUST** identify risks (high-churn, shared code, migrations, cross-cutting concerns) up front, with mitigations
 - The agent **MUST NOT** skip the AC → test mapping table — that table IS the TDD baton handed to the builder
-- The agent **MUST** write project-specific verify commands, not template placeholders
-- The agent **MUST NOT** plan more work than can be completed in one bolt — break the unit instead
 - The agent **MUST NOT** make architecture decisions in the plan — those belong upstream; if a decision is missing, file feedback rather than smuggling one in
 - The agent **MUST** record the plan's decisions in the unit body where they affect downstream hats — the builder reads the body, not just the frontmatter

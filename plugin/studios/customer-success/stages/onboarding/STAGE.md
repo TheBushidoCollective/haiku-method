@@ -1,6 +1,7 @@
 ---
 name: onboarding
 description: Guide new customers through setup, training, and initial value realization
+optional: true
 hats: [onboarding-lead, technical-enabler, verifier]
 fix_hats: [classifier, onboarding-lead, feedback-assessor]
 review: ask
@@ -10,22 +11,22 @@ inputs: []
 
 # Onboarding
 
-Take a newly closed customer from contract signature to first-value realization. The stage is the entry point of the customer-success lifecycle — there are no upstream inputs from this studio — and produces an `ONBOARDING-REPORT.md` per unit, with each unit framing one onboarding workstream (a stakeholder group, an integration, a training track, a milestone).
+The opening stage of the customer-success lifecycle: take a newly closed customer from contract signature to first realized value. This is where the sales handoff becomes a working deployment and a customer who has seen the product deliver.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the three hats in `plan → do → verify` order:
+Standing the customer up and proving initial value: setup, integration, training, and the first milestones that demonstrate the product works for them. Onboarding decides *what first value means and how to reach it* — it does not drive ongoing usage growth (adoption) or assess account health (health-check).
 
-- **`onboarding-lead`** (plan) reads the sales-handoff context (commitments, stakeholders, success criteria), defines what "initial value" looks like in measurable terms, and writes the milestone plan with owners and acceptance signals per step
-- **`technical-enabler`** (do) executes the technical workstream: integration setup, data migration, environment validation, end-to-end test of the deployed configuration, and the run book that captures what was configured and why
-- **`verifier`** (verify) validates the operational shape of the report (preconditions, action, post-condition, rollback) and either advances or rejects to the responsible hat
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+- Read the sales handoff — commitments, stakeholders, success criteria — and define "initial value" in concrete, measurable terms.
+- Sequence the onboarding milestones with an owner and an acceptance signal for each step.
+- Execute the technical workstream end to end — integration, data migration, environment validation — and confirm the deployed configuration actually works.
+- Capture what was configured and why, so the next stage and the customer's own team can build on it.
 
-## Inputs and outputs
+## What NOT to do
 
-The frontmatter declares the canonical I/O contract. Onboarding has no upstream stage inside this studio (`inputs: []`); its starting context is the user-supplied intent (sales handoff, contract terms, stakeholder list). Each unit produces its slice of `ONBOARDING-REPORT.md` (per-unit body authored across both `onboarding-lead` and `technical-enabler`). The aggregate report feeds the `adoption` stage as the handoff context.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, onboarding-lead, feedback-assessor]` dispatches per finding. The classifier routes the FB; `onboarding-lead` is the implementer (re-defining the milestone or re-sequencing the plan); the assessor independently decides closure. The gate is `ask` — the user reviews the onboarding plan and validates readiness before the workflow advances to adoption. Project overlays at `.haiku/studios/customer-success/stages/onboarding/` may add house conventions (named milestone templates, integration runbook formats, sales-to-CS handoff fields) without modifying the plugin defaults.
+- Don't drive ongoing adoption plays or feature expansion — that's the adoption stage.
+- Don't assess churn risk or account health — that's health-check.
+- Don't declare a milestone reached without a verifiable acceptance signal.
+- Don't leave a setup step assumed-done; an unconfirmed configuration surfaces as a defect after handoff.

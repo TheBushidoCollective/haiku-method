@@ -227,6 +227,63 @@ try {
 		assert.strictEqual(json.ok, true)
 	})
 
+	// Regression: admin-portal-reimagine unit-014 (2026-05-19). The unit
+	// declared `inputs: [unit-005-…, unit-006-…, unit-007-…]` — unit NAMES
+	// where file PATHS belong, and no `depends_on`. The cursor's wave-
+	// ready filter (gates on depends_on) dispatched it, then the
+	// unit-start input-existence gate refused it — wedged. Catch the
+	// unit-name shape at WRITE time so it never lands on disk.
+	await test("unit with a unit-name in inputs → reject (inputs_unit_name_not_path)", () => {
+		const { projDir, slug, stage } = createProject("hv-unit-name-input")
+		process.chdir(projDir)
+		const result = handleStateTool("haiku_unit_write", {
+			intent: slug,
+			stage,
+			unit: "unit-014-comparative-dashboard",
+			body: "Build the dashboard reading the upstream composite query.",
+			frontmatter: {
+				title: "comparative dashboard",
+				inputs: [
+					"unit-005-graphql-entity-quick-view",
+					"product/ACCEPTANCE-CRITERIA.md",
+				],
+			},
+		})
+		const json = JSON.parse(result.content[0].text)
+		assert.strictEqual(
+			json.ok,
+			undefined,
+			`expected rejection, got ok: ${JSON.stringify(json)}`,
+		)
+		const errs = JSON.stringify(json)
+		assert.ok(
+			/inputs_unit_name_not_path/.test(errs),
+			`expected inputs_unit_name_not_path error; got ${errs}`,
+		)
+	})
+
+	await test("unit with proper file-path inputs → write succeeds", () => {
+		const { projDir, slug, stage } = createProject("hv-path-inputs")
+		process.chdir(projDir)
+		const result = handleStateTool("haiku_unit_write", {
+			intent: slug,
+			stage,
+			unit: "unit-014-comparative-dashboard",
+			body: "Build the dashboard.",
+			frontmatter: {
+				title: "comparative dashboard",
+				depends_on: [],
+				inputs: ["product/ACCEPTANCE-CRITERIA.md", "intent.md"],
+			},
+		})
+		const json = JSON.parse(result.content[0].text)
+		assert.strictEqual(
+			json.ok,
+			true,
+			`file-path inputs must pass; got ${JSON.stringify(json)}`,
+		)
+	})
+
 	console.log(`\n${passed} passed, ${failed} failed`)
 	process.chdir(origCwd)
 	rmSync(tmp, { recursive: true, force: true })

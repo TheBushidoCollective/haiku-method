@@ -1,6 +1,7 @@
 ---
 name: sourcing
 description: Identify candidate pools and conduct outreach
+optional: true
 hats: [sourcer, recruiter, verifier]
 fix_hats: [classifier, sourcer, feedback-assessor]
 review: auto
@@ -12,22 +13,22 @@ inputs:
 
 # Sourcing
 
-Build the candidate pipeline against the requisition's job spec. Sourcing is where the pipeline gets its volume, its diversity, and its first-touch experience. Pipeline composition decisions made here propagate forward — a homogeneous or thin pipeline at sourcing means a homogeneous or thin shortlist at screening, regardless of how rigorous the screening criteria are.
+Build the candidate pipeline against the requisition's job spec. This is where the pipeline gets its volume, its diversity, and its first-touch experience — and where composition decisions made now set a hard ceiling on everything downstream.
 
-## Per-unit baton
+## Scope
 
-Each unit (a candidate batch keyed to a sourcing channel or persona) walks the three hats in `plan → do → verify` order:
+Pipeline construction and outreach: channel selection, prospect identification, and first-touch engagement. Sourcing decides *who enters the funnel and how they're approached* — not whether they meet the bar (screening) or what role was defined (requisition). A thin or homogeneous pipeline here yields a thin or homogeneous shortlist no matter how rigorous screening is.
 
-- **`sourcer`** (plan) reads the job spec, picks the channel category and persona, and identifies the prospect list with initial fit signals
-- **`recruiter`** (do) runs the personalized outreach against that prospect list, tracks responses, and surfaces channel-effectiveness metrics
-- **`verifier`** (verify) validates the unit's batch artifact for substance and operational completeness — advances or rejects
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+- Pick channels and personas deliberately against the job spec, not just the easiest source to hand.
+- Build prospect lists with initial fit signals so screening starts from real context.
+- Run personalized outreach and track responses, watching channel effectiveness as you go.
+- Mind pipeline composition (mix, persona coverage) as a first-class outcome of this stage, not an afterthought.
 
-## Inputs and outputs
+## What NOT to do
 
-Upstream input is `requisition/job-spec` (must-haves, nice-to-haves, sourcing plan, compensation framing, known market constraints). The single output is `CANDIDATE-PIPELINE.md` at intent scope — the consolidated prospect list with channel mix, fit signals, and outreach status. Screening consumes this output to drive the qualification pass.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, sourcer, feedback-assessor]` dispatches per finding. The gate is `auto` — sourcing decisions are operational and reversible (add more sources, re-run outreach), so harness advancement is appropriate once the verifier signs off and the review agents close their findings. Pipeline-composition concerns (channel mix, persona coverage) surface through the diversity review agent and route back to the sourcer for resolution.
+- Don't qualify or rank candidates against the must-have bar — that's screening.
+- Don't redefine the role or its requirements; consume the job spec as given.
+- Don't optimize for raw volume at the cost of a pipeline that's too narrow to produce a fair shortlist.
+- Don't let a single easy channel quietly determine the whole pipeline's composition.

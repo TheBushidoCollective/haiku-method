@@ -16,10 +16,8 @@
 //   - resolveStageReview           — review-gate type ("auto" / "ask" /
 //                                    "external" / compound CSV)
 //   - resolveStageMetadata         — STAGE.md description + body
-//   - buildFeedbackAssessorPrompt  — prompt body for the auto-injected
-//                                    feedback-assessor hat
 
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { resolvePluginRoot } from "../config.js"
@@ -47,31 +45,61 @@ export function resolveStudioFilePath(subpath: string): string | null {
 
 /** Compute the effective stage list for an intent.
  *
- *  Resolution order:
- *    1. Start with the studio's full stage list (from STUDIO.md).
- *    2. If `intent.stages` is an explicit non-empty array, intersect
- *       with studio stages (preserves studio order; rejects unknown
- *       stages). This is how `/haiku:quick` restricts a multi-stage
- *       studio to a single stage without enumerating skip_stages.
- *    3. Apply `intent.skip_stages` filter on the result.
+ *  `intent.stages` is the CANONICAL, materialized, ordered plan — the
+ *  studio's `stages:` is the superset *template*; the intent owns the live
+ *  list. It's stamped at mode selection (`haiku_select_mode`) and mutated
+ *  only by the engine (e.g. `haiku_drop_stage` removing an optional stage).
  *
- *  Callers that need the full studio list (not intent-filtered)
- *  should call `resolveStudioStages` directly. */
+ *  Resolution:
+ *    1. If `intent.stages` is a non-empty array, it IS the plan — ordered
+ *       by itself (drops preserve studio order, so it stays pipeline-valid).
+ *       Each entry is guarded against the studio's current stage set: a
+ *       stage the studio no longer defines (renamed/removed) is dropped
+ *       rather than emitted as a phantom the cursor can't resolve
+ *       hats/gates for. This is the tick-time stale-stage guard.
+ *    2. If absent/empty (legacy / pre-materialization), fall back to the
+ *       studio's full stage list.
+ *
+ *  The old `skip_stages` deny-list was removed 2026-05-27 — one canonical
+ *  list, no second filter. "What got dropped" = `studio.stages − stages`.
+ *
+ *  Callers that need the full studio list (not intent-filtered) should
+ *  call `resolveStudioStages` directly. */
 export function resolveIntentStages(
 	intent: Record<string, unknown>,
 	studio: string,
 ): string[] {
 	const studioStages = resolveStudioStages(studio)
 	const explicit = Array.isArray(intent.stages)
-		? (intent.stages as string[])
+		? (intent.stages as string[]).filter((s) => typeof s === "string")
 		: []
-	const allowed = explicit.length > 0 ? new Set(explicit) : null
-	const skipStages = (intent.skip_stages as string[]) || []
-	return studioStages.filter((s) => {
-		if (allowed && !allowed.has(s)) return false
-		if (skipStages.includes(s)) return false
-		return true
-	})
+	if (explicit.length > 0) {
+		const studioSet = new Set(studioStages)
+		return explicit.filter((s) => studioSet.has(s))
+	}
+	return studioStages
+}
+
+/** Filter cross-stage references (a stage's `inputs:` entries) to those whose
+ *  source stage is still in the intent's plan — the auto-ignore that lets an
+ *  optional stage be dropped without orphaning a downstream dependency.
+ *
+ *  Most downstream paths handle a dropped stage WITHOUT this, because a dropped
+ *  optional stage never ran (haiku_drop_stage refuses a started stage) so it
+ *  has no artifacts and no `stages/<stage>/` dir: the coverage gate skips a
+ *  prior stage whose dir is absent, and `start_unit` injects only resolved
+ *  inputs that `.exists`. The one path that needs the explicit filter is the
+ *  decompose builder's found/missing split — a dropped-stage input would
+ *  otherwise fall into "missing" and emit a false "⚠ Missing Upstream
+ *  Artifacts" warning telling the agent to file a stage_revisit at a stage
+ *  that isn't in the plan. Filtering by plan first drops it from BOTH sets. */
+export function filterInputsByPlanStages<T extends { stage: string }>(
+	inputs: readonly T[],
+	planStages: readonly string[] | ReadonlySet<string>,
+): T[] {
+	const set =
+		planStages instanceof Set ? planStages : new Set<string>(planStages)
+	return inputs.filter((r) => set.has(r.stage))
 }
 
 export function resolveStudioStages(studio: string): string[] {
@@ -110,6 +138,127 @@ export function resolveStageHats(studio: string, stage: string): string[] {
 	return []
 }
 
+/** Read a stage's STAGE.md frontmatter (project override → plugin). */
+function readStageFrontmatter(
+	studio: string,
+	stage: string,
+): Record<string, unknown> {
+	const info = resolveStudio(studio)
+	const dir = info ? info.dir : studio
+	const pluginRoot = resolvePluginRoot()
+	for (const base of [
+		join(process.cwd(), ".haiku", "studios"),
+		join(pluginRoot, "studios"),
+	]) {
+		const stageFile = join(base, dir, "stages", stage, "STAGE.md")
+		if (existsSync(stageFile)) return readFrontmatter(stageFile)
+	}
+	return {}
+}
+
+/** Whether a stage is optional (STAGE.md `optional: true`). An optional
+ *  stage is offered for keep-or-drop the first time the cursor arrives at
+ *  it; dropping removes it from `intent.stages` via haiku_drop_stage. */
+export function resolveStageOptional(studio: string, stage: string): boolean {
+	return readStageFrontmatter(studio, stage).optional === true
+}
+
+/** Downstream in-plan stages that reference `stage` via their `inputs:` or
+ *  `review-agents-include:`. Drives the "what you're severing" summary shown
+ *  when an optional stage is offered for drop — so the decision isn't blind to
+ *  the cross-stage references the drop will auto-ignore. */
+export function computeStageDependents(
+	studio: string,
+	stage: string,
+	planStages: readonly string[],
+): Array<{ stage: string; inputs: string[]; reviewAgents: string[] }> {
+	const idx = planStages.indexOf(stage)
+	if (idx < 0) return []
+	const out: Array<{
+		stage: string
+		inputs: string[]
+		reviewAgents: string[]
+	}> = []
+	for (const ds of planStages.slice(idx + 1)) {
+		const fm = readStageFrontmatter(studio, ds)
+		const inputs = Array.isArray(fm.inputs)
+			? (
+					fm.inputs as Array<{
+						stage?: string
+						discovery?: string
+						output?: string
+					}>
+				)
+					.filter((i) => i.stage === stage)
+					.map((i) => i.discovery ?? i.output ?? "?")
+			: []
+		const reviewAgents = Array.isArray(fm["review-agents-include"])
+			? (
+					fm["review-agents-include"] as Array<{
+						stage?: string
+						agents?: string[]
+					}>
+				)
+					.filter((r) => r.stage === stage)
+					.flatMap((r) => (Array.isArray(r.agents) ? r.agents : []))
+			: []
+		if (inputs.length > 0 || reviewAgents.length > 0)
+			out.push({ stage: ds, inputs, reviewAgents })
+	}
+	return out
+}
+
+/** Read the ordered studio-level `fix_hats:` list (intent-scope fix
+ *  loop). Source order: explicit `fix_hats:` on STUDIO.md frontmatter
+ *  if present (so a studio can pin the chain), otherwise alphabetical
+ *  filename order from `studios/<studio>/fix-hats/`. Empty result
+ *  means the studio doesn't define an intent-scope fix loop and the
+ *  cursor cannot dispatch — it surfaces a `user_gate` instead so the
+ *  human resolves the finding. */
+export function resolveStudioFixHats(studio: string): string[] {
+	const info = resolveStudio(studio)
+	const dir = info ? info.dir : studio
+	const pluginRoot = resolvePluginRoot()
+	for (const base of [
+		join(process.cwd(), ".haiku", "studios"),
+		join(pluginRoot, "studios"),
+	]) {
+		const studioFile = join(base, dir, "STUDIO.md")
+		if (existsSync(studioFile)) {
+			const fm = readFrontmatter(studioFile)
+			const declared = fm.fix_hats
+			if (Array.isArray(declared) && declared.length > 0) {
+				return declared.filter((h): h is string => typeof h === "string")
+			}
+			break
+		}
+	}
+	// Fallback: enumerate the fix-hats cascade and return the names
+	// alphabetically. MUST walk the SAME tiers as `readStudioFixHatPaths`
+	// (the per-hat-mandate-file resolver): the global tier (`plugin/fix-hats/`,
+	// project `.haiku/fix-hats/`) PLUS the studio tier (`studios/<studio>/
+	// fix-hats/`). A global-only fix hat (e.g. the shared `validator` /
+	// `reconciler`) must show up in the chain for studios that ship no local
+	// copy — otherwise the dispatch sees an empty chain and surfaces a
+	// `user_gate` instead of running the intent-completion fix loop. Order is
+	// alphabetical regardless of which tier supplied the file, matching the
+	// pre-consolidation behavior when every studio carried its own copies.
+	const names: string[] = []
+	for (const fixHatsDir of [
+		join(pluginRoot, "fix-hats"),
+		join(process.cwd(), ".haiku", "fix-hats"),
+		join(pluginRoot, "studios", dir, "fix-hats"),
+		join(process.cwd(), ".haiku", "studios", dir, "fix-hats"),
+	]) {
+		if (!existsSync(fixHatsDir)) continue
+		for (const f of readdirSync(fixHatsDir).filter((f) => f.endsWith(".md"))) {
+			const name = f.replace(/\.md$/, "")
+			if (!names.includes(name)) names.push(name)
+		}
+	}
+	return names.sort()
+}
+
 /** Read the ordered `fix_hats:` list declared on a stage. When set,
  *  pending feedback findings are routed through this sequence
  *  instead of the legacy "draft new units that close feedback" path.
@@ -135,106 +284,6 @@ export function resolveStageFixHats(studio: string, stage: string): string[] {
 		}
 	}
 	return []
-}
-
-/** Build the subagent prompt for the auto-injected `feedback-assessor`
- *  hat. The assessor's job is independent verification of the unit's
- *  `closes:` claims — it reads every feedback body and every output
- *  the unit produced, then decides whether each claim actually
- *  resolves the finding. On approve: workflow engine promotes each
- *  FB item's status to `closed`/`addressed` and the unit completes.
- *  On reject: the unit bolts back to the first hat with a reason
- *  naming the specific unresolved items. */
-export function buildFeedbackAssessorPrompt(opts: {
-	slug: string
-	studio: string
-	stage: string
-	unit: string
-	bolt: number
-	worktreePath: string
-	intentRoot: string
-	unitAbsPath: string
-	closes: string[]
-	feedbackFiles: Array<{ id: string; file: string }>
-	unitOutputs: string[]
-}): string {
-	const {
-		slug,
-		stage,
-		unit,
-		bolt,
-		worktreePath,
-		intentRoot,
-		unitAbsPath,
-		closes,
-		feedbackFiles,
-		unitOutputs,
-	} = opts
-	const lines: string[] = []
-	lines.push(
-		`You are the **feedback-assessor** hat for unit **${unit}** (bolt ${bolt}) in stage **${stage}** of intent **${slug}**.`,
-		"",
-		"## Role",
-		"",
-		"You are the independent verifier. The prior hats produced work claiming to close specific feedback items. You decide — by reading the feedback bodies and the unit's actual outputs — whether each claimed closure is valid. The designer/reviewer cannot self-certify; that is why this hat exists.",
-		"",
-	)
-	if (worktreePath) {
-		lines.push(
-			`**Unit worktree:** \`${worktreePath}\` (intent dir: \`${intentRoot}\`). Read and write at this path — it contains prior-hat commits not yet merged. **Your FIRST Bash command MUST be \`cd <worktree path>\`.** Every git, npm, node, and shell command that follows must run from inside the worktree. Git commits land on the unit's branch only if you are inside the worktree's tree. Absolute paths below are for Read/Write tool references, but shell-layer work (install, build, test, commit) requires the cwd to be the worktree. Verify with \`pwd\` after \`cd\` if in doubt.
-
-**Bash timeouts are MANDATORY on long-running commands.** Never let a test, build, install, or lint hang the hat indefinitely. Every Bash call that runs \`npm test\`, \`vitest\`, \`npx tsc\`, \`npm run build\`, \`npm install\`, \`playwright\`, or any Node CLI must pass an explicit \`timeout\` parameter:
-
-- typecheck / lint: \`timeout: 120000\` (2 min)
-- test runs: \`timeout: 300000\` (5 min)
-- builds / install: \`timeout: 600000\` (10 min; the hard cap)
-
-If a command times out, do NOT retry blindly — diagnose why (hanging test, network fetch, infinite loop in a watcher) and fix the underlying cause. A command that legitimately needs more than 10 minutes is a spec problem, not a timeout problem; surface it via \`haiku_unit_reject_hat\` rather than hanging the bolt.`,
-			"",
-		)
-	}
-	lines.push(
-		"## Required reading",
-		"",
-		`- Unit spec (for \`closes:\` array + output list) — \`${unitAbsPath}\``,
-	)
-	for (const out of unitOutputs) {
-		lines.push(`- Unit output — \`${join(intentRoot, out)}\``)
-	}
-	lines.push("", "## Feedback items the unit claims to close", "")
-	for (const fb of feedbackFiles) {
-		lines.push(
-			`- **${fb.id}** — \`${join(intentRoot, fb.file)}\` (read the full body)`,
-		)
-	}
-	if (closes.length === 0) {
-		lines.push(
-			"- _(none — this assessor was spawned but the unit has no `closes:` references; advance immediately)_",
-		)
-	}
-	lines.push(
-		"",
-		"## Assessment procedure",
-		"",
-		"For each feedback item above:",
-		"1. Read the feedback body in full. Extract the concrete requirement(s) it is asserting must change.",
-		"2. Read the unit's outputs listed above (or glob the unit's artifacts dir if not listed).",
-		"3. Judge independently: does the output *demonstrably* resolve the finding? Be strict — a partial gesture is not a fix.",
-		"4. Record your verdict per feedback item: **closed** (resolved) or **still-pending** (not resolved, with a specific reason).",
-		"",
-		"## Outcome",
-		"",
-		`- **All items closed:** call \`haiku_unit_advance_hat { intent: "${slug}", unit: "${unit}" }\`. The workflow engine will promote each feedback item to \`closed\` (agent-authored) or \`addressed\` (human-authored) automatically.`,
-		`- **Any still-pending:** call \`haiku_unit_reject_hat { intent: "${slug}", unit: "${unit}", reason: "<which items aren't closed and why>" }\`. The unit bolts back to the first hat. The failing feedback items stay \`pending\` — they will be re-addressed on the next bolt.`,
-		"",
-		"## Guardrails",
-		"",
-		"- Do NOT edit any artifacts. You verify only.",
-		"- Do NOT call `haiku_feedback_update` yourself — advance_hat does the status promotion atomically.",
-		"- Be specific in reject reasons: name each feedback id (FB-NN) that isn't closed and one-line why.",
-		"- Trust the unit's output list but also scan the artifacts directory — if a claimed close hinges on an artifact the unit didn't list, flag it.",
-	)
-	return lines.join("\n")
 }
 
 /** Append `feedback-assessor` as the terminal hat when a unit

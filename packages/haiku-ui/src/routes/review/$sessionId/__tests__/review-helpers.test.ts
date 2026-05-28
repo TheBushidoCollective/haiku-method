@@ -4,13 +4,17 @@
  * Both helpers are load-bearing for the SPA's terminal-intent guard
  * (deep links to `/stages/<X>` redirect to `/intent` only when this
  * fires) and the per-stage status display (the chrome shows
- * "completed" when v4 stages merge into intent main, even though v4
- * never writes `status: completed` to per-stage state.json).
+ * "completed" when v4 stages merge into intent main; v4 derives stage
+ * status from per-unit frontmatter and branch-merge state).
  */
 
 import { describe, expect, it } from "vitest"
 import type { ReviewPageSessionData } from "../../../../pages/review/shared/session-data"
-import { isIntentTerminal, resolveActiveStage } from "../-review-helpers"
+import {
+	isIntentTerminal,
+	phaseBadgeCopy,
+	resolveActiveStage,
+} from "../-review-helpers"
 
 function makeSession(
 	intentFrontmatter: Record<string, unknown>,
@@ -114,5 +118,36 @@ describe("resolveActiveStage v4 mergedIntoMain path", () => {
 			{ stage: "a" },
 		)
 		expect(resolveActiveStage(session)).toBe("a")
+	})
+})
+
+describe("phaseBadgeCopy — live-phase → pill", () => {
+	it("maps each live cursor phase to its own pill (gate ≠ Executing)", () => {
+		// The reported bug: at the review/approval gate the pill read
+		// "Executing" because it was fed the stale deprecated stage_states
+		// phase. With the live current_state.phase, gate/review/approve each
+		// map to their own non-"Executing" badge.
+		expect(phaseBadgeCopy("gate", "current")?.label).toBe("Final Review Gate")
+		expect(phaseBadgeCopy("review", "current")?.label).toBe("In Review")
+		expect(phaseBadgeCopy("approve", "current")?.label).toBe("In Approval")
+		expect(phaseBadgeCopy("execute", "current")?.label).toBe("Executing")
+		expect(phaseBadgeCopy("elaborate", "current")?.label).toBe("Elaborating")
+		expect(phaseBadgeCopy("complete", "current")?.label).toBe(
+			"All Gates Closed",
+		)
+	})
+
+	it("a completed stage wins over any phase value", () => {
+		expect(phaseBadgeCopy("execute", "completed")?.label).toBe(
+			"All Gates Closed",
+		)
+		expect(phaseBadgeCopy("execute", undefined, true)?.label).toBe(
+			"All Gates Closed",
+		)
+	})
+
+	it("returns null for an unknown / empty phase (no pill)", () => {
+		expect(phaseBadgeCopy("", "current")).toBeNull()
+		expect(phaseBadgeCopy(undefined, "current")).toBeNull()
 	})
 })

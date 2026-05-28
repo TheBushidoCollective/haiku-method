@@ -9,6 +9,12 @@
  * unions when validating URL params.
  */
 
-export type ReviewTab = "overview" | "units" | "knowledge" | "outputs" | "other"
+export type ReviewTab =
+	| "overview"
+	| "elaboration"
+	| "units"
+	| "knowledge"
+	| "outputs"
+	| "other"
 
 export type ReviewDetailKind = "units" | "knowledge" | "outputs" | "other"

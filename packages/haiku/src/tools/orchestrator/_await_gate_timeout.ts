@@ -25,6 +25,36 @@ export function isAwaitWaitTimeoutError(errorMsg: string): boolean {
 	)
 }
 
+/** Classify whether an error from `_awaitGateReviewSession` is a
+ *  presence-loss (no client connected: the SPA never opened, or the tab
+ *  was closed). Distinct from a wait timeout — presence-loss surfaces
+ *  the review URL for the user to (re)open while the gate keeps holding. */
+export function isAwaitPresenceLostError(errorMsg: string): boolean {
+	return errorMsg.includes("lost presence")
+}
+
+/** Resolve the review URL to hand back on presence-loss. Priority: the
+ *  URL the caller passed, then the persisted stage-scoped pointer
+ *  (`gate_review_url_<stage>`), then the intent-scoped pointer
+ *  (`gate_review_url`). Returns "" when none is known (the agent is then
+ *  told to re-open the gate via haiku_run_next). Pure + tested so the
+ *  "return the URL" contract can't silently regress to a blank. */
+export function resolveGateReviewUrl(
+	passedUrl: string | undefined,
+	intentMeta: Record<string, unknown>,
+	stage: string,
+): string {
+	if (passedUrl) return passedUrl
+	const stageKey = stage ? `gate_review_url_${stage}` : ""
+	if (stageKey && typeof intentMeta[stageKey] === "string") {
+		return intentMeta[stageKey] as string
+	}
+	if (typeof intentMeta.gate_review_url === "string") {
+		return intentMeta.gate_review_url as string
+	}
+	return ""
+}
+
 /**
  * Build the gate-review timeout response. Continuation (isError: false)
  * by design — see haiku_await_gate.ts call site for the full

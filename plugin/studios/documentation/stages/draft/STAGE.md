@@ -1,7 +1,7 @@
 ---
 name: draft
 description: Write the documentation content following the approved outline
-hats: [writer, technical-reviewer]
+hats: [writer, technical-reviewer, verifier]
 fix_hats: [classifier, writer, feedback-assessor]
 review: ask
 elaboration: autonomous
@@ -12,21 +12,22 @@ inputs:
 
 # Draft
 
-Turn the approved outline into prose, code samples, and visuals. Drafting is the build stage of this studio — its deliverable is the actual documentation content readers will see.
+The build stage of the documentation lifecycle: turn the approved outline into the actual content readers will see — prose, code samples, and visuals, technically verified against the source of truth.
 
-## Per-unit baton
+## Scope
 
-Each draft unit walks two hats in `plan/do → verify` order:
+Writing each outlined section into accurate, complete content with working examples. Draft decides *what the documentation actually says* — it does not design the structure (outline) or do the editorial and polish pass (review). It fills the outline; it doesn't redesign it.
 
-- **`writer`** (plan / do) reads the assigned outline section, drafts the prose, examples, and code blocks for that section, and verifies claims against the source of truth as they write
-- **`technical-reviewer`** (verify) checks every technical claim against the system, tests every code sample, validates API signatures and configuration values, and advances or rejects with the responsible failure named
+## What to do
 
-The baton: outline section + audit context → drafted prose with verified examples → validated draft ready for editorial review.
+- Write each section to the outline's purpose and doc mode, filling the structure rather than reshaping it.
+- Cite the source of truth for every technical claim and example.
+- Write code samples that actually run and visuals that actually clarify.
+- Confirm technical claims against reality before handing the draft on.
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes the outline stage's `document-outline`. Produces `DRAFT-CONTENT.md` — the unedited but technically-verified draft.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, writer, feedback-assessor]` dispatches per finding. The classifier targets the FB; the writer revises prose, examples, or claims; the assessor decides closure. The gate is `ask` — the user signs off on draft completeness before editorial review begins. Project overlays at `.haiku/studios/documentation/stages/draft/` may bind voice, terminology, and code-sample conventions to the project's house style.
+- Don't restructure or re-sequence the IA — a wrong outline is a revisit upstream, not a quiet rewrite here.
+- Don't do the editorial polish or final consistency pass — that's the review stage.
+- Don't ship a code sample you haven't verified runs.
+- Don't add sections the outline didn't scope.

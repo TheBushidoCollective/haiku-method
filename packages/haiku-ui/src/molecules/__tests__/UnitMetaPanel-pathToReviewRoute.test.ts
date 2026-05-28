@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { pathToReviewRoute } from "../UnitMetaPanel"
+import { type ArtifactIndex, pathToReviewRoute } from "../UnitMetaPanel"
 
 describe("pathToReviewRoute", () => {
 	it("bare unit name → units kind at current stage", () => {
@@ -95,5 +95,89 @@ describe("pathToReviewRoute", () => {
 			kind: "units",
 			name: "unit-99-bar",
 		})
+	})
+})
+
+describe("pathToReviewRoute — artifact-index resolution (Fix 5)", () => {
+	// Mirrors the index StageReview builds from the session's
+	// output_artifacts / stage_artifacts / other_files. The KEY is the
+	// artifact's intent-dir-relative path (== its `name`); the value is the
+	// producing stage + route kind. These are the paths that used to fall
+	// through to inert gray text — `product/*` discovery artifacts and
+	// repo-relative outputs whose string carries no stage segment.
+	const index: ArtifactIndex = new Map([
+		[
+			"product/ACCEPTANCE-CRITERIA.md",
+			{ stage: "product", kind: "outputs", name: "product/ACCEPTANCE-CRITERIA.md" },
+		],
+		[
+			"product/DATA-CONTRACTS.md",
+			{ stage: "product", kind: "outputs", name: "product/DATA-CONTRACTS.md" },
+		],
+		[
+			"features/worker_new_badge.feature",
+			{
+				stage: "development",
+				kind: "outputs",
+				name: "features/worker_new_badge.feature",
+			},
+		],
+	])
+
+	it("resolves an intent-relative discovery artifact to its producing stage", () => {
+		// `product/` is NOT a `stages/` path and NOT `knowledge/`; the shape
+		// rules can't claim it. The index says product-stage produced it.
+		expect(
+			pathToReviewRoute("product/ACCEPTANCE-CRITERIA.md", "development", index),
+		).toEqual({
+			stage: "product",
+			kind: "outputs",
+			name: "product/ACCEPTANCE-CRITERIA.md",
+		})
+	})
+
+	it("resolves a repo-relative .feature output to its producing stage", () => {
+		expect(
+			pathToReviewRoute("features/worker_new_badge.feature", "development", index),
+		).toEqual({
+			stage: "development",
+			kind: "outputs",
+			name: "features/worker_new_badge.feature",
+		})
+	})
+
+	it("tolerates a workspace-relative .haiku/intents/<slug>/ prefix", () => {
+		expect(
+			pathToReviewRoute(
+				".haiku/intents/my-intent/product/DATA-CONTRACTS.md",
+				"development",
+				index,
+			),
+		).toEqual({
+			stage: "product",
+			kind: "outputs",
+			name: "product/DATA-CONTRACTS.md",
+		})
+	})
+
+	it("shape rules still win over the index for stages/-rooted paths", () => {
+		// Even with an index present, a `stages/<stage>/artifacts/...` path
+		// resolves via the shape rule (its stage is in the string).
+		expect(
+			pathToReviewRoute("stages/design/artifacts/spec.md", "development", index),
+		).toEqual({ stage: "design", kind: "outputs", name: "spec.md" })
+	})
+
+	it("a path not in the index (and not shape-routable) → null", () => {
+		// No backing artifact and no recognizable shape → plain text fallback.
+		expect(
+			pathToReviewRoute("features/never-produced.feature", "development", index),
+		).toBeNull()
+	})
+
+	it("no index → unresolvable intent-relative path stays null", () => {
+		expect(
+			pathToReviewRoute("product/ACCEPTANCE-CRITERIA.md", "development"),
+		).toBeNull()
 	})
 })

@@ -1,0 +1,33 @@
+{
+  "name": "haiku",
+  "displayName": "H·AI·K·U",
+  "description": "H·AI·K·U methodology — universal lifecycle orchestration with hat-based workflows, completion criteria, and automatic context preservation.",
+  "version": "9.0.0",
+  "author": {
+    "name": "GigSmart",
+    "url": "https://gigsmart.com"
+  },
+  "homepage": "https://haikumethod.ai",
+  "repository": "https://github.com/gigsmart/haiku-method",
+  "license": "Apache-2.0",
+  "keywords": [
+    "haiku",
+    "haiku-method",
+    "lifecycle",
+    "orchestration",
+    "methodology",
+    "workflow",
+    "iteration",
+    "completion-criteria",
+    "hat-switching",
+    "context-preservation",
+    "human-ai-collaboration"
+  ],
+  "skills": "./skills/",
+  "mcpServers": {
+    "haiku": {
+      "command": "npx",
+      "args": ["-y", "haiku-method", "mcp"]
+    }
+  }
+}

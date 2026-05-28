@@ -151,6 +151,7 @@ test("FB write: new file uses 3-digit zero padding", async () => {
 			body: "body",
 			origin: "user-chat",
 			author: "user",
+			severity: "medium",
 		})
 		assert.ok(
 			!r.isError,

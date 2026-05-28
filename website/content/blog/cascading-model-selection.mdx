@@ -27,7 +27,22 @@ unit.model  →  hat.model  →  stage.default_model  →  studio.default_model
 
 The most specific wins. If a unit's frontmatter says `model: opus`, that unit runs on Opus — regardless of what the hat, the stage, or the studio default to. If nothing overrides at the unit level, the hat decides. If the hat has no opinion, the stage. If the stage has no opinion, the studio.
 
-Each layer exists because each layer has a different scope of knowledge about what the work needs. A studio default says "most work in this lifecycle is Sonnet-grade." A stage override says "but review phases need Opus for adversarial reasoning." A hat override says "but the builder hat can usually drop to Haiku for scaffolding." A unit override says "but *this particular* unit involves a consensus algorithm, and I want Opus regardless."
+Each layer exists because each layer has a different scope of knowledge about what the work needs.
+
+<Grid>
+  <Card eyebrow="Studio" title="Lifecycle default" accent="info">
+    "Most work in this lifecycle is Sonnet-grade." Sensible baseline for the whole pipeline.
+  </Card>
+  <Card eyebrow="Stage" title="Phase override" accent="info">
+    "But review phases need Opus for adversarial reasoning." Stage knows something the studio doesn't.
+  </Card>
+  <Card eyebrow="Hat" title="Role override" accent="info">
+    "But the builder hat can usually drop to Haiku for scaffolding." Role knows something the stage doesn't.
+  </Card>
+  <Card eyebrow="Unit" title="Work-item override" accent="good">
+    "But *this particular* unit involves a consensus algorithm, and I want Opus regardless." Unit wins.
+  </Card>
+</Grid>
 
 <ExpandableDiagram chart={`flowchart TB
     U[Unit<br/>model field] --> UD{set?}
@@ -72,14 +87,18 @@ Model selections aren't hidden. They show up everywhere:
   <Card eyebrow="Dashboard" title="Assignments by unit" accent="info">
     The dashboard surfaces per-unit model assignments alongside the usual bolt/phase/hat info. If you're wondering "why is this run so expensive," the answer is one command away.
   </Card>
-  <Card eyebrow="State tools" title="Machine-readable" accent="info">
-    `haiku_unit_list` now returns the model field in its JSON output, so anything scripting around haiku state can read and act on the assignments.
+  <Card eyebrow="Machine-readable" title="Scriptable from outside" accent="info">
+    Tooling that lives outside the harness can read the per-unit model assignments too — so dashboards, audits, and your own cost reports can act on the same decisions.
   </Card>
 </Grid>
 
 ## A security note
 
-There's a real attack surface here. Frontmatter gets read from `.md` files, and `.md` files get edited by agents. If an attacker could sneak `model: opus` or something stranger into a frontmatter block via prompt injection, they could drive up cost or destabilize a run. The cascade resolution runs input sanitization on every `model:` value — unknown strings get rejected, not passed through to the spawn call. It's the kind of thing you don't notice when it works, and the kind of thing that eats an incident response when it doesn't.
+There's a real attack surface here. Frontmatter gets read from `.md` files, and `.md` files get edited by agents. If an attacker could sneak `model: opus` or something stranger into a frontmatter block via prompt injection, they could drive up cost or destabilize a run.
+
+<Callout tone="warn" title="What stops the obvious abuse">
+The cascade resolution runs input sanitization on every `model:` value — unknown strings get rejected, not passed through to the spawn call. It's the kind of thing you don't notice when it works, and the kind of thing that eats an incident response when it doesn't.
+</Callout>
 
 ## Why this matters
 

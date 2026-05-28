@@ -16,13 +16,19 @@ import {
 	resolveIntentStages,
 	resolveStudioStages,
 } from "../orchestrator/studio.js"
+import { derivePosition } from "../orchestrator/workflow/cursor.js"
 import {
 	type DriftEvent,
 	runDriftSweep,
 } from "../orchestrator/workflow/drift-sweep.js"
+import {
+	deriveProgressTrack,
+	deriveStageMilestones,
+	snapshotMilestoneIndex,
+} from "../orchestrator/workflow/progress-track.js"
 import { getSession, type ReviewSession } from "../sessions.js"
 import { intentDir, parseFrontmatter } from "../state-tools.js"
-import { readStudioReviewAgentPaths } from "../studio-reader.js"
+import { readStageDef, readStudioReviewAgentPaths } from "../studio-reader.js"
 
 function titleCase(s: string): string {
 	return s
@@ -314,7 +320,163 @@ export function respondSessionApi(
 		const current = session.intent_slug
 			? getCurrentState(session.intent_slug)
 			: null
-		if (current) data.current_state = current
+		if (current) {
+			data.current_state = current
+			// Attach the granular milestone track (the same ordered
+			// milestones the status line shows) so the SPA can render a
+			// fine-grained stepper instead of the coarse five-phase strip.
+			// Best-effort: a derivation failure must never drop the rest of
+			// the payload — the SPA falls back to `phase`.
+			if (session.intent_slug && current.studio) {
+				try {
+					const fm = readIntentFrontmatterFresh(session.intent_slug)
+					const mode = typeof fm?.mode === "string" ? fm.mode : ""
+					const track = deriveProgressTrack({
+						slug: session.intent_slug,
+						studio: current.studio,
+						intentDir: intentDir(session.intent_slug),
+						intentMode: mode,
+					})
+					if (track.total > 0) {
+						current.milestones = track.steps
+						// Place the active milestone from the LIVE cursor action,
+						// not the stamp-derived `track.index` (which lags the
+						// action — an intent at the approval gate still reads
+						// "spec review" from stamps alone). This is the SAME
+						// mapping the status line uses, so the SPA's phase strip
+						// and the status line agree (reported 2026-05-26: status
+						// line "approval gate" vs SPA "spec review"). Fall back to
+						// the track index for actions with no stage milestone.
+						let activeIdx = track.index
+						try {
+							const pos = derivePosition({
+								slug: session.intent_slug,
+								intentDir: intentDir(session.intent_slug),
+								studio: current.studio as string,
+							})
+							const snapIdx = snapshotMilestoneIndex(
+								pos.action as { kind?: string } | null,
+								track.steps,
+							)
+							if (snapIdx >= 0) activeIdx = snapIdx
+						} catch {
+							/* fall back to the stamp-derived index */
+						}
+						current.progress_index = activeIdx
+						current.progress_total = track.total
+					}
+				} catch {
+					/* leave milestones unset — SPA falls back to coarse phase */
+				}
+			}
+		}
+		// Per-stage summaries + granular milestone tracks for EVERY stage
+		// (not just the engine-active one) so the SPA's Overview tab shows
+		// the studio-definition summary and the SAME fine-grained dot
+		// stepper on completed/upcoming stages — not a blank summary and a
+		// different (coarse) stepper. The summary is the stage's STAGE.md
+		// `description` frontmatter ("from studio definition"); the
+		// milestone LIST is studio-config driven so it's correct for any
+		// stage even when its merged unit FM is stale on disk (the SPA
+		// forces every pip done from the stage status on completed stages).
+		// Best-effort: a read failure must never drop the rest of the
+		// payload.
+		{
+			const slug = session.intent_slug
+			const fm = slug ? readIntentFrontmatterFresh(slug) : {}
+			const studio = (current?.studio as string) || (fm.studio as string) || ""
+			if (slug && studio) {
+				try {
+					const mode = typeof fm?.mode === "string" ? fm.mode : ""
+					const intentStages = resolveIntentStages(fm, studio)
+					const stages =
+						intentStages.length > 0 ? intentStages : resolveStudioStages(studio)
+					const dir = intentDir(slug)
+					const milestonesByStage: Record<string, unknown> = {}
+					const summaries: Record<string, string> = {}
+					const briefs: Record<string, string> = {}
+					const observations: Record<string, string> = {}
+					const elaborations: Record<string, string> = {}
+					for (const st of stages) {
+						try {
+							const steps = deriveStageMilestones({
+								slug,
+								studio,
+								intentDir: dir,
+								stage: st,
+								mode,
+							})
+							if (steps.length > 0) milestonesByStage[st] = steps
+						} catch {
+							/* skip this stage's track — others still ship */
+						}
+						const def = readStageDef(studio, st)
+						const desc = def?.data?.description
+						if (typeof desc === "string" && desc.trim()) {
+							summaries[st] = desc.trim()
+						}
+						// Per-stage user-facing BRIEF — the plain-language summary
+						// the briefer wrote before the gate. Surfaced to the SPA
+						// review surface (first thing at the gate) and the website
+						// browse stage view. Read server-side; agents never read it.
+						try {
+							const briefPath = join(dir, "stages", st, "BRIEF.md")
+							if (existsSync(briefPath)) {
+								const body = readFileSync(briefPath, "utf8").trim()
+								if (body) briefs[st] = body
+							}
+						} catch {
+							/* skip this stage's brief — others still ship */
+						}
+						// Per-stage agent OBSERVATIONS — the free-form reflection
+						// written at stage close. Same shape as the brief; surfaced
+						// on the SPA's per-stage browse view.
+						try {
+							const obsPath = join(dir, "stages", st, "observations.md")
+							if (existsSync(obsPath)) {
+								const body = readFileSync(obsPath, "utf8").trim()
+								if (body) observations[st] = body
+							}
+						} catch {
+							/* skip this stage's observations — others still ship */
+						}
+						// Per-stage ELABORATION — the decompose-phase narrative,
+						// surfaced in its own tab. Same shape as the brief.
+						try {
+							const elabPath = join(dir, "stages", st, "elaboration.md")
+							if (existsSync(elabPath)) {
+								const body = readFileSync(elabPath, "utf8").trim()
+								if (body) elaborations[st] = body
+							}
+						} catch {
+							/* skip this stage's elaboration — others still ship */
+						}
+					}
+					if (Object.keys(milestonesByStage).length > 0)
+						data.stage_milestones = milestonesByStage
+					if (Object.keys(summaries).length > 0)
+						data.stage_summaries = summaries
+					if (Object.keys(briefs).length > 0) data.stage_briefs = briefs
+					if (Object.keys(observations).length > 0)
+						data.stage_observations = observations
+					if (Object.keys(elaborations).length > 0)
+						data.stage_elaborations = elaborations
+					// Intent-scope synthesized REFLECTION — written once at intent
+					// close. Surfaced at the intent level (not per stage).
+					try {
+						const reflPath = join(dir, "reflection.md")
+						if (existsSync(reflPath)) {
+							const body = readFileSync(reflPath, "utf8").trim()
+							if (body) data.reflection = body
+						}
+					} catch {
+						/* skip reflection — the rest of the payload still ships */
+					}
+				} catch {
+					/* leave both unset — SPA falls back to its defaults */
+				}
+			}
+		}
 		// Track-C drift sweep — same call the cursor makes pre-tick.
 		// Surfaced under `drift` so the SPA's DriftBanner can render
 		// the same set of mutated artifacts the engine would react to
@@ -366,6 +528,8 @@ export function respondSessionApi(
 		if (session.stageArtifacts) data.stage_artifacts = session.stageArtifacts
 		if (session.outputArtifacts) data.output_artifacts = session.outputArtifacts
 		if (session.otherFiles) data.other_files = session.otherFiles
+		if (session.intentOtherFiles)
+			data.intent_other_files = session.intentOtherFiles
 		if (session.unitOutputs) data.unit_outputs = session.unitOutputs
 		if (session.outputDeclaredBy)
 			data.output_declared_by = session.outputDeclaredBy
@@ -402,6 +566,7 @@ export function respondSessionApi(
 	if (session.session_type === "design_direction") {
 		data.title = "Design Direction"
 		data.intent_slug = session.intent_slug
+		if (session.context) data.context = session.context
 		data.archetypes = session.archetypes
 		data.selection = session.selection
 	}
@@ -412,6 +577,15 @@ export function respondSessionApi(
 		data.prompt = session.prompt
 		data.options = session.options
 		data.selection = session.selection
+	}
+	if (session.session_type === "view") {
+		data.intent_slug = session.intent_slug
+		data.mode = session.mode
+		if (session.studio) data.studio = session.studio
+		if (session.stage) data.stage = session.stage
+		if (session.artifact) data.artifact = session.artifact
+		if (session.boot_port) data.boot_port = session.boot_port
+		if (session.boot_command) data.boot_command = session.boot_command
 	}
 	reply.send(data)
 }

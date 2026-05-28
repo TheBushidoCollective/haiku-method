@@ -336,6 +336,8 @@ test("reset → intent_create produces a clean slate (no stale stages/feedback/e
 			title: "fat intent",
 			description: "Real-ish body.",
 			context: preservedContext,
+			// studio_candidates is required on intent_create (2026-05-26).
+			studio_candidates: ["software"],
 		})
 		const createTxt = createResp.content?.[0]?.text ?? ""
 		assert.ok(

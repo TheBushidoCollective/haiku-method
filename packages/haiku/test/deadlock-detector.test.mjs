@@ -23,7 +23,9 @@ const {
 	wouldDeadlock,
 	buildLoopHaltAction,
 	__resetDeadlockDetector,
+	__simulateRestartForTests,
 	__getTickHistoryForTests,
+	__seedEntryForTests,
 	actionSignatureForDeadlock,
 } = await import("../src/orchestrator/workflow/deadlock-detector.ts")
 
@@ -42,6 +44,193 @@ test("deadlock-detector: same action twice in a row reaches threshold", () => {
 		2,
 		"second identical tick reaches threshold (count=2)",
 	)
+})
+
+test("deadlock-detector: a STABLE stuck fix-hat batch repeats to a halt (the no-op loop)", () => {
+	// FB-011/012/013 stalled at `addressed`: the cursor re-dispatched the
+	// same start_feedback_hat batch every tick because the subagents did
+	// the work but never called advance/reject. The batch is identical
+	// each tick → signature must be stable → wouldDeadlock halts.
+	__resetDeadlockDetector()
+	const stuckBatch = {
+		action: "start_feedback_hat",
+		dispatches: [
+			{ feedback_id: "FB-011", stage: "product", hat: "product" },
+			{ feedback_id: "FB-012", stage: "product", hat: "product" },
+			{ feedback_id: "FB-013", stage: "product", hat: "product" },
+		],
+	}
+	recordTickResult("slug-noop", stuckBatch) // 1
+	recordTickResult("slug-noop", stuckBatch) // 2
+	recordTickResult("slug-noop", stuckBatch) // 3
+	const verdict = wouldDeadlock("slug-noop", stuckBatch)
+	assert.ok(verdict, "a stable stuck fix-hat batch must trip the loop halt")
+	assert.strictEqual(verdict.kind, "repeat")
+})
+
+test("deadlock-detector: an EVOLVING fix-hat batch (progress) does NOT false-halt", () => {
+	// Healthy progress: each tick the same FBs advance to the next hat, so
+	// the batch's (feedback_id, hat) set changes. Signature must change →
+	// no halt, even across many ticks. Pre-fix, all start_feedback_hat
+	// ticks collapsed to one signature and this would have halted at 4.
+	__resetDeadlockDetector()
+	const tick = (hat) => ({
+		action: "start_feedback_hat",
+		dispatches: [{ feedback_id: "FB-001", stage: "product", hat }],
+	})
+	const hats = ["classifier", "product", "specification", "feedback-assessor"]
+	for (const h of hats) {
+		assert.strictEqual(
+			wouldDeadlock("slug-progress", tick(h)),
+			null,
+			`advancing through '${h}' must not halt`,
+		)
+		recordTickResult("slug-progress", tick(h))
+	}
+	assert.strictEqual(
+		__getTickHistoryForTests("slug-progress").count,
+		1,
+		"each distinct hat is a fresh signature; counter never accumulates",
+	)
+})
+
+test("deadlock-detector: an EVOLVING elaborate_loop (clearing signals one per tick) does NOT false-halt", () => {
+	// admin-portal-reimagine, security stage, 2026-05-22: the cursor
+	// emitted elaborate_loop/security 4 consecutive ticks and halted. Each
+	// tick had REAL on-disk progress — a different signal cleared
+	// (conversation → verify_conversation → decompose → verify_decompose) —
+	// but the pre-fix signature ignored signals_unmet, so all 4 collapsed to
+	// one value and the 4th tripped the repeat halt BEFORE the last signal
+	// could clear. Folding the unmet-signal set into the signature breaks the
+	// chain on every step of genuine progress.
+	__resetDeadlockDetector()
+	const tick = (signals_unmet) => ({
+		action: "elaborate_loop",
+		stage: "security",
+		signals_unmet,
+	})
+	// The natural cadence: each tick a different signal remains, because the
+	// agent cleared the prior one and re-ticked for the next instruction.
+	const progression = [
+		[{ signal: "conversation" }, { signal: "decompose" }],
+		[{ signal: "verify_conversation" }, { signal: "decompose" }],
+		[{ signal: "decompose" }],
+		[{ signal: "verify_decompose" }],
+	]
+	for (const signals of progression) {
+		assert.strictEqual(
+			wouldDeadlock("slug-elab-progress", tick(signals)),
+			null,
+			`clearing toward ${JSON.stringify(signals)} must not halt`,
+		)
+		recordTickResult("slug-elab-progress", tick(signals))
+	}
+	assert.strictEqual(
+		__getTickHistoryForTests("slug-elab-progress").count,
+		1,
+		"each distinct unmet-signal set is a fresh signature; counter never accumulates",
+	)
+})
+
+test("deadlock-detector: a STABLE elaborate_loop (same signal stuck every tick) still halts", () => {
+	// The other half of the contract: a verifier that won't sign leaves the
+	// SAME signal unmet tick after tick. That's a real wedge — the signature
+	// stays stable and the repeat halt must still fire.
+	__resetDeadlockDetector()
+	const stuck = {
+		action: "elaborate_loop",
+		stage: "security",
+		signals_unmet: [{ signal: "verify_decompose" }],
+	}
+	recordTickResult("slug-elab-stuck", stuck) // 1
+	recordTickResult("slug-elab-stuck", stuck) // 2
+	recordTickResult("slug-elab-stuck", stuck) // 3
+	const verdict = wouldDeadlock("slug-elab-stuck", stuck)
+	assert.ok(verdict, "a stuck elaborate signal must still trip the halt")
+	assert.strictEqual(verdict.kind, "repeat")
+	assert.strictEqual(verdict.count, 4)
+})
+
+test("deadlock-detector: elaborate_loop signal set is order-independent", () => {
+	const a = actionSignatureForDeadlock({
+		action: "elaborate_loop",
+		stage: "security",
+		signals_unmet: [{ signal: "decompose" }, { signal: "conversation" }],
+	})
+	const b = actionSignatureForDeadlock({
+		action: "elaborate_loop",
+		stage: "security",
+		signals_unmet: [{ signal: "conversation" }, { signal: "decompose" }],
+	})
+	assert.strictEqual(a, b, "same unmet-signal set in different order = same signature")
+})
+
+test("deadlock-detector: elaborate_loop discovery signals fold in the agent name", () => {
+	// Two discovery templates outstanding vs one is genuine progress — the
+	// agent identity has to be part of the signature or clearing one of two
+	// discovery artifacts would look like a no-op tick.
+	const two = actionSignatureForDeadlock({
+		action: "elaborate_loop",
+		stage: "design",
+		signals_unmet: [
+			{ signal: "discovery", agent: "research", units: [] },
+			{ signal: "discovery", agent: "design-direction", units: [] },
+		],
+	})
+	const one = actionSignatureForDeadlock({
+		action: "elaborate_loop",
+		stage: "design",
+		signals_unmet: [{ signal: "discovery", agent: "research", units: [] }],
+	})
+	assert.notStrictEqual(
+		two,
+		one,
+		"clearing one of two discovery artifacts must change the signature",
+	)
+})
+
+test("deadlock-detector: count survives an MCP restart (persisted on-disk)", () => {
+	// The in-memory count resetting on every MCP reconnect is exactly why
+	// the FB-011/012/013 no-op loop survived: each reconnect zeroed the
+	// counter before it could reach HALT_THRESHOLD. Persistence fixes that
+	// — the count rehydrates from disk so the loop still escalates.
+	__resetDeadlockDetector()
+	const stuck = {
+		action: "start_feedback_hat",
+		dispatches: [{ feedback_id: "FB-011", stage: "product", hat: "product" }],
+	}
+	recordTickResult("slug-restart", stuck) // 1
+	recordTickResult("slug-restart", stuck) // 2
+	recordTickResult("slug-restart", stuck) // 3
+	// MCP restarts: in-memory map is wiped, the on-disk file remains.
+	__simulateRestartForTests()
+	// The next tick's pre-check rehydrates count=3 from disk; one more
+	// would be the 4th identical signature → halt.
+	const verdict = wouldDeadlock("slug-restart", stuck)
+	assert.ok(
+		verdict,
+		"a no-op loop spanning a restart must still reach the halt — count rehydrates from disk",
+	)
+	assert.strictEqual(verdict.kind, "repeat")
+	assert.strictEqual(verdict.count, 4)
+})
+
+test("deadlock-detector: batch signature is order-independent", () => {
+	const a = actionSignatureForDeadlock({
+		action: "start_feedback_hat",
+		dispatches: [
+			{ feedback_id: "FB-002", stage: "s", hat: "h" },
+			{ feedback_id: "FB-001", stage: "s", hat: "h" },
+		],
+	})
+	const b = actionSignatureForDeadlock({
+		action: "start_feedback_hat",
+		dispatches: [
+			{ feedback_id: "FB-001", stage: "s", hat: "h" },
+			{ feedback_id: "FB-002", stage: "s", hat: "h" },
+		],
+	})
+	assert.strictEqual(a, b, "same batch in different order = same signature")
 })
 
 test("deadlock-detector: changing action signature resets the counter", () => {
@@ -413,4 +602,139 @@ test("recordTickResult: loop_halted action does NOT pollute the recent window", 
 		!after.recent.some((s) => s.includes("loop_halted")),
 		"loop_halted signature must not appear in recent window",
 	)
+})
+
+// ─ Regression: worker-new-badge (2026-05-27). A wait-for-human action
+// (`user_gate`) re-emitted across many pickup ticks must NEVER poison the
+// churn window. The user re-ran /haiku:haiku-pickup ~9× at a parked
+// development-stage gate (across session restarts, so the persisted
+// recent[] accumulated); the next tick resolved a genuine progress action
+// (start_unit_hat) and the churn detector swapped it for loop_halted —
+// masking the very gate that was asking the user to act.
+test("recordTickResult: a repeated user_gate is a no-op — never enters the window", () => {
+	__resetDeadlockDetector()
+	const gate = {
+		action: "user_gate",
+		stage: "development",
+		unit_batch: "unit-001-render-new-tag-in-worker-dates",
+	}
+	// Nine pickups at the same parked gate (the worker-new-badge window).
+	for (let i = 0; i < 9; i++) recordTickResult("slug-gate", gate)
+	const h = __getTickHistoryForTests("slug-gate")
+	assert.strictEqual(
+		h,
+		null,
+		"a stream of user_gate waits records nothing — the gate is not engine progression",
+	)
+})
+
+test("worker-new-badge: a user_gate window does NOT false-halt the next progress action", () => {
+	__resetDeadlockDetector()
+	const gate = {
+		action: "user_gate",
+		stage: "development",
+		unit_batch: "unit-001-render-new-tag-in-worker-dates",
+	}
+	// Repeated pickups while parked at the gate — exactly the incident.
+	for (let i = 0; i < 9; i++) recordTickResult("slug-wnb", gate)
+	// The gate is satisfied; the cursor resolves the planner hat.
+	const progress = {
+		action: "start_unit_hat",
+		stage: "development",
+		hat: "planner",
+		units: ["unit-001-render-new-tag-in-worker-dates"],
+	}
+	const verdict = wouldDeadlock("slug-wnb", progress)
+	assert.strictEqual(
+		verdict,
+		null,
+		"genuine progress after a user_gate wait must not be halted as churn",
+	)
+})
+
+test("user_gate exemption does NOT mask a genuine engine wedge that follows", () => {
+	// The exemption is scoped to wait-for-human actions only. A real A↔B
+	// engine churn that happens to be interleaved with no gates still halts.
+	__resetDeadlockDetector()
+	const A = { action: "dispatch_review", role: "spec" }
+	const B = { action: "complete_stage", stage: "design" }
+	// A few idle gate ticks first (no-ops), then a real wedge.
+	recordTickResult("slug-mix", { action: "user_gate", stage: "design" })
+	for (const x of [A, B, A, B, A, B, A]) recordTickResult("slug-mix", x)
+	const verdict = wouldDeadlock("slug-mix", B)
+	assert.ok(verdict, "an interleaved gate must not disarm a genuine A↔B wedge")
+	assert.strictEqual(verdict.kind, "churn")
+})
+
+// ─ Recovery: a window persisted BEFORE the user_gate exemption shipped
+// still holds user_gate signatures on disk. After an MCP restart it
+// rehydrates (if not yet stale), so the next genuine progress action
+// would re-trip churn unless the churn computation excludes the
+// wait-for-human signatures. This reproduces the EXACT worker-new-badge
+// .deadlock-history.json (recent[] = 9× user_gate, signature =
+// loop_halted, churn_fired = false) and asserts the engine self-heals —
+// no manual file deletion required.
+test("worker-new-badge: a rehydrated pre-fix user_gate window self-heals on the next progress tick", () => {
+	__resetDeadlockDetector()
+	const gateSig = actionSignatureForDeadlock({
+		action: "user_gate",
+		stage: "development",
+		unit_batch: "unit-001-render-new-tag-in-worker-dates",
+	})
+	const haltSig = actionSignatureForDeadlock({ action: "loop_halted" })
+	const now = new Date().toISOString()
+	__seedEntryForTests("slug-rehydrate", {
+		signature: haltSig,
+		count: 1,
+		first_seen: now,
+		updated_at: now,
+		recent: Array(9).fill(gateSig),
+		churn_fired: false,
+	})
+	const progress = {
+		action: "start_unit_hat",
+		stage: "development",
+		hat: "planner",
+		units: ["unit-001-render-new-tag-in-worker-dates"],
+	}
+	const verdict = wouldDeadlock("slug-rehydrate", progress)
+	assert.strictEqual(
+		verdict,
+		null,
+		"a pre-fix poisoned user_gate window must not re-halt the next progress action",
+	)
+	// And recording that progress tick must not (falsely) latch churn.
+	recordTickResult("slug-rehydrate", progress)
+	assert.strictEqual(
+		__getTickHistoryForTests("slug-rehydrate").churn_fired,
+		false,
+		"progress after a poisoned gate window does not latch churn telemetry",
+	)
+})
+
+test("a genuine A↔B wedge with gate signatures interleaved in the window still halts", () => {
+	// The filter removes ONLY wait-for-human signatures. A real engine
+	// wedge whose window happens to contain a stray gate signature must
+	// still reach the distinct-count threshold and halt.
+	__resetDeadlockDetector()
+	// recent[] holds signature STRINGS; wouldDeadlock takes the action OBJECT.
+	const Aobj = { action: "dispatch_review", role: "spec" }
+	const Bobj = { action: "complete_stage", stage: "design" }
+	const A = actionSignatureForDeadlock(Aobj)
+	const B = actionSignatureForDeadlock(Bobj)
+	const gateSig = actionSignatureForDeadlock({ action: "user_gate", stage: "design" })
+	const now = new Date().toISOString()
+	// 8 real alternating ticks with one gate signature mixed in — the
+	// gate drops out, leaving a clean A↔B wedge of length ≥ 8.
+	__seedEntryForTests("slug-wedge", {
+		signature: A,
+		count: 1,
+		first_seen: now,
+		updated_at: now,
+		recent: [A, B, A, B, gateSig, A, B, A, B],
+		churn_fired: false,
+	})
+	const verdict = wouldDeadlock("slug-wedge", Bobj)
+	assert.ok(verdict, "a real A↔B wedge must still halt despite an interleaved gate")
+	assert.strictEqual(verdict.kind, "churn")
 })

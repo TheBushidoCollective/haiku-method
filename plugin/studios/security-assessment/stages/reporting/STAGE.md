@@ -15,22 +15,22 @@ outputs:
 
 # Reporting
 
-Formal findings report with severity ratings, reproduction steps, remediation guidance, and executive summary. The deliverable the customer pays for. Units are **report sections** (one per finding or finding-cluster) plus the executive summary, methodology, and scope sections that wrap them.
+The deliverable the customer pays for: a formal findings report with severity ratings, reproduction steps, remediation guidance, and an executive summary. This stage turns the assessment's technical work into something the customer can read, act on, and verify.
 
-## Per-unit baton
+## Scope
 
-The three hats execute in `plan → do → verify` order:
+Communicating findings for multiple audiences: per-finding descriptions, reproduction steps at the right detail, evidence references, severity per the engagement rubric, remediation guidance, and the executive summary, methodology, and scope sections that frame them. Reporting decides *how the findings are presented and remediated* — not what the findings are (the upstream assessment stages own that).
 
-- **`report-writer`** (plan/do): drafts the section — finding description, affected asset, reproduction steps at the right level of detail, evidence references, severity per the engagement rubric, multi-audience language.
-- **`remediation-advisor`** (do): adds the remediation guidance — short-term mitigation, long-term fix, verification check the customer can run themselves to confirm the fix worked.
-- **`verifier`** (verify): validates the section's evidence trail, severity alignment, reproduction-step appropriateness, and remediation specificity. Body-only per architecture §3.4.
+## What to do
 
-The baton: impact assessment → drafted section → remediation-augmented section → validated section.
+- Write each finding for the audience that needs it — technical detail for engineers, business framing for executives.
+- Make reproduction steps detailed enough to confirm the finding, without becoming a reusable attack script.
+- Give remediation guidance with short-term mitigation, long-term fix, and a verification check the customer can run themselves.
+- Tie every severity rating and claim to the evidence the assessment already captured.
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes `post-exploitation/impact-assessment`. Produces `FINDINGS-REPORT.md` (intent-scope) plus per-unit remediation entries.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, report-writer, feedback-assessor]` — most findings are clarity, evidence-completeness, or remediation-specificity issues; `report-writer` is the implementer. Gate is `external` because the report is the engagement deliverable — sign-off lives in the customer's review channel (their ticketing system, doc platform, or signed PDF), not in a local approval.
+- Don't introduce findings the assessment stages didn't establish — new findings are a revisit upstream, not a reporting invention.
+- Don't restate severities that contradict the impact assessment without resolving the conflict.
+- Don't ship a finding without its evidence trail or a remediation path.
+- Don't leave the executive summary disconnected from the technical findings it summarizes.

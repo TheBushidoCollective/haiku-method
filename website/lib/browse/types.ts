@@ -34,6 +34,13 @@ export interface BrowseProvider {
 	): Promise<import("@haiku/shared").HaikuIntentDetail | null>
 	/** Read a raw file from the workspace */
 	readFile(path: string): Promise<string | null>
+	/** Resolve an intent-relative file path to a directly-usable URL (a blob
+	 *  URL for local files, an authed-fetched blob URL for git providers) so
+	 *  it can load inside a sandboxed `srcDoc` iframe with no base URL and no
+	 *  auth header. Returns null when the file is missing/unreadable. Used to
+	 *  render an HTML output's relative assets (CSS, images). Optional —
+	 *  providers without it fall back to non-asset-resolved rendering. */
+	resolveAssetUrl?(path: string): Promise<string | null>
 	/** List files matching a pattern in a directory */
 	listFiles(dir: string): Promise<string[]>
 	/** Write a file to the workspace via commit (optional — not all providers support writes) */
@@ -195,6 +202,7 @@ export function parseUnit(
 		status: deriveUnitStatus(data),
 		dependsOn: (data.depends_on as string[]) || [],
 		refs: (data.refs as string[]) || [],
+		inputs: (data.inputs as string[]) || [],
 		outputs: (data.outputs as string[]) || [],
 		bolt: (data.bolt as number) || 0,
 		hat: (data.hat as string) || "",

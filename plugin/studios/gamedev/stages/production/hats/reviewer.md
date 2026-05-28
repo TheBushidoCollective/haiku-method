@@ -2,6 +2,10 @@
 
 You do NOT fix what you find. You either advance the unit (the body passes the lens) or reject it (naming the responsible hat the reject routes back to). Findings outside the current unit's hat chain route via `haiku_feedback`.
 
+## Validate this unit's outputs against its criteria
+
+List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, field: "outputs" }`, then confirm each one satisfies the unit's completion criteria. The outputs are what you validate; the unit's criteria are the bar. Stay scoped to this one unit — sibling units have their own verify passes.
+
 ## Process
 
 ### 1. Read the unit body end-to-end

@@ -206,6 +206,25 @@ export function withIntentMainLock<T>(slug: string, fn: () => T): T {
 	}
 }
 
+/**
+ * Run `fn` while holding an advisory lock for the intent's
+ * dispatch-claim walk. Serializes the queue-walk-and-claim step
+ * performed by `haiku_feedback_advance_hat` /
+ * `haiku_unit_advance_hat` when they pick the next dispatchable hat
+ * and stamp it as in-flight. Without this lock, two concurrent
+ * terminal advances could both pick the same next-dispatchable FB and
+ * relay duplicate subagent blocks. Per-intent scope: parallelism
+ * across different intents is preserved.
+ */
+export function withIntentDispatchLock<T>(slug: string, fn: () => T): T {
+	const lock = acquireLock(`${slug}-dispatch`, `intent-dispatch:${slug}`)
+	try {
+		return fn()
+	} finally {
+		releaseLock(lock)
+	}
+}
+
 // Test-only escape hatch — internal callers can verify lock state
 // without exposing the raw acquire/release primitives.
 export const __testOnly = {

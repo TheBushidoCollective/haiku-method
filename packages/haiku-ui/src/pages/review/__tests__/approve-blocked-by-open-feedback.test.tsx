@@ -21,7 +21,7 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { decideMode } from "../FeedbackSidebar"
+import { decideMode } from "../review-decision"
 
 describe("FeedbackSidebar — open-feedback gate (principle: a person cannot approve a stage with open feedback)", () => {
 	it("mode=approve when nothing is open and the user is on the current stage", () => {

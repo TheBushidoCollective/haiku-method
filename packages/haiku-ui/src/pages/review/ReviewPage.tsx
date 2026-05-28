@@ -27,17 +27,21 @@ import { DriftBanner, type DriftEntry } from "../../molecules/DriftBanner"
 import { StageProgressStrip } from "../../molecules/StageProgressStrip"
 import { SubmitSuccess } from "../../molecules/SubmitSuccess"
 import type { AnnotationPin } from "../../organisms/AnnotationCanvas"
-import { FeedbackFloatingButton } from "../../organisms/FeedbackFloatingButton"
+import { FeedbackRail } from "../../organisms/FeedbackRail"
 import { FeedbackSheet } from "../../organisms/FeedbackSheet"
+import { RAIL_GUTTER_CLASS } from "../../organisms/feedbackRailLayout"
 import type { InlineCommentEntry } from "../../organisms/InlineComments"
 import type { ReviewAnnotations } from "../../types"
 import { ArtifactsPane } from "./ArtifactsPane"
+import { FeedbackComposer } from "./FeedbackComposer"
 import { FeedbackPanelBody } from "./FeedbackPanelBody"
 import { FeedbackSidebar } from "./FeedbackSidebar"
+import { GateDecisionBar } from "./GateDecisionBar"
 import { IntentDriftAssessmentsSection } from "./IntentDriftAssessmentsSection"
 import { RereviewBanner } from "./shared/RereviewBanner"
 import type { ReviewPageSessionData } from "./shared/session-data"
 import type { ReviewDetailKind, ReviewTab } from "./shared/stage-tabs"
+import { useReviewChromeHeightVars } from "./shared/useReviewChromeHeightVars"
 import { StageReview } from "./stage/StageReview"
 import { useFeedbackSidebarController } from "./useFeedbackSidebarController"
 import { useIsMobile } from "./useIsMobile"
@@ -227,18 +231,102 @@ function phaseBadgeCopy(
  * reviewer can see where the stage sits in its own lifecycle
  * (elaborate → execute → review → gate).
  */
+interface Milestone {
+	key: string
+	label: string
+	status: "done" | "active" | "pending"
+}
+
 function PhaseStepper({
 	phase,
 	stageStatus,
+	milestones,
+	progressIndex,
 }: {
 	phase: string | null
 	stageStatus: string
+	/** Granular per-stage track (mirrors the status line). When present
+	 *  and non-empty, the stepper renders one pip per milestone instead
+	 *  of the coarse five-phase strip. */
+	milestones?: Milestone[]
+	progressIndex?: number
 }): React.ReactElement {
+	const isStageComplete =
+		stageStatus === "completed" || stageStatus === "complete"
+
+	// Granular track: one pip per cursor milestone (elaborate → each
+	// review role → execute → each approval role → observations; or the
+	// intent-completion tail). Pips are keyed by the stable milestone
+	// `key` so live updates reconcile in place without remounting.
+	if (milestones && milestones.length > 0) {
+		const total = milestones.length
+		const ai =
+			typeof progressIndex === "number"
+				? progressIndex
+				: milestones.findIndex((m) => m.status === "active")
+		const allDone = isStageComplete || ai < 0 || ai >= total
+		const activeLabel = !allDone ? milestones[ai]?.label : undefined
+		return (
+			// biome-ignore lint/a11y/useSemanticElements: minimal grouping; fieldset/legend would impose form semantics
+			<div
+				className="inline-flex items-center gap-2"
+				role="group"
+				aria-label={`Milestone ${allDone ? total : ai + 1} of ${total}`}
+			>
+				<span className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
+					Phase
+				</span>
+				<div className="inline-flex items-center gap-1">
+					{milestones.map((m, i) => {
+						const done = isStageComplete || m.status === "done"
+						const active = !isStageComplete && m.status === "active"
+						return (
+							<div
+								key={m.key}
+								className="flex items-center gap-1"
+								title={m.label}
+							>
+								<span
+									className={`inline-block w-2 h-2 rounded-full transition-colors ${
+										active
+											? "bg-amber-500 ring-2 ring-amber-300 dark:ring-amber-700"
+											: done
+												? "bg-green-500"
+												: "bg-stone-300 dark:bg-stone-700"
+									}`}
+									aria-hidden="true"
+								/>
+								{i < total - 1 && (
+									<span
+										className={`w-2 h-0.5 transition-colors ${
+											done
+												? "bg-green-400 dark:bg-green-700"
+												: "bg-stone-300 dark:bg-stone-700"
+										}`}
+										aria-hidden="true"
+									/>
+								)}
+							</div>
+						)
+					})}
+				</div>
+				<span className="text-xs font-mono text-stone-500 dark:text-stone-400">
+					{allDone ? "done" : `${ai + 1}/${total}`}
+				</span>
+				{activeLabel && (
+					<span className="text-xs text-amber-600 dark:text-amber-400 truncate max-w-[12rem]">
+						{activeLabel}
+					</span>
+				)}
+			</div>
+		)
+	}
+
+	// Coarse fallback — legacy five-phase strip for payloads without a
+	// milestone track.
 	const activeIndex = phase
 		? STAGE_PHASES.indexOf(phase as (typeof STAGE_PHASES)[number])
 		: -1
-	const isStageComplete =
-		stageStatus === "completed" || stageStatus === "complete"
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: minimal grouping; fieldset/legend would impose form semantics
 		<div
@@ -300,7 +388,7 @@ function MobileFeedbackSection(): React.ReactElement {
 	).length
 	return (
 		<>
-			<FeedbackFloatingButton
+			<FeedbackRail
 				ref={fabRef}
 				open={sheetOpen}
 				onToggle={() => setSheetOpen((o) => !o)}
@@ -311,17 +399,25 @@ function MobileFeedbackSection(): React.ReactElement {
 				onClose={() => setSheetOpen(false)}
 				triggerRef={fabRef}
 			>
-				<FeedbackPanelBody
-					items={controller.items}
-					loading={controller.loading}
-					error={controller.error}
-					onStatusChange={controller.handleStatusChange}
-					onDelete={controller.handleDelete}
-					onRetry={controller.retry}
-					onReply={controller.handleReply}
-					busyIds={controller.busyIds}
-					creating={controller.creating}
-				/>
+				{/* Feedback AUTHORING lives in the drawer (mobile split): the
+				    composer pins at the TOP (immediately usable on open), the
+				    list scrolls below it with bottom padding to clear the
+				    sticky gate bar. The gate DECISION is separate — the sticky
+				    bottom bar (GateDecisionBar composer={false}). */}
+				<FeedbackComposer className="border-t-0 border-b" />
+				<div className="flex-1 min-h-0 overflow-y-auto pb-3">
+					<FeedbackPanelBody
+						items={controller.items}
+						loading={controller.loading}
+						error={controller.error}
+						onStatusChange={controller.handleStatusChange}
+						onDelete={controller.handleDelete}
+						onRetry={controller.retry}
+						onReply={controller.handleReply}
+						busyIds={controller.busyIds}
+						creating={controller.creating}
+					/>
+				</div>
 			</FeedbackSheet>
 		</>
 	)
@@ -341,6 +437,9 @@ export function ReviewPage({
 	const gateModes = resolveGateModes(session.gate_type)
 	const gateBadges = gateModes.map(gateBadgeCopy)
 	const isMobile = useIsMobile()
+	// Keep `--review-header-h` on the page root in sync with the dynamic
+	// header height so the left rail + slide-out drawer anchor below it.
+	const { rootRef, headerRef, gateBarRef } = useReviewChromeHeightVars()
 
 	// Stepper navigation — which stage's content the main pane is showing.
 	// Defaults to the active stage (what the intent is currently on).
@@ -353,7 +452,8 @@ export function ReviewPage({
 	// Stage-internal sub-state. In production the router owns these
 	// (StageContent drives them from URL params); this component keeps
 	// local copies so tests that render ReviewPage directly still work.
-	const [stageTab, setStageTab] = useState<ReviewTab | undefined>(initialTab)
+	// `string` not `ReviewTab` — admits dynamic per-directory tab ids.
+	const [stageTab, setStageTab] = useState<string | undefined>(initialTab)
 	const [stageDetail, setStageDetail] = useState<{
 		kind: ReviewDetailKind
 		name: string
@@ -461,10 +561,14 @@ export function ReviewPage({
 	return (
 		<FeedbackProvider intent={intentSlug} stage={selectedStage}>
 			<div
+				ref={rootRef}
 				data-testid="review-page-ready"
 				className="h-screen overflow-hidden flex flex-col bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100"
 			>
-				<HeaderLandmark className="shrink-0 z-40 bg-white/80 dark:bg-stone-900/80 backdrop-blur-sm border-b border-stone-200 dark:border-stone-800">
+				<HeaderLandmark
+					ref={headerRef}
+					className="shrink-0 z-40 bg-white/80 dark:bg-stone-900/80 backdrop-blur-sm border-b border-stone-200 dark:border-stone-800"
+				>
 					<div className="px-4 sm:px-6 py-3 flex items-center justify-between border-b border-stone-100 dark:border-stone-800/60">
 						<div className="flex items-center gap-3 min-w-0">
 							<span className="text-base font-bold tracking-tight text-stone-900 dark:text-stone-100">
@@ -533,7 +637,16 @@ export function ReviewPage({
 
 				<div
 					data-testid="review-split"
-					className="flex-1 flex flex-col xl:flex-row overflow-hidden"
+					className={[
+						"flex-1 flex flex-col xl:flex-row overflow-hidden",
+						// Reserve the rail's gutter on the mobile branch so page
+						// content is inset by the rail width and never renders
+						// underneath the fixed full-height rail column. Desktop
+						// (sidebar) needs no gutter.
+						isMobile ? RAIL_GUTTER_CLASS : "",
+					]
+						.filter(Boolean)
+						.join(" ")}
 				>
 					{!isMobile && (
 						<FeedbackSidebar
@@ -610,6 +723,18 @@ export function ReviewPage({
 											? (session.current_state?.pending_signals ?? null)
 											: null
 									}
+									milestones={
+										// Same scoping as pending_signals — the granular
+										// track is derived for the engine's current stage.
+										selectedStage === activeStage
+											? (session.current_state?.milestones ?? null)
+											: null
+									}
+									progressIndex={
+										selectedStage === activeStage
+											? session.current_state?.progress_index
+											: undefined
+									}
 								/>
 
 								{/* Drift banner — sticky strip between StageBanner and
@@ -648,6 +773,43 @@ export function ReviewPage({
 				</div>
 
 				{isMobile && <MobileFeedbackSection />}
+
+				{/* Mobile gate controls — DECISION-ONLY (composer={false}).
+				    The Approve / Request-Changes surface docks here as a sticky
+				    bottom bar so the gate is actionable below the xl breakpoint.
+				    The desktop FeedbackSidebar is `hidden xl:flex` + suppressed
+				    via `!isMobile`, which previously stranded the gate with no
+				    way to Approve / Request Changes on mobile. The comment
+				    composer lives inside the feedback drawer
+				    (`<FeedbackComposer/>`), not here — "the approve button is
+				    its own thing, not part of feedback authoring." Never
+				    co-renders with the desktop sidebar, so it owns its own
+				    decision state. Suppressed on the intent-overview +
+				    post-submit screens, which have no stage gate to drive. */}
+				{isMobile && !viewingIntent && !submittedDecision && (
+					<div
+						ref={gateBarRef}
+						className="sticky bottom-0 z-[60] w-full border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950"
+					>
+						<GateDecisionBar
+							stage={selectedStage ?? activeStage}
+							activeStage={activeStage}
+							sessionId={sessionId}
+							gateType={session.gate_type}
+							approveAction={session.approve_action}
+							awaitActive={session.await_active}
+							pendingDecisionQueued={!!session.pending_decision}
+							getAnnotations={getAnnotations}
+							adHoc={isAdHoc}
+							composer={false}
+							onDecisionSuccess={(decision) => {
+								if (decision === "approved" || decision === "external") {
+									setSubmittedDecision(decision)
+								}
+							}}
+						/>
+					</div>
+				)}
 			</div>
 		</FeedbackProvider>
 	)
@@ -665,6 +827,8 @@ function StageBanner({
 	gateBadges,
 	adHoc,
 	pendingSignals,
+	milestones,
+	progressIndex,
 }: {
 	stageName: string
 	stageStatus: string
@@ -681,6 +845,11 @@ function StageBanner({
 	 *  is currently keeping the loop from advancing. Null when the
 	 *  caller is browsing a non-current stage. */
 	pendingSignals?: ReadonlyArray<string> | null
+	/** Granular per-stage milestone track for the current stage (null when
+	 *  browsing another stage). Drives the fine-grained phase stepper;
+	 *  falls back to the coarse five-phase strip when absent. */
+	milestones?: Milestone[] | null
+	progressIndex?: number
 }): React.ReactElement {
 	const statusPill =
 		stageStatus === "current" || stageStatus === "active"
@@ -722,7 +891,12 @@ function StageBanner({
 						<p className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
 							Stage
 						</p>
-						<PhaseStepper phase={stagePhase} stageStatus={stageStatus} />
+						<PhaseStepper
+							phase={stagePhase}
+							stageStatus={stageStatus}
+							milestones={milestones ?? undefined}
+							progressIndex={progressIndex}
+						/>
 					</div>
 					<div className="flex items-center gap-2 mt-1 flex-wrap">
 						<h1 className="text-base font-bold text-stone-900 dark:text-stone-100 leading-tight capitalize">
@@ -855,9 +1029,10 @@ function StageScopedContent({
 	onPinsChange: (pins: AnnotationPin[]) => void
 	highlightFeedbackId: string | null
 	onHighlightConsumed: () => void
-	stageTab: ReviewTab | undefined
+	// `string` not `ReviewTab` — admits dynamic per-directory tab ids.
+	stageTab: string | undefined
 	stageDetail: { kind: ReviewDetailKind; name: string } | null
-	onStageTabChange: (tab: ReviewTab | undefined) => void
+	onStageTabChange: (tab: string | undefined) => void
 	onStageDetailChange: (
 		detail: { kind: ReviewDetailKind; name: string } | null,
 	) => void
@@ -1051,6 +1226,22 @@ function IntentOverviewPane({
 						</p>
 					)}
 				</div>
+
+				{/* Reflection — the intent-scope synthesis the agent wrote at
+				    intent close (reflection.md). Intent-level, so it lives here
+				    rather than on any single stage. Teal-accented to read as the
+				    intent's own retrospective; absent until the reflection phase
+				    runs. */}
+				{session.reflection && (
+					<div className="bg-white dark:bg-stone-900 rounded-lg border-2 border-teal-200 dark:border-teal-900/60 px-5 py-4">
+						<p className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 mb-3">
+							Reflection
+						</p>
+						<MarkdownViewer id="intent-reflection">
+							{session.reflection}
+						</MarkdownViewer>
+					</div>
+				)}
 
 				{/* Drift assessments — intent-scope drift history (per
 				    SPA-UI-SPECS §4). Renders after the intent-definition

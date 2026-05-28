@@ -1,7 +1,7 @@
 ---
 name: deliver
 description: Finalize and package the deliverable for its audience
-hats: [publisher, verifier]
+hats: [delivery-planner, publisher, verifier]
 fix_hats: [classifier, publisher, feedback-assessor]
 review: auto
 elaboration: autonomous
@@ -14,25 +14,22 @@ inputs:
 
 # Deliver
 
-Finalize and package the deliverable for its audience. The draft from `create` plus the findings from `review` go in; an audience-ready final artifact comes out. This stage incorporates surviving review findings, adjusts tone and structure for the target audience, and packages the final form (formatting, attribution, table of contents, links).
+The terminal stage of the ideation lifecycle: finalize and package the deliverable for its audience. The draft from create plus the surviving findings from review go in; an audience-ready final artifact comes out. This is operational work — incorporate, format, package, ship.
 
-## What a unit IS for this stage
+## Scope
 
-Each unit is a **delivery action** — one concrete operational step with preconditions, an unambiguous action, a verifiable post-condition check, and a rollback or forward-fix path. Typical actions: incorporate critical findings, format for audience, finalize attribution, validate links, package for the delivery channel.
+Finalization and packaging: incorporating the findings the deliverable will address, adapting tone and structure for the audience, and producing the final form (formatting, attribution, table of contents, links). Deliver decides *how the finished artifact reaches its audience* — not what it says (create) or whether it was sound (review). The substantive decisions are already made by the time this stage runs.
 
-## Per-unit baton
+## What to do
 
-Units walk two hats in `do → verify` order. Planning was completed during decompose (the elaborator-stage planner decides which delivery actions are needed); execution then runs:
+- Incorporate the surviving review findings the deliverable is meant to address.
+- Adapt tone and structure to the target audience without changing the substance.
+- Package the final form completely — formatting, attribution, links, and any channel-specific exports.
+- Treat each step as a concrete action with a verifiable post-condition and a rollback or forward-fix path.
 
-- **`publisher`** (do) incorporates findings and finalizes formatting; produces the audience-ready version
-- **`verifier`** (verify) validates that preconditions / action / post-condition are all stated, the post-condition is verifiable, and rollback is named where applicable
+## What NOT to do
 
-For most ideation intents two hats suffice — delivery is rarely complex enough to warrant a separate plan hat per unit. Project overlays may add a third hat (e.g., `formatter` between `publisher` and `verifier`) when the delivery channel justifies it.
-
-## Inputs and outputs
-
-Inputs: `create/draft-deliverable`, `review/review-report`. Output: per-unit operational records composing into `FINAL-DELIVERABLE.md` at intent scope, plus any side artifacts the delivery channel requires (formatted exports, attribution appendix, link manifest).
-
-## Fix loop and gate
-
-When intent-completion review feedback opens, `fix_hats: [classifier, publisher, feedback-assessor]` dispatches per finding. Gate is `auto` — by `deliver` the human-decision points have already happened (in `create`'s `ask` gate and `review`'s `ask` gate). Anything still open at this stage is operational.
+- Don't reopen the substance or re-argue findings — the create and review stages already settled those.
+- Don't generate new content or run a fresh review pass.
+- Don't ship with a broken link, missing attribution, or an unincorporated critical finding.
+- Don't perform a packaging action you can't verify completed.

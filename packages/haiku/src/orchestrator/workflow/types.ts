@@ -50,14 +50,19 @@ export type StateName =
 	| "continue_unit"
 	| "continue_units"
 	// review loop
-	| "review"
+	// `review` removed 2026-05-18: orphan — registered but the cursor
+	// only emits per-role `dispatch_review`, never the parallel
+	// `review` action. The serial per-role walk replaced the parallel
+	// design before the rest of the codebase caught up.
 	| "review_fix"
 	| "fix_quality_gates"
 	| "integrate_fix_chains"
 	| "pre_review"
 	| "pre_review_waiting"
 	// intent-completion review
-	| "intent_completion_review"
+	// `intent_completion_review` removed 2026-05-18: same story as
+	// `review` above — orphan, never emitted. Per-role `intent_review`
+	// is what the cursor walks at intent completion.
 	| "intent_completion_fix"
 	// revisit — `revisited` removed 2026-05-12: declared but never emitted.
 	// The feedback walk handles stage rewinds via `start_feedback_hat` at

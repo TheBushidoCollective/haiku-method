@@ -59,6 +59,7 @@ const resetFixLoopBolts = (_slug: string, _stage: string): void => {
 
 import { reportError } from "../../sentry.js"
 import { logSessionEvent } from "../../session-metadata.js"
+import { findLiveReviewSessionForIntent } from "../../sessions.js"
 import {
 	HAIKU_AWAIT_GATE_INPUT_SCHEMA,
 	type HaikuAwaitGateInput,
@@ -82,7 +83,9 @@ import { defineTool } from "../define.js"
 import { withAnnouncement } from "./_announce.js"
 import {
 	buildAwaitTimeoutResponse,
+	isAwaitPresenceLostError,
 	isAwaitWaitTimeoutError,
+	resolveGateReviewUrl,
 } from "./_await_gate_timeout.js"
 import { text } from "./_text.js"
 import { withInstructions as renderInstructions } from "./_with_instructions.js"
@@ -147,13 +150,18 @@ function stampGateApproval(
 			fm[targetField] && typeof fm[targetField] === "object"
 				? (fm[targetField] as Record<string, unknown>)
 				: {}
-		// Reviews witness the unit body; approvals witness the
-		// declared output paths.
+		// Reviews witness the unit body + input premises; approvals are
+		// bookkeeping-only (just the `at` timestamp) under the premise-
+		// witness model — output mutation is not drift, so nothing is
+		// witnessed here.
 		if (isPreExecute) {
-			records.user = buildReviewRecord(unitPath)
+			const unitInputs = Array.isArray(fm.inputs) ? (fm.inputs as string[]) : []
+			records.user = buildReviewRecord(unitPath, {
+				intentDir: intentDirAbs,
+				unitInputs,
+			})
 		} else {
-			const outputs = Array.isArray(fm.outputs) ? (fm.outputs as string[]) : []
-			records.user = buildApprovalRecord(intentDirAbs, outputs)
+			records.user = buildApprovalRecord()
 		}
 		setFrontmatterField(unitPath, targetField, records)
 	}
@@ -168,9 +176,11 @@ export default defineTool({
 		"the user's decision, and returns the post-decision action all in " +
 		"one tool call. Use haiku_await_gate only when the original tick " +
 		"timed out, the MCP host disconnected, or the agent restart lost " +
-		"the in-memory blocking call; reads gate_review_session_<stage> " +
-		"(stage-scope) or gate_review_session_id (intent-scope) from " +
-		"intent.md frontmatter to reattach. Returns the same post-decision action " +
+		"the in-memory blocking call. The live review session is resolved " +
+		"from the in-memory registry keyed by intent slug, NOT a " +
+		"repo-persisted pointer (a page refresh reconnects the same logical " +
+		"session; pass session_id to target a specific one). Returns the " +
+		"same post-decision action " +
 		"shape (advance_stage / advance_phase / changes_requested / " +
 		"external_review_requested / intent_complete / etc.).",
 	inputSchema: jsonSchemaOf(HAIKU_AWAIT_GATE_INPUT_SCHEMA),
@@ -236,6 +246,19 @@ export default defineTool({
 			intentPhase === "awaiting_completion_review" ||
 			intentPhase === "intent_completion"
 
+		// Session resolution: the session id is NOT persisted to the repo
+		// (2026-05-26 — "the MCP is long-lived; the connection is to the
+		// MCP, not the tool"). Resolution order:
+		//   1. explicit `session_id` arg — haiku_run_next passes this on the
+		//      inline path, and an agent can pass it to re-await a specific
+		//      session after a connection blip.
+		//   2. the live in-memory registry, keyed by intent slug — the
+		//      authoritative source while the MCP process is up. A page
+		//      refresh reconnects the SAME logical session; this finds it.
+		//   3. a legacy `gate_review_session_*` FM pointer — only present on
+		//      intents that opened a gate before this change. New gates
+		//      never write it.
+		const liveSession = findLiveReviewSessionForIntent(slug)
 		const stageScopedSidKey = activeStage
 			? `gate_review_session_${activeStage}`
 			: ""
@@ -244,38 +267,50 @@ export default defineTool({
 			: ""
 		const intentPersistedSid =
 			(intentMeta.gate_review_session_id as string | undefined) || ""
-		const persistedSid = isIntentScopeGate
+		const legacyPersistedSid = isIntentScopeGate
 			? intentPersistedSid || stagePersistedSid
 			: stagePersistedSid
 
-		if (!persistedSid && !validated.session_id && !activeStage) {
-			return text(
-				`No active stage on intent '${slug}' and no pending intent-scope gate — nothing to await. Call haiku_run_next first.`,
-			)
-		}
-		const sessionId = validated.session_id || persistedSid
+		const sessionId =
+			validated.session_id || liveSession?.session_id || legacyPersistedSid
 		if (!sessionId) {
+			if (!activeStage && !isIntentScopeGate) {
+				return text(
+					`No active stage on intent '${slug}' and no pending intent-scope gate — nothing to await. Call haiku_run_next first.`,
+				)
+			}
 			const where = activeStage ? `stage '${activeStage}'` : `intent scope`
 			return text(
-				`No pending gate-review session for intent '${slug}' (${where}). Call haiku_run_next to (re)open the gate.`,
+				`No live gate-review session for intent '${slug}' (${where}). Call haiku_run_next to (re)open the gate — it re-derives the gate from the cursor and reattaches the live session.`,
 			)
 		}
 
 		const stage = activeStage
-		// next_stage / next_phase / context live on intent.md frontmatter
-		// for both scopes — haiku_run_next's gate-review handler writes
-		// them un-keyed (single review session at a time, intent-scoped
-		// fields). Pre-2026-05-12 this read from a non-existent
-		// `stages/<stage>/gate-session.json` for stage scope; the read
-		// always returned undefined and the gate then defaulted next_*
-		// to null. The defaulting masked the bug; now we read the same
-		// place haiku_run_next writes.
+		// Post-decision routing (gate_context → which side effects fire,
+		// next_stage/next_phase → where to advance). Resolution order:
+		//   1. explicit args — haiku_run_next passes these on the inline
+		//      path, so the normal flow needs no repo-persisted pointer.
+		//   2. legacy `gate_review_*` FM pointers — present only on gates
+		//      opened before this change.
+		//   3. defaults (stage_gate / null) — the no-args separate-await
+		//      path on a new gate. When the real gate isn't a plain
+		//      stage_gate, the agent should re-enter via haiku_run_next
+		//      (which re-derives the routing); the default never seals or
+		//      advances a phase it shouldn't, it just stamps a stage gate.
 		const nextStage =
-			(intentMeta.gate_review_next_stage as string | null | undefined) ?? null
+			validated.next_stage !== undefined
+				? validated.next_stage
+				: ((intentMeta.gate_review_next_stage as string | null | undefined) ??
+					null)
 		const nextPhase =
-			(intentMeta.gate_review_next_phase as string | null | undefined) ?? null
+			validated.next_phase !== undefined
+				? validated.next_phase
+				: ((intentMeta.gate_review_next_phase as string | null | undefined) ??
+					null)
 		const gateContext =
-			(intentMeta.gate_review_context as string | undefined) || "stage_gate"
+			validated.gate_context ||
+			(intentMeta.gate_review_context as string | undefined) ||
+			"stage_gate"
 		const intentDirPath = `.haiku/intents/${slug}`
 
 		const _awaitGateReviewSession = getAwaitGateReviewSession()
@@ -562,7 +597,7 @@ export default defineTool({
 						}
 						externalReviewMessage = withAnnouncement(
 							`The user routed stage "${stage}" to external review. The engine opened the MR for you: ${opened.createdUrl}`,
-							`Tell the user: "I opened the MR at ${opened.createdUrl} — review and merge it when you're ready. Run /haiku:pickup after the merge to continue." The MR was created against \`haiku/${slug}/main\` (NOT the repo default) so the workflow engine can detect the merge.`,
+							`Tell the user: "I opened the MR at ${opened.createdUrl} — review and merge it when you're ready. Run /haiku:haiku-pickup after the merge to continue." The MR was created against \`haiku/${slug}/main\` (NOT the repo default) so the workflow engine can detect the merge.`,
 						)
 					} else if (opened.compareUrl) {
 						externalReviewMessage = withAnnouncement(
@@ -578,7 +613,7 @@ export default defineTool({
 				} else {
 					externalReviewMessage = withAnnouncement(
 						`The user routed stage "${stage}" to external review.`,
-						`Submit the work for review through your project's review process. Record the review URL via haiku_run_next { intent: "${slug}", external_review_url: "<url>" }. Run /haiku:pickup again after the PR is merged.`,
+						`Submit the work for review through your project's review process. Record the review URL via haiku_run_next { intent: "${slug}", external_review_url: "<url>" }. Run /haiku:haiku-pickup again after the PR is merged.`,
 					)
 				}
 
@@ -774,27 +809,33 @@ export default defineTool({
 				return buildAwaitTimeoutResponse(slug)
 			}
 
-			// Presence-loss is a distinct user-action error: the SPA tab
-			// disconnected mid-await (no heartbeat for ≥120s). The throw
-			// message from `awaitGateReviewSession` already names the
-			// recovery path ("re-open the URL and call haiku_await_gate
-			// when ready") — wrapping it in the generic "Review UI
-			// failed to start" / "investigate the SPA server (port
-			// conflict? blocked browser launch?)" boilerplate below
-			// would direct the agent at a problem that doesn't exist
-			// (the UI started fine; the user closed the tab). Surface
-			// the message verbatim. Reported on PR #352 review.
-			if (errorMsg.includes("lost presence")) {
+			// Presence loss = no client is connected to the gate: either the
+			// SPA never opened, or the user closed the tab mid-review. This is
+			// NOT a failure and we do NOT abandon the gate. The contract
+			// (2026-05-26): hand the review URL back so the agent surfaces it
+			// to the user to open / re-open, AND keep HOLDING — the agent
+			// re-calls `haiku_await_gate`, which re-enters the wait. Resolve
+			// the URL from the arg or the persisted `gate_review_url[_<stage>]`
+			// pointer so it's available even when the agent didn't pass it.
+			if (isAwaitPresenceLostError(errorMsg)) {
 				syncSessionMetadata(slug, stFile)
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `GATE DISCONNECTED: ${errorMsg}`,
-						},
-					],
-					isError: true,
-				}
+				const gateUrl = resolveGateReviewUrl(reviewUrl, intentMeta, stage)
+				return text(
+					withInstructions({
+						action: "gate_awaiting_client",
+						intent: slug,
+						stage,
+						review_url: gateUrl || null,
+						message: withAnnouncement(
+							gateUrl
+								? `The review isn't connected — the SPA never opened, or the tab was closed. Review URL: ${gateUrl}`
+								: "The review isn't connected (the SPA never opened, or the tab was closed) and no review URL is recorded.",
+							gateUrl
+								? `Show the user this URL to open or re-open the review: ${gateUrl} — then call \`haiku_await_gate { intent: "${slug}" }\` again to keep holding for their decision. Do NOT abandon the gate or advance without it.`
+								: `Call \`haiku_run_next { intent: "${slug}" }\` to re-open the gate, then surface the URL it returns to the user.`,
+						),
+					}),
+				)
 			}
 
 			const agentFixable =

@@ -1,5 +1,9 @@
 **Focus:** Verify the implementation against the API surface and the unit completion criteria. You are the verify role for the development stage — body-only, no frontmatter interpretation. The reviewer catches contract drift: places where the code "works" but doesn't match what was promised in inception. Drift here becomes a breaking change for consumers on the next release.
 
+## Validate this unit's outputs against its criteria
+
+List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, field: "outputs" }`, then confirm each one satisfies the unit's completion criteria. The outputs are what you validate; the unit's criteria are the bar. Stay scoped to this one unit — sibling units have their own verify passes.
+
 ## Process
 
 ### 1. Read the inputs

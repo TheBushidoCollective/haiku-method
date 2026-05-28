@@ -15,21 +15,39 @@ sees a flat name → builder map. Folder depth has no runtime meaning.
 ```
 prompts/
   stage/
+    # Listed in lifecycle order — same order the cursor walks them.
+    # On-disk folder names are a flat sibling set; the lifecycle
+    # ordering is enforced in `cursor.ts`, not by folder position.
     start_stage/                  lifecycle init
     elaborate/                    elaborate-loop signals (single cursor state)
       elaborate_loop/             the router (the registered action)
       elaborate/                  conversation signal sub-builder
       decompose/                  unit-spec writing sub-builder
-      decompose_review/           coverage-verifier sub-builder
+      decompose_review/           coverage + spec-vs-intent verifier sub-builder
       discovery_required/         per-template discovery sub-builder
       elaborate_review/           substance-verifier sub-builder
+    review/                       ── PRE-execute sign-offs on the SPEC (per-role serial walk)
+      dispatch_review/            handles all roles — engine roles
+                                  (spec, continuity, cross-stage-consistency)
+                                  render mandate bodies from sibling
+                                  engine-bodies/<role>.eta.md (pre-execute prose:
+                                  "audit the planned spec, no code exists yet");
+                                  configured agents resolve via the 3-tier cascade.
+                                  Fires between elaborate_loop completion and
+                                  wave-ready hat dispatch.
     execute/                      hat dispatch
       start_unit/, start_unit_hat/
-    review/                       pre-execution sign-offs
-      dispatch_review/, review/
-    approve/                      post-execution sign-offs
-      dispatch_approval/, dispatch_quality_gates/
-    gate/                         user gates (both pre and post)
+    approve/                      ── POST-execute sign-offs on the WORK (per-role serial walk)
+      dispatch_approval/          handles all roles — engine roles render
+                                  mandate bodies from sibling
+                                  engine-bodies/<role>.eta.md (post-execute prose:
+                                  "audit the built work against the spec the
+                                  pre-execute review already approved");
+                                  configured agents resolve via the 3-tier cascade.
+                                  Fires after every unit's hat sequence completes.
+      dispatch_quality_gates/     post-execute engine-run quality gates
+                                  (not subagent-dispatched).
+    gate/                         user gates (branch off review AND approve walks)
       user_gate/
     complete/                     stage merge / advance
       complete_stage/, advance_stage/, advance_phase/
@@ -41,7 +59,9 @@ prompts/
 
   intent/
     setup/                        select_studio, migrated
-    review/                       intent_review, intent_completion_review
+    review/                       intent_review (per-role serial walk;
+                                  engine roles render from sibling
+                                  intent_review/engine-bodies/<role>.eta.md)
     seal/                         seal_intent, intent_complete, intent_approved
     repair/                       safe_intent_repair, revise_unit_specs,
                                   external_review_requested
@@ -51,8 +71,11 @@ prompts/
     review_fix/, fix_quality_gates/, intent_completion_fix/,
     changes_requested/
 
-  drift/                          Track C (filesystem reconciliation)
-    drift_detected/
+  drift/                          retired 2026-05-17 — engine-internal
+                                  (see orchestrator/workflow/drift-handle-events.ts).
+                                  No agent-facing prompts; the sweep
+                                  files FBs that flow through the
+                                  feedback fix_hats chain.
 
   global/                         scope-agnostic — keep small
     error/, complete/
@@ -79,18 +102,28 @@ prompts/
    - **global** (scope-agnostic surface like `error` / `complete`)
 
 2. **For stage and intent, identify the phase** using the
-   six-phase model from architecture §2.1:
+   six-phase model from architecture §2.1. As of 2026-05-18 the
+   stage phase order is:
 
    ```
-   elaborate → execute → review → approve → complete
-                                  + gate (user gates branch off review and approve)
-                                  + error (engine-refused-to-advance surfaces)
+   elaborate → review (PRE-execute) → execute → approve (POST-execute) → complete
+                                                + gate (user gates branch off review and approve)
+                                                + error (engine-refused-to-advance surfaces)
    ```
+
+   `review` is now PRE-execute (audits the SPEC before code lands).
+   `approve` is POST-execute (audits the WORK after it lands). Engine-
+   built-in roles (spec, continuity, cross-stage-consistency) fire in
+   BOTH walks with phase-appropriate mandate bodies. See
+   `cursor.ts` § "Stage-level walks" for the canonical ordering.
 
    Use the cursor's emit clause as the source of truth. If your
-   action is emitted in `cursor.ts` under "All hat sequences done;
-   some review role unsigned", you're in `review`. Match the wording
-   in the cursor walk, not your intuition.
+   action is emitted in `cursor.ts` under "Every elaborate-loop signal
+   is met → pre-execute review track" (pre-execute reviewRoles walk),
+   you're in `review`. If it's emitted under "All units' hat sequences
+   done → post-execute output approval track" (post-execute
+   approvalRoles walk), you're in `approve`. Match the wording in the
+   cursor walk, not your intuition.
 
 3. **Engine-refused-to-advance surfaces** (validator errors,
    transient blocks, escalations) live in `stage/error/`, not in

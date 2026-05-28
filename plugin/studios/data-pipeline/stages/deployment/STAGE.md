@@ -1,6 +1,7 @@
 ---
 name: deployment
 description: Deploy pipelines to production with monitoring and alerting
+optional: true
 hats: [pipeline-engineer, sre, verifier]
 fix_hats: [classifier, pipeline-engineer, feedback-assessor]
 review: external
@@ -17,45 +18,22 @@ review-agents-include:
 
 # Deployment
 
-Take the validated pipeline and put it into production. This stage owns the
-orchestrator registration, the schedule, the resource sizing, the alert
-routing, the runbooks, and the rollback plan. Deployment is where the
-pipeline stops being code on a branch and starts being infrastructure other
-people depend on — operational readiness, not just successful execution, is
-the bar.
+The terminal stage of the data-pipeline lifecycle: take the validated pipeline and put it into production. This is where the pipeline stops being code on a branch and becomes infrastructure other people depend on.
 
-## Per-unit baton
+## Scope
 
-Each deployment unit is one **operational step** — typically one DAG, one
-schedule family, or one alert / runbook surface. The unit walks the three
-hats in `plan → do → verify` order:
+Operationalizing the pipeline — orchestrator registration, schedule, resource sizing, alert routing, runbooks, and rollback plan. Deployment decides *how the pipeline runs and is operated in production* — it does not change transformation or validation logic; if either is wrong, that's a revisit upstream.
 
-- **`pipeline-engineer`** (plan / do) packages the pipeline for the
-  orchestrator: schedule, dependency chain, retry / timeout policy,
-  resource limits, logging, and integration tests in a staging environment
-- **`sre`** (do / verify) verifies operational readiness: alert routing to
-  the right on-call channel, monitoring of pipeline health AND data
-  freshness, runbooks an unfamiliar engineer can actually follow, rollback
-  plan for the first run
-- **`verifier`** (verify) validates the artifact body-only against substance,
-  citation, internal consistency, and decision-register accountability
+## What to do
 
-The stage also imports the upstream `data-quality` and `coverage` review
-agents so deployment doesn't pass a pipeline whose validation tests or
-transformation logic regressed since their original gates.
+- Package the pipeline for the orchestrator: schedule, dependency chain, retry / timeout policy, resource limits.
+- Route alerts to the right on-call channel and monitor both pipeline health and data freshness.
+- Write runbooks an unfamiliar engineer can actually follow, and a rollback plan for the first run.
+- Hold operational readiness — not just a successful execution — as the bar to ship.
 
-## Inputs and outputs
+## What NOT to do
 
-`VALIDATION-REPORT.md` from validation is the input — deployment refuses to
-ship a pipeline whose validation suite has unresolved blocking findings.
-The stage produces `PIPELINE-CONFIG.md` (intent-scope) — the orchestrator-
-registered configuration, monitoring surface, and operational runbook.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, pipeline-engineer, feedback-assessor]` dispatches per
-finding. The gate is `external` — production deployment requires the team's
-external approval mechanism (PR merge in the orchestrator's repo, change-
-management ticket, on-call signoff) to land, not a local "approve" click.
-Project overlays may add team-specific deployment manifests, CI hooks, or
-on-call routing without modifying plugin defaults.
+- Don't modify transformation or validation logic — route a regression back to the stage that owns it.
+- Don't deploy a pipeline whose validation suite has unresolved blocking findings.
+- Don't treat a clean run as readiness; without alerting, monitoring, and rollback it isn't done.
+- Don't add scope the validated pipeline didn't already cover.

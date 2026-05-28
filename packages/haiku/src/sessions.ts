@@ -22,9 +22,46 @@ const HEARTBEAT_SWEEP_INTERVAL = 5_000
 const lastHeartbeatAt = new Map<string, number>()
 const presenceLost = new Set<string>()
 
+// ─── Never-attached watch (2026-05-26) ───────────────────────────────
+// The grace logic above only sees sessions that heartbeated AT LEAST
+// ONCE (they're in `lastHeartbeatAt`). A gate whose SPA NEVER opens
+// sends no heartbeat, so it never enters that map — and used to linger
+// forever as "live": `findLiveReviewSessionForIntent` kept returning it,
+// which made `shouldLaunchReviewBrowser` SUPPRESS the browser launch on
+// every later gate ("the gate won't open a browser"), and the gate await
+// blocked the full timeout with no signal. The never-attached watch
+// closes that gap: when an await begins blocking it registers a start
+// time; if no heartbeat arrives within NEVER_ATTACHED_GRACE_MS we mark
+// the session presence-lost (shorter than the 120s attached-then-lost
+// grace — a never-opened SPA won't recover on its own). The final intent
+// user gate registers as EXEMPT so it HOLDS for the human instead of
+// failing fast.
+const NEVER_ATTACHED_GRACE_MS = 60_000
+const presenceWatchStartedAt = new Map<string, number>()
+
+/** Begin watching a session for never-attached presence loss. Called when
+ *  a handler starts blocking on the session's gate await. After
+ *  NEVER_ATTACHED_GRACE_MS with no heartbeat the sweep marks it
+ *  presence-lost, so the await returns the URL for the user to (re)open
+ *  while it keeps holding. Tests may backdate `startedAt`. */
+export function beginPresenceWatch(
+	sessionId: string,
+	opts: { startedAt?: number } = {},
+): void {
+	presenceWatchStartedAt.set(sessionId, opts.startedAt ?? Date.now())
+}
+
+/** Stop watching a session (await ended). */
+export function endPresenceWatch(sessionId: string): void {
+	presenceWatchStartedAt.delete(sessionId)
+}
+
 export function recordHeartbeat(sessionId: string): boolean {
 	if (!sessions.has(sessionId)) return false
 	lastHeartbeatAt.set(sessionId, Date.now())
+	// First heartbeat → the never-attached watch no longer applies; the
+	// attached-then-lost grace (lastHeartbeatAt) takes over from here.
+	presenceWatchStartedAt.delete(sessionId)
 	if (presenceLost.delete(sessionId)) {
 		console.error(`[haiku] Presence restored for session ${sessionId}`)
 	}
@@ -38,10 +75,45 @@ export function hasPresenceLost(sessionId: string): boolean {
 export function clearHeartbeat(sessionId: string): void {
 	lastHeartbeatAt.delete(sessionId)
 	presenceLost.delete(sessionId)
+	presenceWatchStartedAt.delete(sessionId)
+}
+
+/** A session is "still blocking" — a handler is parked on it waiting for
+ *  a decision — while its blocking type is pending. View sessions are
+ *  non-blocking by design (fire-and-forget a URL at Playwright), so they
+ *  never count: the watchdog must not spam presence-lost for sessions
+ *  nobody is waiting on. */
+type AnySession =
+	| ReviewSession
+	| QuestionSession
+	| DesignDirectionSession
+	| PickerSession
+	| ViewSession
+function sessionStillBlocking(session: AnySession): boolean {
+	if (session.session_type === "view") return false
+	if (
+		(session.session_type === "review" ||
+			session.session_type === "question" ||
+			session.session_type === "design_direction" ||
+			session.session_type === "picker") &&
+		session.status !== "pending"
+	) {
+		return false
+	}
+	return true
+}
+
+function markPresenceLost(id: string, reason: string): void {
+	if (presenceLost.has(id)) return
+	presenceLost.add(id)
+	console.error(`[haiku] Presence lost for session ${id} — ${reason}`)
+	sessionEvents.emit(`session:${id}`)
 }
 
 function sweepPresence(): void {
 	const now = Date.now()
+	// Pass 1 — attached-then-lost: a session that heartbeated at least once
+	// and then went dark for HEARTBEAT_GRACE_MS (120s).
 	for (const [id, ts] of lastHeartbeatAt) {
 		if (now - ts <= HEARTBEAT_GRACE_MS) continue
 		const session = sessions.get(id)
@@ -50,31 +122,36 @@ function sweepPresence(): void {
 			presenceLost.delete(id)
 			continue
 		}
-		// Only interesting while a handler is still blocking on the session
-		if (
-			(session.session_type === "review" && session.status !== "pending") ||
-			(session.session_type === "question" && session.status !== "pending") ||
-			(session.session_type === "design_direction" &&
-				session.status !== "pending") ||
-			(session.session_type === "picker" && session.status !== "pending")
-		) {
+		if (!sessionStillBlocking(session)) continue
+		markPresenceLost(id, `no heartbeat in ${Math.round((now - ts) / 1000)}s`)
+	}
+	// Pass 2 — never-attached: an await opened but the SPA never sent a
+	// single heartbeat within NEVER_ATTACHED_GRACE_MS (60s). Sessions in
+	// `lastHeartbeatAt` already attached (Pass 1 owns them).
+	for (const [id, startedAt] of presenceWatchStartedAt) {
+		if (lastHeartbeatAt.has(id)) continue
+		if (now - startedAt <= NEVER_ATTACHED_GRACE_MS) continue
+		const session = sessions.get(id)
+		if (!session) {
+			presenceWatchStartedAt.delete(id)
 			continue
 		}
-		if (!presenceLost.has(id)) {
-			presenceLost.add(id)
-			console.error(
-				`[haiku] Presence lost for session ${id} — no heartbeat in ${Math.round(
-					(now - ts) / 1000,
-				)}s`,
-			)
-			sessionEvents.emit(`session:${id}`)
-		}
+		if (!sessionStillBlocking(session)) continue
+		markPresenceLost(
+			id,
+			`SPA never opened (no heartbeat in the first ${Math.round((now - startedAt) / 1000)}s)`,
+		)
 	}
 }
 
 // Watchdog sweeps every HEARTBEAT_SWEEP_INTERVAL. unref() so the timer
 // never prevents the MCP process from exiting cleanly.
 setInterval(sweepPresence, HEARTBEAT_SWEEP_INTERVAL).unref()
+
+/** Test seam: run one presence sweep synchronously. */
+export function _runPresenceSweepForTests(): void {
+	sweepPresence()
+}
 
 /**
  * Notify that a session's status has been updated.
@@ -265,6 +342,19 @@ export interface ReviewSession {
 		relativePath?: string
 		intentRelativePath?: string
 	}>
+	/** Intent-ROOT stray files (intent-scope "Other"). Same shape as
+	 *  `otherFiles`; `stage` is "". System journals (action-log /
+	 *  write-audit) are excluded by the parser — never surfaced in the SPA. */
+	intentOtherFiles?: Array<{
+		stage: string
+		name: string
+		type: string
+		language?: string
+		directory?: string
+		content?: string
+		relativePath?: string
+		intentRelativePath?: string
+	}>
 	/** Per-unit output preview entries keyed by unit slug. The SPA's
 	 *  Units tab renders each entry as a click-out link with a hover
 	 *  popover preview. Built server-side at session creation so the
@@ -380,6 +470,11 @@ export interface DesignDirectionSession {
 	session_type: "design_direction"
 	session_id: string
 	intent_slug: string
+	/** Optional markdown preamble shown above the archetype cards.
+	 *  Mirrors `context` on QuestionSession — gives the user the context
+	 *  they need to choose well. Empty string when the tool didn't supply
+	 *  one. */
+	context: string
 	archetypes: DesignArchetypeData[]
 	status: "pending" | "answered"
 	selection: DirectionSelection | null
@@ -396,6 +491,11 @@ export interface PickerOption {
 	id: string
 	label: string
 	description?: string
+	/** When true the SPA tucks this option behind a "Show all…"
+	 *  expansion instead of rendering it in the default shortlist. Used
+	 *  by the studio picker to present the agent's 2–4 candidates up
+	 *  front while keeping the full registry one click away. */
+	secondary?: boolean
 }
 
 export interface PickerSelection {
@@ -416,9 +516,53 @@ export interface PickerSession {
 	selection: PickerSelection | null
 }
 
+/**
+ * View session — opened by the `haiku_view` MCP tool. Scopes the
+ * tunnelled artifact-browser route to a single intent (optionally
+ * narrowed to a stage or specific artifact). Distinct from a review
+ * session in that there is no decision flow, no annotations, no
+ * heartbeat gating — just an authenticated window through the tunnel
+ * for the runtime-verifier review-agent (or any other consumer) to
+ * point Playwright at.
+ *
+ * Lifecycle: opened by `haiku_view`, closed by `haiku_view_close` or
+ * evicted by the standard session TTL. Boot-mode (subprocess) state
+ * lives on the session so cleanup happens in one place.
+ */
+export interface ViewSession {
+	session_type: "view"
+	session_id: string
+	intent_dir: string
+	intent_slug: string
+	/** The studio this intent belongs to. Populated at session
+	 *  creation by reading the intent's FM. The SPA reads this to
+	 *  decide whether a studio-contributed app should handle the
+	 *  artifact instead of the default mime dispatch. */
+	studio?: string
+	/** Stage scope when narrower than the whole intent. */
+	stage?: string
+	/** Specific artifact path (relative to the intent dir) when the
+	 *  caller wants the SPA to deep-link to a single file rather than
+	 *  the stage's artifact list. */
+	artifact?: string
+	/** "viewer" → SPA artifact-browser; "boot" → spawned dev server. */
+	mode: "viewer" | "boot"
+	status: "open" | "closed"
+	/** Boot-mode only: ephemeral port the spawned process bound to. */
+	boot_port?: number
+	/** Boot-mode only: PID of the spawned dev server. */
+	boot_pid?: number
+	/** Boot-mode only: the command that was spawned (for diagnostics). */
+	boot_command?: string
+}
+
 const sessions = new Map<
 	string,
-	ReviewSession | QuestionSession | DesignDirectionSession | PickerSession
+	| ReviewSession
+	| QuestionSession
+	| DesignDirectionSession
+	| PickerSession
+	| ViewSession
 >()
 
 // ─── Previous-review snapshots (for re-review delta) ────────────────
@@ -588,6 +732,35 @@ export function updatePickerSession(
 	return session
 }
 
+export function createViewSession(
+	params: Omit<ViewSession, "session_type" | "session_id" | "status">,
+): ViewSession {
+	evictSessions()
+	const session_id = newSessionId()
+	const session: ViewSession = {
+		...params,
+		session_type: "view",
+		session_id,
+		status: "open",
+	}
+	sessions.set(session_id, session)
+	sessionCreatedAt.set(session_id, Date.now())
+	return session
+}
+
+export function updateViewSession(
+	sessionId: string,
+	updates: Partial<
+		Pick<ViewSession, "status" | "boot_port" | "boot_pid" | "boot_command">
+	>,
+): ViewSession | undefined {
+	const session = sessions.get(sessionId)
+	if (!session || session.session_type !== "view") return undefined
+	Object.assign(session, updates)
+	notifySessionUpdate(sessionId)
+	return session
+}
+
 export function getSession(
 	sessionId: string,
 ):
@@ -595,6 +768,7 @@ export function getSession(
 	| QuestionSession
 	| DesignDirectionSession
 	| PickerSession
+	| ViewSession
 	| undefined {
 	return sessions.get(sessionId)
 }
@@ -645,6 +819,25 @@ export function isBrowserAttached(sessionId: string): boolean {
 	const ts = lastHeartbeatAt.get(sessionId)
 	if (!ts) return false
 	return Date.now() - ts <= BROWSER_ATTACHED_FRESHNESS_MS
+}
+
+/** True when SOME non-ad-hoc review session for the intent has a browser
+ *  GENUINELY attached (a fresh heartbeat) right now. This is the right
+ *  test for "is a tab already open, so skip the launch" — distinct from
+ *  `findLiveReviewSessionForIntent`, which only checks a session RECORD
+ *  exists and isn't presence-lost. A session can exist with no live tab
+ *  (never opened, or closed inside the heartbeat grace), and suppressing
+ *  the launch on that record left the user with NO SPA at all — the gate
+ *  "wouldn't open." (2026-05-26 CRITICAL.) Launch is suppressed only when
+ *  a real tab is attached; otherwise the gate always (re)launches. */
+export function hasAttachedReviewSessionForIntent(intentSlug: string): boolean {
+	for (const [id, s] of sessions) {
+		if (s.session_type !== "review") continue
+		if (s.intent_slug !== intentSlug) continue
+		if (s.ad_hoc) continue
+		if (isBrowserAttached(id)) return true
+	}
+	return false
 }
 
 /**

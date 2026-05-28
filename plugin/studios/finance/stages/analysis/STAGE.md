@@ -1,7 +1,7 @@
 ---
 name: analysis
 description: Perform variance analysis and track financial performance
-hats: [analyst, auditor]
+hats: [analyst, auditor, verifier]
 fix_hats: [classifier, analyst, feedback-assessor]
 review: auto
 elaboration: autonomous
@@ -14,23 +14,22 @@ inputs:
 
 # Analysis
 
-Compare actuals to budget and forecast, classify each material variance, and translate the resulting variance landscape into corrective-action recommendations. This is the diagnostic stage of the lifecycle: budget says what was supposed to happen, forecast says what was projected, actuals reveal what actually happened, and analysis explains the gap.
+The diagnostic stage of the finance cycle: explain the gap between what was planned and what actually happened. Budget said what was supposed to happen, forecast said what was projected, actuals reveal what occurred — analysis says why they differ and what to do about it.
 
-The stage produces one intent-scope artifact (`VARIANCE-REPORT.md` under `stages/analysis/artifacts/`) plus per-unit variance workings.
+## Scope
 
-## Per-unit baton
+Variance diagnosis: comparing actuals against budget and forecast, classifying each material variance, and recommending corrective action. Analysis decides *why the gap exists and how to respond* — not what the targets should have been (budget), and not how the findings reach stakeholders (reporting).
 
-Each unit walks the two hats in `plan/do → verify` order:
+## What to do
 
-- **`analyst`** (plan + do) reads the upstream budget plan and forecast model, pulls actuals, calculates variances at the appropriate granularity, classifies each material variance as structural / timing / operational, and writes the supporting evidence and recommended corrective action
-- **`auditor`** (verify) cross-checks the data sources, validates methodology consistency, confirms root-cause attributions are evidence-backed (not assumption-backed), and advances or rejects
+- Classify each material variance by cause — structural, timing, or operational — not just by size.
+- Tie every variance back to its data source so the attribution is auditable, not asserted.
+- Translate the variance landscape into specific corrective-action recommendations, not just a table of deltas.
+- Apply a consistent materiality threshold so attention lands where it changes a decision.
 
-Detailed process lives in each hat's md file.
+## What NOT to do
 
-## Inputs and outputs
-
-Upstream `budget/budget-plan` and `forecast/forecast-model` feed in. The output `variance-report` feeds `reporting` (stakeholder communication) and `close` (period sign-off context).
-
-## Fix loop and gate
-
-`fix_hats: [classifier, analyst, feedback-assessor]` dispatches per finding — classifier targets the affected variance, `analyst` re-runs the calculation or re-attributes the root cause, `feedback-assessor` decides closure. The gate is `auto` because the substantive review happens at the next stage (`reporting`) where the variance report becomes stakeholder-facing. Project overlays may add house-style variance categorization, materiality threshold tables, or organization-specific dimension hierarchies.
+- Don't reset targets or reallocate the budget — surface the recommendation; the actual change is a revisit to budget.
+- Don't reproject the forecast to make a variance disappear.
+- Don't package findings for stakeholders or build dashboards — that's reporting.
+- Don't report a variance you can't trace to its source.

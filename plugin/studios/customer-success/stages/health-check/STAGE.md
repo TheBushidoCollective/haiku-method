@@ -12,22 +12,22 @@ inputs:
 
 # Health Check
 
-Assess current account health across multiple dimensions and convert the read into ranked risks with concrete mitigation plans. The stage takes the adoption usage report as its starting condition and produces a `HEALTH-REPORT.md` per unit, with each unit framing one account, segment, or risk surface.
+Read account health across multiple dimensions and convert that read into ranked risks with concrete mitigation plans. This stage is the lifecycle's early-warning system — it tells the studio which accounts are healthy enough to grow and which need intervention before renewal is at stake.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the three hats in `plan → do → verify` order:
+Scoring health on evidence, separating leading from lagging churn signals, and producing a ranked mitigation plan. Health-check decides *where each account stands and what to do about the risks* — it does not grow product usage (adoption) or qualify expansion opportunities (expansion).
 
-- **`health-monitor`** (plan) reads the usage report and any external signals (support volume, sentiment, stakeholder access), then writes the multi-dimensional scorecard: each dimension rated with explicit evidence, plus a trend versus the prior period
-- **`risk-analyst`** (do) reads the scorecard, identifies the churn-risk indicators (leading and lagging, separated), ranks them by severity and reversibility, and writes the mitigation plan with owners and measurable success criteria
-- **`verifier`** (verify) validates the operational shape of the report (preconditions, action, post-condition, rollback) and either advances or rejects to the responsible hat
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+- Rate each health dimension against explicit evidence, and show the trend versus the prior period.
+- Pull external signals — support volume, sentiment, stakeholder access — alongside usage, not in place of it.
+- Separate leading indicators from lagging ones, and rank risks by severity and reversibility.
+- Give every mitigation an owner and a measurable success criterion.
 
-## Inputs and outputs
+## What NOT to do
 
-The frontmatter declares the canonical I/O contract. Upstream `adoption/usage-report` feeds in; each unit produces its slice of `HEALTH-REPORT.md` (per-unit body authored across both `health-monitor` and `risk-analyst`). The aggregate report feeds the `expansion` stage as the qualifying signal for which accounts are healthy enough to grow.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, health-monitor, feedback-assessor]` dispatches per finding. The classifier routes the FB; `health-monitor` is the implementer (re-rating the dimension or re-evidencing the score); the assessor independently decides closure. The gate is `ask` — the user reviews the health read and risk plan and approves locally before the workflow advances. Project overlays at `.haiku/studios/customer-success/stages/health-check/` may add house conventions (named health-score formula, named risk tiers, account-segmentation rules) without modifying the plugin defaults.
+- Don't design or run adoption plays — that's the adoption stage.
+- Don't qualify or pursue expansion opportunities — that's expansion.
+- Don't rate a dimension without the evidence behind the rating.
+- Don't surface a risk without a concrete, owned mitigation.

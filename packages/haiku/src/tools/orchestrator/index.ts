@@ -11,12 +11,13 @@
 
 import type { ToolDef } from "../types.js"
 import haiku_await_gate from "./haiku_await_gate.js"
-import haiku_baseline_init from "./haiku_baseline_init.js"
+// v9: haiku_baseline_init removed — premise-witness model has no baseline.json.
 // v4: haiku_classify_drift removed — drift sweep auto-files FBs.
 import haiku_coverage_acknowledge from "./haiku_coverage_acknowledge.js"
 import haiku_debug from "./haiku_debug.js"
 import haiku_discovery_complete from "./haiku_discovery_complete.js"
 import haiku_dispatch_quality_gates from "./haiku_dispatch_quality_gates.js"
+import haiku_drop_stage from "./haiku_drop_stage.js"
 import haiku_human_write from "./haiku_human_write.js"
 import haiku_intent_archive from "./haiku_intent_archive.js"
 import haiku_intent_create from "./haiku_intent_create.js"
@@ -24,6 +25,7 @@ import haiku_intent_reset from "./haiku_intent_reset.js"
 import haiku_intent_seal from "./haiku_intent_seal.js"
 import haiku_intent_unarchive from "./haiku_intent_unarchive.js"
 import haiku_record_agent_write from "./haiku_record_agent_write.js"
+import haiku_review_stamp from "./haiku_review_stamp.js"
 import haiku_run_next from "./haiku_run_next.js"
 import haiku_select_mode from "./haiku_select_mode.js"
 import haiku_select_stage from "./haiku_select_stage.js"
@@ -32,16 +34,17 @@ import haiku_stage_decompose_seal from "./haiku_stage_decompose_seal.js"
 import haiku_stage_elaboration_record from "./haiku_stage_elaboration_record.js"
 import haiku_stage_elaboration_seal from "./haiku_stage_elaboration_seal.js"
 import haiku_stage_reset from "./haiku_stage_reset.js"
+import haiku_unit_reset from "./haiku_unit_reset.js"
 
 export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 	(
 		[
 			haiku_await_gate,
-			haiku_baseline_init,
 			haiku_coverage_acknowledge,
 			haiku_debug,
 			haiku_discovery_complete,
 			haiku_dispatch_quality_gates,
+			haiku_drop_stage,
 			haiku_human_write,
 			haiku_intent_archive,
 			haiku_intent_create,
@@ -49,6 +52,7 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 			haiku_intent_seal,
 			haiku_intent_unarchive,
 			haiku_record_agent_write,
+			haiku_review_stamp,
 			haiku_run_next,
 			haiku_select_mode,
 			haiku_select_stage,
@@ -57,6 +61,7 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 			haiku_stage_elaboration_record,
 			haiku_stage_elaboration_seal,
 			haiku_stage_reset,
+			haiku_unit_reset,
 		] satisfies ToolDef[]
 	).map((t) => [t.name, t]),
 )

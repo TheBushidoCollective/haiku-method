@@ -150,13 +150,8 @@ For each event emitted or consumed: event name + topic, payload schema, producer
 
 ## Anti-patterns (RFC 2119)
 
-- The agent **MUST** write behavioral specs as `.feature` files in Gherkin syntax — not prose, not pseudocode, not bullet lists
 - The agent **MUST NOT** write specs that describe implementation (`POST /signup with valid body returns 201`) rather than behavior (`User submits valid signup form`)
-- The agent **MUST NOT** leave contracts ambiguous (`returns data` instead of specifying the schema, `handles errors gracefully` instead of listing each error)
-- The agent **MUST** specify every error response alongside the success response
 - The agent **MUST NOT** define happy path only without error and edge-case scenarios
-- The agent **MUST NOT** use `Scenario Outline` to merge genuinely different behaviors into one parameterized scenario
-- The agent **MUST NOT** put per-scenario preconditions in `Background:` — `Background:` is only for steps that apply to every scenario in the file
-- The agent **MUST** use the same entity / field / endpoint names in AC, `.feature`, and `DATA-CONTRACTS.md`
-- The agent **MUST** check the unit's discipline before writing specs and adapt format accordingly
+- The agent **MUST NOT** leave contracts ambiguous — every response shape is named, every error is enumerated
 - The agent **MUST NOT** introduce a new endpoint, table, or event in `.feature` without writing its row in `DATA-CONTRACTS.md`
+- The agent **MUST** use the same entity / field / endpoint names in AC, `.feature`, and `DATA-CONTRACTS.md`

@@ -52,7 +52,6 @@ export {
 // targets.invalidates rerouting the cursor naturally.
 export { enrichActionWithPreview } from "./orchestrator/preview.js"
 export {
-	buildFeedbackAssessorPrompt,
 	resolveIntentStages,
 	resolveStageHats,
 	resolveStageMetadata,

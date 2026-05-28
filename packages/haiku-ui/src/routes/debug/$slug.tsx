@@ -291,7 +291,7 @@ function ForceStageCompleteForm({
 						summary: `Force stages 0..${stage} complete (sign all reviews/approvals/QGs)${closeFb ? " AND close every open feedback on those stages" : ""}.`,
 					})
 				}
-				className="mt-3 rounded bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+				className="mt-3 rounded bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500 dark:disabled:bg-stone-800 dark:disabled:text-stone-400"
 			>
 				Prepare op
 			</button>
@@ -383,7 +383,7 @@ function SetIntentFieldForm({
 						})
 					}
 				}}
-				className="mt-3 rounded bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+				className="mt-3 rounded bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500 dark:disabled:bg-stone-800 dark:disabled:text-stone-400"
 			>
 				Prepare op
 			</button>
@@ -407,7 +407,7 @@ function ResetDriftForm({ onPrepare }: { onPrepare: (op: PendingOp) => void }) {
 							"Re-stamp every witnessed reviews/approvals slot with current on-disk SHA.",
 					})
 				}
-				className="rounded bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
+				className="rounded bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800"
 			>
 				Prepare op
 			</button>
@@ -523,7 +523,7 @@ function MutateFeedbackForm({
 						})
 					}
 				}}
-				className="mt-3 rounded bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+				className="mt-3 rounded bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500 dark:disabled:bg-stone-800 dark:disabled:text-stone-400"
 			>
 				Prepare op
 			</button>
@@ -636,7 +636,7 @@ function SetUnitIterationsForm({
 						summary: `Hand-write iterations[] on ${stage}/${unit} (${(parsed as unknown[]).length} entries): ${JSON.stringify(parsed)}`,
 					})
 				}}
-				className="mt-3 rounded bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+				className="mt-3 rounded bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500 dark:disabled:bg-stone-800 dark:disabled:text-stone-400"
 			>
 				Prepare op
 			</button>

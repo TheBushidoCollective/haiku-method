@@ -1,22 +1,26 @@
-// orchestrator/prompts/select_studio/index.ts — Tells the agent to
-// call haiku_select_studio so the user can pick a lifecycle template.
+// orchestrator/prompts/select_studio/index.ts — Rendered for the
+// `select_studio` action. NOTE: in the normal tick path the agent
+// never sees this — `haiku_run_next` intercepts `select_*` actions and
+// runs the SPA picker inline (2026-05-07). This prompt is the fallback
+// surface for direct / foreign callers.
 //
-// Pre-narrow contract (load-bearing for UX): the action carries
-// `available_studios` as the full studio registry. The agent has the
-// intent description it just authored, so it should pick the 2-4
-// studios most likely to fit and pass them as `options` on the call.
-// The tool's elicitation then shows that subset PLUS a "Show all
-// studios..." escape, which re-elicits with the full list when the
-// user wants more.
+// Pre-narrow contract (load-bearing for UX): the studio picker should
+// show a 2–4 studio shortlist FIRST, with the rest behind a "Show all
+// studios…" expansion — not the whole registry on every intent. That
+// shortlist comes from `studio_candidates`, which the agent stamps on
+// intent.md at CREATE time (it has the description in context then) and
+// `haiku_select_studio` reads when it opens the picker. The full
+// registry always rides along, so narrowing is never lossy.
 //
-// Without this directive the agent calls the tool with no `options`,
-// the elicitation falls through to the full list, and the user picks
-// from N studios on every intent — exactly the noise we hear about.
+// Why agent-side (at create) instead of engine-side ranking: the agent
+// already has the description in context and can do a semantically-
+// aware top-N pick for free. Engine-side keyword overlap would be a
+// second-order signal we'd have to maintain. Why at create rather than
+// here: the 2026-05-07 change keeps the agent out of the select_* tick
+// loop entirely, so create is the only point the agent is in the loop.
 //
-// Why agent-side instead of engine-side ranking: the agent already
-// has the description in context (it just wrote it) and can do a
-// semantically-aware top-N pick for free. Engine-side keyword
-// overlap would be a second-order signal we'd have to maintain.
+// `available_studios` on the action is currently unpopulated; the
+// listing falls through to the empty fallback for foreign callers.
 
 import { Eta } from "eta"
 import { loadTemplate } from "../../../_load-template.js"

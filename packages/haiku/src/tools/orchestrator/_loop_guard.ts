@@ -82,13 +82,12 @@ export function actionSignature(result: OrchestratorAction): string {
 /** Append a line to the current MCP session's loop-guard log file.
  *  The MCP server's stderr is captured over a unix socket by Claude
  *  Code, which the user can't grep from disk. A file on disk in the
- *  session's own log directory (same dir the subagent prompts already
- *  live in, `$TMPDIR/haiku-prompts/{session_id}/`) is recoverable: the
- *  user pastes the last N lines back when filing a bug. Co-locating
- *  with subagent prompts means a wedged user has ONE place to look
- *  for everything the engine wrote during their session, not a
- *  scattered .haiku/diagnostics/ directory the repo otherwise doesn't
- *  use.
+ *  per-session log directory
+ *  (`~/.haiku/projects/{project-key}/sessions/{session_id}/`) is
+ *  recoverable: the user pastes the last N lines back when filing a
+ *  bug. The sibling `~/.haiku/projects/{project-key}/intents/<slug>/
+ *  prompts/` tree holds every generated prompt, so a wedged user has
+ *  ONE root to look in for everything the engine wrote.
  *
  *  Fail-open: if the write fails (no session id, FS error), still
  *  emit to stderr so we don't silently lose the diagnostic.
@@ -115,9 +114,10 @@ function writeLoopGuardDiagnostic(line: string): string | null {
  *  only needs "the engine had trouble, retry, file an issue if it
  *  persists." Diagnostic detail goes to:
  *    1. stderr (`console.error`) — captured by the MCP runner
- *    2. `$TMPDIR/haiku-prompts/{session_id}/loop-guards.log` — co-located
- *       with the session's subagent prompts, recoverable from disk
- *       when stderr is buried in the MCP socket
+ *    2. `~/.haiku/projects/{project-key}/sessions/{session_id}/loop-guards.log`
+ *       — persistent, user-inspectable log alongside the per-intent
+ *       prompts/ trees, recoverable from disk when stderr is buried
+ *       in the MCP socket
  *    3. The error-response text's `diagnostic:` suffix and `log:` path
  *       — so the user can paste the response into a bug report without
  *       grepping

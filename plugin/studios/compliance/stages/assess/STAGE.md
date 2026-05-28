@@ -1,7 +1,7 @@
 ---
 name: assess
 description: Evaluate current state against controls, identify gaps and risks
-hats: [auditor, risk-assessor]
+hats: [auditor, risk-assessor, verifier]
 fix_hats: [classifier, auditor, feedback-assessor]
 review: ask
 elaboration: collaborative
@@ -12,21 +12,22 @@ inputs:
 
 # Assess
 
-Take the scoping memo and produce a defensible picture of where the organization stands against each in-scope control. This stage owns the intent-scope `GAP-REPORT.md` — the document the remediate stage uses to plan work and the certify stage uses to demonstrate audit readiness. Findings here drive everything downstream.
+Take the scoped control set and produce a defensible picture of where the organization actually stands against each in-scope control. This is the stage that grades reality against the framework and turns the result into a prioritized gap list the rest of the lifecycle acts on.
 
-## Per-unit baton
+## Scope
 
-Each assessment unit walks the hat chain in order:
+Evaluating each in-scope control as met, partial, or unmet on cited evidence, then ranking the gaps by risk. Assess decides *how well controls are satisfied today and which gaps matter most* — it does not redefine what's in scope (that's scope) or close any gap (that's remediate).
 
-- **`auditor`** (plan / do) reads the upstream `CONTROL-MAPPING.md`, evaluates each in-scope control against the current state of systems and processes, and records the determination (met / partial / unmet) with the specific evidence reviewed
-- **`risk-assessor`** (do / verify) takes the auditor's findings and assigns likelihood + impact scores using a consistent methodology, then prioritizes the gap list
+## What to do
 
-Note: this stage runs without a dedicated `verifier` hat — both hats produce body content and the second hat's risk-scoring pass acts as the substantive check on the first hat's findings. (Uncertainty flagged: pure plan → do → verify per architecture §3 would add a verifier hat; the current shape diverges. Not changing structure here.)
+- Determine each control's status against concrete, cited evidence — never on assertion or assumption.
+- Separate likelihood from impact when ranking gaps, and apply the same scoring method consistently across findings.
+- Make every finding traceable back to the control it grades and forward to the evidence that supports it.
+- Surface contested or ambiguous determinations rather than rounding them to a convenient verdict.
 
-## Inputs and outputs
+## What NOT to do
 
-`scope/control-mapping` feeds in. The output `GAP-REPORT.md` is intent-scope and feeds both `remediate` (which gaps to close) and `certify` (which findings to demonstrate resolution for).
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, auditor, feedback-assessor]` dispatches per finding — `auditor` is the implementer, re-evaluating the contested control or correcting the evidence trail. The gate is `ask`: a human approves locally because assessment findings carry organizational and legal weight that benefits from a deliberate sign-off before remediation work begins. Project overlays may add framework-specific scoring rubrics or evidence-collection conventions.
+- Don't change the in-scope boundary or reclassify systems — that's the scope stage.
+- Don't design or implement fixes — that belongs to remediate.
+- Don't grade a control without the evidence to back the grade.
+- Don't leave a gap unranked; an unprioritized finding gives remediation no order to work in.

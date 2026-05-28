@@ -74,6 +74,17 @@ function setupRepo(slug, stage) {
 			studio: "software",
 			mode: "continuous",
 			plugin_version: "4.0.0",
+			// Explicit application plan — the canonical intent.stages IS the
+			// plan, dropping the optional `release` stage, so `security` is the
+			// final stage (the software studio superset now ends at `release`).
+			stages: [
+				"inception",
+				"design",
+				"product",
+				"development",
+				"operations",
+				"security",
+			],
 		}),
 	)
 	mkdirSync(join(tmp, ".haiku", "studios"), { recursive: true })
@@ -90,10 +101,10 @@ async function simulateUserGatePrepare({ tmp, intentDir, stage, gateKind }) {
 	const orig = process.cwd()
 	try {
 		process.chdir(tmp)
-		const { resolveStudioStages } = await import(
+		const { resolveIntentStages } = await import(
 			`${REPO_ROOT}/packages/haiku/src/orchestrator/studio.ts`
 		)
-		const { parseFrontmatter, setFrontmatterField } = await import(
+		const { parseFrontmatter } = await import(
 			`${REPO_ROOT}/packages/haiku/src/state-tools.ts`
 		)
 		const intentFile = join(intentDir, "intent.md")
@@ -102,7 +113,8 @@ async function simulateUserGatePrepare({ tmp, intentDir, stage, gateKind }) {
 			typeof intentFm.studio === "string" ? intentFm.studio : ""
 		let nextStage = null
 		if (gateKind === "approval") {
-			const stages = resolveStudioStages(studioName) ?? []
+			// Mirror haiku_run_next: route by the intent's canonical plan.
+			const stages = resolveIntentStages(intentFm, studioName) ?? []
 			const idx = stages.indexOf(stage)
 			if (idx >= 0 && idx < stages.length - 1) {
 				nextStage = stages[idx + 1]
@@ -113,34 +125,23 @@ async function simulateUserGatePrepare({ tmp, intentDir, stage, gateKind }) {
 		const nextPhase = gateKind === "spec" ? "execute" : null
 		const gateContext =
 			gateKind === "spec" ? "elaborate_to_execute" : "stage_gate"
-		setFrontmatterField(
-			intentFile,
-			`gate_review_session_${stage}`,
-			"test-session-id",
-		)
-		setFrontmatterField(
-			intentFile,
-			`gate_review_url_${stage}`,
-			"http://localhost:0/test",
-		)
-		setFrontmatterField(intentFile, "gate_review_context", gateContext)
-		if (nextStage !== null && nextStage !== undefined) {
-			setFrontmatterField(intentFile, "gate_review_next_stage", nextStage)
-		}
-		if (nextPhase !== null && nextPhase !== undefined) {
-			setFrontmatterField(intentFile, "gate_review_next_phase", nextPhase)
-		}
+		// 2026-05-26: run_next no longer writes any gate_review_* pointer
+		// to intent.md. The routing computed here is handed to the inline
+		// await_gate as ARGS (gate_context / next_stage / next_phase);
+		// nothing about the session or its routing lands in the repo. We
+		// assert the engine still does NOT touch the FM, then assert the
+		// computation that now travels as args.
 		const finalFm = matter(readFileSync(intentFile, "utf8")).data
-		return { nextStage, nextPhase, finalFm }
+		return { nextStage, nextPhase, gateContext, finalFm }
 	} finally {
 		process.chdir(orig)
 	}
 }
 
-test("user_gate(approval) on non-final stage writes gate_review_next_stage from studio topology", async () => {
+test("user_gate(approval) on non-final stage routes next_stage from studio topology", async () => {
 	const { tmp, intentDir } = setupRepo("test-intent", "inception")
 	try {
-		const { nextStage, finalFm } = await simulateUserGatePrepare({
+		const { nextStage, gateContext, finalFm } = await simulateUserGatePrepare({
 			tmp,
 			intentDir,
 			stage: "inception",
@@ -151,20 +152,23 @@ test("user_gate(approval) on non-final stage writes gate_review_next_stage from 
 		assert.strictEqual(
 			nextStage,
 			"design",
-			"inception is not final; nextStage must be design",
+			"inception is not final; next_stage (passed to await_gate as an arg) must be design so it routes to advance_stage",
 		)
-		assert.strictEqual(
-			finalFm.gate_review_next_stage,
-			"design",
-			"FM must carry gate_review_next_stage so await_gate routes to advance_stage",
+		assert.strictEqual(gateContext, "stage_gate")
+		assert.ok(
+			!("gate_review_next_stage" in finalFm),
+			"run_next must NOT persist gate_review_next_stage to the repo; routing travels as an arg",
 		)
-		assert.strictEqual(finalFm.gate_review_context, "stage_gate")
+		assert.ok(
+			!("gate_review_session_inception" in finalFm),
+			"run_next must NOT persist a session pointer to the repo",
+		)
 	} finally {
 		rmSync(tmp, { recursive: true, force: true })
 	}
 })
 
-test("user_gate(approval) on final stage leaves gate_review_next_stage unset", async () => {
+test("user_gate(approval) on final stage routes next_stage = null", async () => {
 	const { tmp, intentDir } = setupRepo("test-intent", "security")
 	try {
 		const { nextStage, finalFm } = await simulateUserGatePrepare({
@@ -177,50 +181,50 @@ test("user_gate(approval) on final stage leaves gate_review_next_stage unset", a
 		assert.strictEqual(
 			nextStage,
 			null,
-			"security is final; nextStage must be null so completeOrReviewIntent fires",
+			"security is final; next_stage must be null so completeOrReviewIntent fires",
 		)
 		assert.ok(
 			!("gate_review_next_stage" in finalFm),
-			`FM must NOT carry gate_review_next_stage for the final stage; got ${JSON.stringify(finalFm.gate_review_next_stage)}`,
+			"run_next must NOT persist gate_review_next_stage to the repo",
 		)
 	} finally {
 		rmSync(tmp, { recursive: true, force: true })
 	}
 })
 
-test("user_gate(spec) writes gate_review_next_phase = 'execute' and leaves nextStage unset", async () => {
+test("user_gate(spec) routes next_phase = 'execute' and leaves next_stage null", async () => {
 	// Sibling of the #357 approval fix. Pre-fix: nextPhase was
 	// unconditionally null for user_gate, so await_gate's "approved"
 	// branch fell past `if (gateContext === "elaborate_to_execute"
 	// && nextPhase)` into completeOrReviewIntent — which rejected
 	// with "Cannot complete intent" if any later stage wasn't done.
-	// Reported on `admin-portal-reimagine` 2026-05-13. Now spec
-	// gates always write `gate_review_next_phase: "execute"` so
-	// approval routes to advance_phase cleanly.
+	// Reported on `admin-portal-reimagine` 2026-05-13. Spec gates always
+	// route `next_phase: "execute"` (now as an await_gate arg, not an FM
+	// pointer) so approval routes to advance_phase cleanly.
 	const { tmp, intentDir } = setupRepo("test-intent", "inception")
 	try {
-		const { nextStage, nextPhase, finalFm } = await simulateUserGatePrepare({
-			tmp,
-			intentDir,
-			stage: "inception",
-			gateKind: "spec",
-		})
+		const { nextStage, nextPhase, gateContext, finalFm } =
+			await simulateUserGatePrepare({
+				tmp,
+				intentDir,
+				stage: "inception",
+				gateKind: "spec",
+			})
 		assert.strictEqual(
 			nextPhase,
 			"execute",
-			"spec gates must write next_phase = 'execute' so await_gate routes to advance_phase",
-		)
-		assert.strictEqual(
-			finalFm.gate_review_next_phase,
-			"execute",
-			"FM must carry gate_review_next_phase for the spec-gate routing branch",
+			"spec gates must route next_phase = 'execute' so await_gate routes to advance_phase",
 		)
 		assert.strictEqual(
 			nextStage,
 			null,
-			"spec gates advance phase, not stage; nextStage stays null",
+			"spec gates advance phase, not stage; next_stage stays null",
 		)
-		assert.strictEqual(finalFm.gate_review_context, "elaborate_to_execute")
+		assert.strictEqual(gateContext, "elaborate_to_execute")
+		assert.ok(
+			!("gate_review_next_phase" in finalFm),
+			"run_next must NOT persist gate_review_next_phase to the repo; routing travels as an arg",
+		)
 	} finally {
 		rmSync(tmp, { recursive: true, force: true })
 	}

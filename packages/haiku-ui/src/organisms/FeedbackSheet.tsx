@@ -1,84 +1,50 @@
 /**
- * FeedbackSheet — mobile bottom-sheet modal backed by native <dialog> (unit-10).
+ * FeedbackSheet — mobile left-edge SLIDE-OUT feedback drawer.
  *
- * Canonical references:
- *   - stages/development/units/unit-10-feedback-sheet-mobile.md — scope +
- *     completion criteria.
- *   - stages/development/artifacts/unit-10-tactical-plan.md §A — component
- *     tree, effect wiring, focus-trap / reduced-motion decisions.
- *   - stages/design/artifacts/feedback-inline-mobile.html lines 244–407 —
- *     canonical visible markup.
- *   - packages/haiku-ui/BROWSER-SUPPORT.md — native <dialog> policy, jsdom
- *     caveats, DESIGN-BRIEF §6 line 838 divergence rationale.
+ * A plain controlled `<aside>`, NOT a native `<dialog>`. The previous
+ * `<dialog>` implementation kept rendering as a small floating box instead of
+ * a docked drawer: a non-modal `<dialog>` carries UA-default positioning
+ * (`position: absolute; margin: auto; width/height: fit-content`) that fought
+ * the Tailwind `fixed top-0 left-0 bottom-0` classes, and its imperative
+ * `show()`/`close()` lifecycle desynced from the controlled `open` prop (the
+ * "× does nothing" bug — the button hid the dialog while the parent still
+ * thought it was open, so the effect re-`show()`-ed it). A plain `<aside>`
+ * with `position: fixed` has none of those surprises: positioning is exactly
+ * what the classes say, and close is a pure parent state flip.
  *
- * CSS selector alignment (FB-34): the rendered root is a native
- * `<dialog className="feedback-sheet">`, which is exactly what the
- * `dialog.feedback-sheet` block in `packages/haiku-ui/src/index.css`
- * (lines ~240-305) selects. Backdrop, `::backdrop` blur, `sheet-up`
- * slide-in animation, `backdrop-fade-in`, and the reduced-motion guards
- * in that block all paint on this element. The previous
- * `<div role="dialog">` placeholder (which the CSS selectors did NOT
- * match) has been replaced by this native-dialog implementation — do
- * NOT regress the root element back to a div without also rewriting
- * every `dialog.feedback-sheet` selector in index.css.
+ * Geometry: full-height panel docked to the LEFT edge
+ * (`fixed top-0 left-0 bottom-0 w-[min(85vw,360px)]`), transform-based slide
+ * (`-translate-x-full` closed → `translate-x-0` open — off-screen to the
+ * LEFT). It is NON-modal — the page behind it (header, content, and the
+ * sticky `GateDecisionBar` at the bottom) stays visible and interactive. The
+ * drawer sits at `z-50`; the route docks the gate bar at `z-[60]` so it paints
+ * over the drawer's bottom edge and stays clickable, and the drawer body
+ * carries bottom padding so the last feedback item scrolls clear of the bar.
  *
- * Architecture:
- *   - The <dialog> element renders unconditionally in the DOM; `open` drives
- *     an imperative `showModal()` / `close()` call in an effect.
- *   - Platform-native `<dialog>` provides top-layer, background `inert`, and
- *     focus-trap — in REAL browsers. In jsdom the top-layer is not emulated,
- *     so we reuse `useFocusTrap(dialogRef, open)` from the a11y foundation
- *     as both the jsdom emulation and a belt-and-suspenders guard for edge
- *     cases (iframe-inside-dialog, shadow DOM tabbable discovery).
- *   - `useFocusTrap` snapshots `document.activeElement` on enable and
- *     restores it on disable, giving us FAB-restore "for free". We do not
- *     duplicate the focus call manually — duplicate focus thrashes screen
- *     readers.
- *   - Backdrop click: native <dialog> does not auto-close on backdrop click.
- *     A `click` listener on the dialog element closes when
- *     `event.target === dialogRef.current` (the click fell through to the
- *     `<dialog>` element itself — i.e. the backdrop). MDN documents this
- *     pattern.
- *   - Escape: native <dialog> fires a `cancel` event and then closes on
- *     Escape. We do NOT `preventDefault` on `cancel`; the default
- *     `close` event is the canonical cleanup trigger.
- *   - Reduced motion: `useReducedMotion()` swaps the `sheet-enter` slide-up
- *     animation class for a `sheet-enter--reduced` sentinel. The sentinel
- *     has no CSS body — it is a greppable marker for the test harness. The
- *     global `@media (prefers-reduced-motion: reduce)` guard in
- *     `src/index.css` also clamps animation-duration to 0.01ms, so even if
- *     the class stayed present the sheet would appear instantly.
+ * Controlled-only API: the parent owns `open` and supplies `onClose`. The rail
+ * (`FeedbackRail`) is the trigger and lives one level up. Close paths — the ×
+ * button, Escape, and re-clicking the rail — ALL call `onClose()`; the parent
+ * flips `open` → false. Nothing in here closes imperatively.
  *
- * Controlled-only API: the parent owns `open` and supplies `onClose`. There
- * is no uncontrolled-open variant — the FAB pair (`FeedbackFloatingButton`)
- * is always the trigger and always lives one level up.
+ * CSS: styling rides Tailwind utility classes on the root + the shared
+ * `.feedback-sheet` class (matched by `index.css`); the root is an `<aside>`,
+ * so the CSS selector is class-based, NOT `dialog.feedback-sheet`.
  */
 
 import type { ReactNode, RefObject } from "react"
 import { useEffect, useRef } from "react"
-import {
-	focusRingClass,
-	touchTargetClass,
-	useFocusTrap,
-	useReducedMotion,
-} from "../a11y"
+import { focusRingClass, touchTargetClass, useReducedMotion } from "../a11y"
 
 export interface FeedbackSheetProps {
-	/** Current open state. Drives `dialog.showModal()` / `dialog.close()`. */
+	/** Current open state. Drives the slide transform + a11y visibility. */
 	open: boolean
 	/**
-	 * Fires when the sheet closes through any path (Escape, backdrop click,
-	 * explicit close button). Parent is responsible for flipping `open` to
-	 * `false` in response.
+	 * Fires when the sheet should close (× button, Escape). The parent flips
+	 * `open` to `false` in response — this component never closes itself.
 	 */
 	onClose: () => void
 	/**
-	 * Ref to the FAB that opened the sheet. The `useFocusTrap` hook snapshots
-	 * the prior `document.activeElement` on enable and restores it on disable,
-	 * so passing this ref is a belt-and-suspenders contract for downstream
-	 * consumers that may want to re-focus the trigger imperatively. Not
-	 * currently used internally — documented here to stay stable if the
-	 * component's close-side behavior evolves.
+	 * Ref to the rail that opened the drawer. On close, focus returns here.
 	 */
 	triggerRef?: RefObject<HTMLButtonElement | null>
 	/** Accessible-name id override. Defaults to `"feedback-sheet-title"`. */
@@ -87,18 +53,41 @@ export interface FeedbackSheetProps {
 	title?: ReactNode
 	/** Sheet body contents (AgentFeedbackToggle, FeedbackList, footer). */
 	children?: ReactNode
-	/** `id` on the <dialog>; wires with FAB's `aria-controls`. */
+	/** `id` on the panel; wires with the rail's `aria-controls`. */
 	id?: string
-	/** Extra class names appended to the dialog root. */
+	/** Extra class names appended to the panel root. */
 	className?: string
 }
 
-const DIALOG_BASE_CLASS = [
-	"feedback-sheet",
-	"fixed inset-0 z-50",
-	"flex flex-col",
-	"text-stone-900 dark:text-stone-100",
-].join(" ")
+function panelClass(open: boolean, prefersReducedMotion: boolean): string {
+	return [
+		"feedback-sheet",
+		// Panel docked to the LEFT edge, BELOW the app header. `fixed` anchors
+		// to the viewport (a plain element has no `<dialog>` UA-position
+		// surprises). The top is pinned to the header's bottom edge via the
+		// `--review-header-h` CSS custom property the review page writes from a
+		// ResizeObserver on the header (the header is dynamic — two rows, the
+		// H·AI·K·U bar + the stage-progress strip). Falls back to `0px` (full
+		// height) when the var is unset, so the drawer never collapses.
+		"fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50",
+		"w-[min(85vw,360px)] max-w-full",
+		"flex flex-col",
+		// Surface — explicit on the element (no dependency on a CSS selector).
+		"bg-white dark:bg-stone-900",
+		"text-stone-900 dark:text-stone-100",
+		"border-r border-stone-200 dark:border-stone-700 shadow-2xl",
+		// Transform slide from the left edge. Closed → off-screen
+		// (`-translate-x-full`); open → in place (`translate-x-0`). Reduced
+		// motion drops the transition so it snaps.
+		open ? "translate-x-0" : "-translate-x-full",
+		prefersReducedMotion ? "" : "transition-transform duration-300 ease-out",
+		// Closed → not interactive (it's off-screen to the left; this keeps it
+		// from catching clicks or stealing focus during/after the slide-out).
+		open ? "" : "pointer-events-none",
+	]
+		.filter(Boolean)
+		.join(" ")
+}
 
 const HEADER_CLASS = [
 	"feedback-sheet__header",
@@ -115,7 +104,15 @@ const CLOSE_BUTTON_CLASS = [
 	"text-lg",
 ].join(" ")
 
-const BODY_CLASS = ["feedback-sheet__body", "flex-1 overflow-y-auto"].join(" ")
+// The body is a flex COLUMN, not the scroll container — so a consumer can pin
+// a composer (shrink-0) and let the feedback list scroll in the remaining
+// space (the list carries its own bottom padding to clear the sticky gate
+// bar). Making the body itself `overflow-y-auto` scrolled the composer away
+// with the list — it ended up buried below a long feedback list.
+const BODY_CLASS = [
+	"feedback-sheet__body",
+	"flex-1 flex flex-col min-h-0",
+].join(" ")
 
 export function FeedbackSheet({
 	open,
@@ -127,164 +124,63 @@ export function FeedbackSheet({
 	id,
 	className,
 }: FeedbackSheetProps): React.ReactElement {
-	const dialogRef = useRef<HTMLDialogElement>(null)
 	const prefersReducedMotion = useReducedMotion()
+	const closeButtonRef = useRef<HTMLButtonElement>(null)
 
 	const resolvedTitleId = titleId ?? "feedback-sheet-title"
 	const resolvedId = id ?? "feedback-sheet"
 	const resolvedTitle: ReactNode = title ?? "Feedback"
 
-	// Imperative open/close + scroll-lock + listener wiring.
-	//
-	// Hook-order note: this effect is intentionally registered BEFORE
-	// useFocusTrap below. Effect cleanups run in reverse of registration
-	// order, so when `open` flips false: useFocusTrap's cleanup runs first
-	// (restoring focus to its snapshotted priorFocus, typically `document.body`
-	// in contexts where the FAB wasn't focused prior to the sheet opening),
-	// and THIS effect's cleanup runs second — giving us the last word on
-	// restoring focus to the FAB per unit spec CC3 "Focus returns to FAB".
+	// Escape-to-close + focus management. CONTROLLED: every close path calls
+	// `onClose()`; the parent flips `open`. On open we move focus into the
+	// drawer (the close button); on close we return focus to the rail.
 	useEffect(() => {
-		const dialog = dialogRef.current
-		if (!dialog) return
+		if (!open) return
 
-		function handleClose(): void {
-			onClose()
-		}
-
-		function handleClick(event: MouseEvent): void {
-			// Backdrop click — native <dialog> does not auto-close on backdrop.
-			// event.target === dialog means the click fell through to the
-			// <dialog> itself (i.e. the pseudo-element backdrop area).
-			if (!dialog) return
-			if (event.target === dialog) {
-				dialog.close()
-			}
-		}
-
-		// Escape keydown → close (FB-60).
-		//
-		// Native <dialog> fires `cancel` → `close` on Escape automatically in
-		// real browsers, but jsdom does NOT auto-fire `cancel` on keydown. This
-		// handler is a belt-and-suspenders emulation that:
-		//   - In jsdom, IS the close path the test exercises — dispatching a
-		//     real keydown on the dialog root drives the same `dialog.close()`
-		//     → `close` event → onClose() → FAB focus restore chain the
-		//     platform runs in production.
-		//   - In real browsers, it is redundant with the native cancel/close
-		//     pipeline. Calling `dialog.close()` on an already-closing dialog
-		//     is a no-op once `open` is false (the polyfill and the spec both
-		//     early-return when the attribute is missing), so the double-call
-		//     is safe.
-		// Wired alongside `click` + `close` so it lives and dies with `open`.
 		function handleKeyDown(event: KeyboardEvent): void {
-			if (!dialog) return
 			if (event.key === "Escape") {
-				// Do NOT preventDefault — the native `cancel` default (close)
-				// is the canonical cleanup trigger. In jsdom the native path
-				// no-ops, so we proactively drive close() here.
-				dialog.close()
+				event.preventDefault()
+				onClose()
 			}
 		}
+		document.addEventListener("keydown", handleKeyDown)
 
-		if (open) {
-			// Guard against InvalidStateError when already open.
-			if (!dialog.open) {
-				// showModal is not fully implemented in older jsdom. The test
-				// harness polyfills it; production browsers use the real impl.
-				if (typeof dialog.showModal === "function") {
-					try {
-						dialog.showModal()
-					} catch {
-						// Last-resort fallback — force the attribute so tests
-						// + any degraded environment still observe the dialog
-						// as open. Real browsers never hit this path.
-						dialog.setAttribute("open", "")
-					}
-				} else {
-					dialog.setAttribute("open", "")
-				}
-			}
-			// Belt-and-suspenders scroll lock — native showModal() already
-			// sets overflow:hidden on <html> in most browsers; setting it
-			// here makes the behavior deterministic in jsdom tests and any
-			// environment where the platform doesn't handle it.
-			document.documentElement.style.overflow = "hidden"
-
-			dialog.addEventListener("close", handleClose)
-			dialog.addEventListener("click", handleClick)
-			dialog.addEventListener("keydown", handleKeyDown)
-
-			return () => {
-				dialog.removeEventListener("close", handleClose)
-				dialog.removeEventListener("click", handleClick)
-				dialog.removeEventListener("keydown", handleKeyDown)
-				document.documentElement.style.overflow = ""
-				// Restore focus to the FAB. Runs AFTER useFocusTrap's cleanup
-				// (which may have restored focus to a stale priorFocus) because
-				// cleanups run in reverse order of effect registration — and
-				// this effect is registered before useFocusTrap. The unit spec
-				// is explicit: "Focus returns to FAB".
-				const fab = triggerRef?.current
-				if (fab && document.contains(fab)) {
-					try {
-						fab.focus()
-					} catch {
-						// Defensive: some environments throw when focusing a
-						// detached or non-focusable node. Swallow — a11y-layer
-						// priorFocus restore has already happened.
-					}
-				}
-			}
+		// Move focus into the drawer so keyboard users land on it.
+		try {
+			closeButtonRef.current?.focus()
+		} catch {
+			/* non-focusable in some environments — ignore */
 		}
 
-		if (!open && dialog.open) {
-			if (typeof dialog.close === "function") {
+		return () => {
+			document.removeEventListener("keydown", handleKeyDown)
+			// Return focus to the rail that opened it.
+			const trigger = triggerRef?.current
+			if (trigger && document.contains(trigger)) {
 				try {
-					dialog.close()
+					trigger.focus()
 				} catch {
-					dialog.removeAttribute("open")
+					/* defensive — detached/non-focusable node */
 				}
-			} else {
-				dialog.removeAttribute("open")
 			}
-			document.documentElement.style.overflow = ""
 		}
-
-		return undefined
 	}, [open, onClose, triggerRef])
 
-	// Focus-trap: handles initial-focus + Tab/Shift-Tab wrap + restore-on-close.
-	// Reused from the a11y foundation so jsdom tests (which do not emulate the
-	// native top-layer) still pass the Tab-doesn't-escape assertion. In real
-	// browsers the native top-layer enforces the same contract; the hook is a
-	// belt-and-suspenders guard. Registered AFTER the imperative effect above
-	// so its cleanup runs FIRST on close — the paired effect then has the
-	// final word on where focus lands (the FAB, per CC3).
-	useFocusTrap(dialogRef, open)
-
-	// Animation class — only applied while open. Under reduced-motion we swap
-	// the `sheet-enter` slide-up class for the `sheet-enter--reduced` sentinel
-	// so the test can assert className presence without depending on CSS.
-	const animationClass = open
-		? prefersReducedMotion
-			? "sheet-enter--reduced"
-			: "sheet-enter"
-		: ""
-
-	const dialogClassName = [DIALOG_BASE_CLASS, animationClass, className ?? ""]
+	const rootClassName = [
+		panelClass(open, prefersReducedMotion),
+		className ?? "",
+	]
 		.filter(Boolean)
 		.join(" ")
 
 	return (
-		<dialog
-			ref={dialogRef}
+		<aside
 			id={resolvedId}
 			aria-labelledby={resolvedTitleId}
-			aria-modal="true"
-			// biome-ignore lint/a11y/noRedundantRoles: Unit-10 completion criterion requires explicit role="dialog" + aria-modal on the sheet root — belt-and-suspenders for axe audits and RTL `getByRole` ergonomics in environments (jsdom, some legacy screen readers) where the implicit <dialog> role is not always surfaced.
+			aria-hidden={open ? undefined : true}
 			role="dialog"
 			data-testid="feedback-sheet"
-			className={dialogClassName}
+			className={rootClassName}
 		>
 			<header className={HEADER_CLASS}>
 				<h2
@@ -294,19 +190,13 @@ export function FeedbackSheet({
 					{resolvedTitle}
 				</h2>
 				<button
+					ref={closeButtonRef}
 					type="button"
-					onClick={() => {
-						const dialog = dialogRef.current
-						if (dialog && typeof dialog.close === "function") {
-							try {
-								dialog.close()
-								return
-							} catch {
-								// Fall through to onClose() below.
-							}
-						}
-						onClose()
-					}}
+					// CONTROLLED close: call onClose() so the parent flips `open` →
+					// false. (The old code called the native dialog.close() and
+					// returned, so onClose never fired and the effect re-opened it
+					// — the "× does nothing" bug.)
+					onClick={onClose}
 					aria-label="Close feedback panel"
 					className={[
 						CLOSE_BUTTON_CLASS,
@@ -319,6 +209,6 @@ export function FeedbackSheet({
 				</button>
 			</header>
 			<div className={BODY_CLASS}>{children}</div>
-		</dialog>
+		</aside>
 	)
 }

@@ -20,6 +20,7 @@ import {
 	countPendingFeedback,
 	deleteFeedbackFile,
 	deriveAuthorType,
+	deriveFeedbackStatus,
 	FEEDBACK_ORIGINS,
 	feedbackDir,
 	findFeedbackFile,
@@ -573,6 +574,7 @@ try {
 			title: "MCP test feedback",
 			body: "Created via the MCP tool.",
 			origin: "agent",
+			severity: "medium",
 		})
 
 		assert.ok(
@@ -597,6 +599,7 @@ try {
 			title: "Citation missing for claim",
 			body: "Body asserts X but no citation provided.",
 			origin: "adversarial-review",
+			severity: "high",
 			inline_anchor: {
 				selected_text: "this claim has no citation backing it",
 				paragraph: 3,
@@ -674,6 +677,7 @@ try {
 			stage: "",
 			title: "Intent-scope finding",
 			body: "Cross-stage concern logged by studio-level review",
+			severity: "medium",
 		})
 		assert.ok(!result.isError, getTextResult(result))
 		const parsed = JSON.parse(getTextResult(result))
@@ -742,6 +746,7 @@ try {
 			stage: stageName,
 			title: "Test",
 			body: "Test",
+			severity: "medium",
 		})
 		assert.ok(result.isError)
 		assert.ok(
@@ -772,6 +777,7 @@ try {
 			stage: "nonexistent-stage",
 			title: "Test",
 			body: "Test",
+			severity: "medium",
 		})
 		assert.ok(result.isError)
 		assert.ok(
@@ -787,12 +793,189 @@ try {
 				title: `Origin test ${origin}`,
 				body: "Testing origin.",
 				origin,
+				severity: "medium",
 			})
 			assert.ok(
 				!result.isError,
 				`Origin '${origin}' should be valid but got error: ${getTextResult(result)}`,
 			)
 		}
+	})
+
+	// ── haiku_feedback severity ───────────────────────────────────────────────
+
+	console.log("\n=== haiku_feedback severity ===")
+
+	test("MCP tool rejects missing severity", () => {
+		const result = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "No severity",
+			body: "Filed without a severity.",
+			origin: "agent",
+		})
+		assert.ok(result.isError)
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_input_invalid")
+		assert.ok(
+			parsed.errors.some(
+				(e) =>
+					e.keyword === "required" && e.params?.missingProperty === "severity",
+			),
+			`expected missing-required severity; got ${JSON.stringify(parsed.errors)}`,
+		)
+	})
+
+	test("MCP tool rejects invalid severity enum", () => {
+		const result = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "Bad severity",
+			body: "Filed with an out-of-enum severity.",
+			severity: "urgent",
+		})
+		assert.ok(result.isError)
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_input_invalid")
+		assert.ok(
+			parsed.errors.some((e) => e.path === "/severity" && e.keyword === "enum"),
+			`expected /severity enum violation; got ${JSON.stringify(parsed.errors)}`,
+		)
+	})
+
+	test("MCP tool persists severity to frontmatter", () => {
+		const result = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "Blocker finding",
+			body: "Something is broken.",
+			origin: "adversarial-review",
+			severity: "blocker",
+		})
+		assert.ok(!result.isError, getTextResult(result))
+		const parsed = JSON.parse(getTextResult(result))
+		const raw = readFileSync(join(projDir, parsed.file), "utf8")
+		assert.ok(
+			raw.includes("severity: blocker"),
+			`expected severity in FM, got:\n${raw.slice(0, 400)}`,
+		)
+	})
+
+	// ── haiku_feedback_set_severity (classifier backfill) ─────────────────────
+
+	console.log("\n=== haiku_feedback_set_severity ===")
+
+	test("backfills severity on a user FB that landed without one", () => {
+		// Mirror the SPA/human path: writeFeedbackFile with no severity.
+		const created = writeFeedbackFile(intentSlug, stageName, {
+			title: "User finding no severity",
+			body: "Typed in the SPA, no severity picker.",
+			origin: "user-chat",
+			author: "user",
+		})
+		const num = Number.parseInt(created.feedback_id.replace(/^FB-/, ""), 10)
+		// Confirm it landed severity-less.
+		const before = readFileSync(join(projDir, created.file), "utf8")
+		assert.ok(!/^severity:/m.test(before), "expected no severity pre-backfill")
+
+		const set = handleStateTool("haiku_feedback_set_severity", {
+			intent: intentSlug,
+			stage: stageName,
+			feedback_id: num,
+			severity: "high",
+			reasoning: "User reported a real defect.",
+		})
+		assert.ok(!set.isError, getTextResult(set))
+		const parsed = JSON.parse(getTextResult(set))
+		assert.strictEqual(parsed.ok, true)
+		assert.strictEqual(parsed.severity, "high")
+		const after = readFileSync(join(projDir, created.file), "utf8")
+		assert.ok(after.includes("severity: high"), "expected severity written")
+	})
+
+	test("refuses to overwrite an already-set severity", () => {
+		const created = writeFeedbackFile(intentSlug, stageName, {
+			title: "Already classified",
+			body: "Agent filed this with a severity.",
+			origin: "adversarial-review",
+			severity: "medium",
+		})
+		const num = Number.parseInt(created.feedback_id.replace(/^FB-/, ""), 10)
+		const set = handleStateTool("haiku_feedback_set_severity", {
+			intent: intentSlug,
+			stage: stageName,
+			feedback_id: num,
+			severity: "blocker",
+		})
+		assert.ok(set.isError, "expected immutability rejection")
+		const parsed = JSON.parse(getTextResult(set))
+		assert.strictEqual(parsed.error, "severity_already_set")
+		assert.strictEqual(parsed.current_severity, "medium")
+	})
+
+	// ── anti-churn: settled-duplicate warning ─────────────────────────────────
+
+	console.log("\n=== settled-duplicate warning ===")
+
+	test("re-filing a finding that matches a rejected one warns (reword-resistant)", () => {
+		// File a finding, reject it with a reason.
+		const orig = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "Null crash in payment handler",
+			body: "Payment handler dereferences a null customer object and crashes.",
+			origin: "adversarial-review",
+			severity: "high",
+		})
+		const origId = JSON.parse(getTextResult(orig)).feedback_id
+		const origNum = Number.parseInt(origId.replace(/^FB-/, ""), 10)
+		const rej = handleStateTool("haiku_feedback_reject", {
+			intent: intentSlug,
+			stage: stageName,
+			feedback_id: origNum,
+			reason:
+				"Not a bug — the customer object is guaranteed non-null by the caller.",
+		})
+		assert.ok(!rej.isError, getTextResult(rej))
+
+		// File a REWORDED restatement of the same finding.
+		const dup = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "Payment handler null crash",
+			body: "Payment handler crashes on a null customer object dereference.",
+			origin: "adversarial-review",
+			severity: "high",
+		})
+		assert.ok(!dup.isError, getTextResult(dup))
+		const dupParsed = JSON.parse(getTextResult(dup))
+		assert.ok(
+			dupParsed.duplicate_warning,
+			`expected a duplicate_warning on the reworded re-file; got ${JSON.stringify(dupParsed)}`,
+		)
+		assert.strictEqual(dupParsed.duplicate_warning.matches, origId)
+		assert.strictEqual(dupParsed.duplicate_warning.settled_status, "rejected")
+		assert.ok(
+			/dismissed/.test(dupParsed.duplicate_warning.resolution),
+			`expected the rejection reason surfaced; got ${dupParsed.duplicate_warning.resolution}`,
+		)
+	})
+
+	test("a genuinely new finding does NOT warn", () => {
+		const fresh = handleStateTool("haiku_feedback", {
+			intent: intentSlug,
+			stage: stageName,
+			title: "Missing rate limit on the export endpoint",
+			body: "The CSV export endpoint has no rate limiting and can be abused.",
+			origin: "adversarial-review",
+			severity: "medium",
+		})
+		assert.ok(!fresh.isError, getTextResult(fresh))
+		const freshParsed = JSON.parse(getTextResult(fresh))
+		assert.ok(
+			!freshParsed.duplicate_warning,
+			`a distinct finding must not warn; got ${JSON.stringify(freshParsed.duplicate_warning)}`,
+		)
 	})
 
 	// ── haiku_feedback_update MCP tool ────────────────────────────────────────
@@ -1151,6 +1334,42 @@ try {
 			parsed.errors.some((e) => e.path === "/intent"),
 			"Expected an error on /intent",
 		)
+	})
+
+	// ── findFeedbackFile numbering-collision safety ───────────────────────────
+	// Regression for the churn-FB-stuck bug (2026-05-19): two files sharing
+	// one integer prefix (a legacy `01-*.md` next to a `001-*.md`) must
+	// resolve deterministically to the OPEN one, so the lifecycle guard and
+	// the cursor's feedback walk never disagree about whether the FB is
+	// closed.
+	console.log("\n=== findFeedbackFile numbering-collision safety ===")
+
+	test("two files share integer 1 → resolves the OPEN one, not the closed duplicate", () => {
+		const fbDir = join(intentDirPath, "stages", stageName, "feedback")
+		mkdirSync(fbDir, { recursive: true })
+		// Closed duplicate (legacy 2-digit prefix), integer 1.
+		writeFileSync(
+			join(fbDir, "01-closed-dup.md"),
+			"---\ntitle: closed dup\norigin: agent\nauthor_type: agent\ncreated_at: 2026-05-19T00:00:00Z\nclosed_at: 2026-05-19T01:00:00Z\nclosed_by: fix-loop:FB-001:bolt-1\n---\n\nclosed duplicate\n",
+		)
+		// Open file (3-digit prefix), integer 1.
+		writeFileSync(
+			join(fbDir, "001-open-real.md"),
+			"---\ntitle: open real\norigin: agent\nauthor_type: agent\ncreated_at: 2026-05-19T00:00:00Z\nstatus: pending\nclosed_by: null\nbolt: 0\nresolution: null\n---\n\nopen real FB\n",
+		)
+		const found = findFeedbackFile(intentSlug, stageName, "FB-001")
+		assert.ok(found, "expected a match for FB-001")
+		assert.strictEqual(
+			found.filename,
+			"001-open-real.md",
+			`must resolve the OPEN file, not the closed duplicate; got ${found.filename}`,
+		)
+		// And its derived status must be open (pending), so the advance-hat
+		// lifecycle guard would NOT reject it.
+		assert.strictEqual(deriveFeedbackStatus(found.data), "pending")
+		// Cleanup so later sequential-numbering tests aren't perturbed.
+		rmSync(join(fbDir, "01-closed-dup.md"))
+		rmSync(join(fbDir, "001-open-real.md"))
 	})
 
 	// ── Cleanup ───────────────────────────────────────────────────────────────

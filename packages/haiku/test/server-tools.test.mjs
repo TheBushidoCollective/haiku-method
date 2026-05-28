@@ -122,11 +122,16 @@ const expectedStateTools = [
 	"haiku_intent_get",
 	"haiku_intent_list",
 	"haiku_stage_get",
-	// haiku_unit_get is FSM-internal only per architecture §1.1 / §1.2 — it
-	// exposes frontmatter, which the FM-is-FSM-only rule forbids exposing
-	// to agents. Use haiku_unit_read (body+title only) for agent-callable
-	// reads. The handler is retained for FSM-internal callers but is no
-	// longer registered in the agent-callable schema.
+	// haiku_unit_get is agent-callable again (2026-05-20) but SCOPED: it
+	// reads only the agent-authorable/corrective FM fields (quality_gates,
+	// outputs, inputs, depends_on, model, closes, title, …) and refuses the
+	// FSM-driven fields (iterations/reviews/approvals/started_at) with
+	// `unit_field_engine_only`. It's the read counterpart to haiku_unit_set's
+	// corrective exemption — without it the exemption is write-but-can't-
+	// safely-merge (the whole quality_gates array gets clobbered). The
+	// §1.1 boundary still holds: engine bookkeeping stays hidden; the body/
+	// title still go through haiku_unit_read.
+	"haiku_unit_get",
 	"haiku_unit_read",
 	"haiku_unit_write",
 	"haiku_unit_set",
@@ -191,6 +196,49 @@ test("orchestratorToolDefs and orchestratorToolHandlers are in sync", async () =
 		missingHandlers,
 		[],
 		`Tool-def entries without handlers (dangling): ${missingHandlers.join(", ")}`,
+	)
+})
+
+// inputSchema parity: the ADVERTISED schema (orchestratorToolDefs, what
+// ListTools returns) and the HANDLER's ToolDef.inputSchema must agree on
+// WHICH params exist and which are required. They're hand-maintained in
+// two files; the canonical pattern is for both to feed
+// `jsonSchemaOf(SHARED_SCHEMA)` so they can't drift. They DID drift on
+// 2026-05-26 — `studio_candidates` was added to haiku_intent_create's
+// handler schema but not the advertised one, so the agent never saw the
+// param and the studio picker never narrowed. This guard catches that
+// class — a param the handler accepts but the agent can't see, or a
+// required-set mismatch — for every tool. (We compare the property KEY
+// set + the `required` array, not full deep-equal: per-property
+// description wording is allowed to differ between the advertised blurb
+// and the handler's, but the CONTRACT — which params, which required —
+// must not.)
+test("every orchestrator tool's advertised params + required match its handler's", async () => {
+	const { orchestratorToolHandlers } = await import(
+		"../src/tools/orchestrator/index.ts"
+	)
+	const keysOf = (s) => Object.keys(s?.properties ?? {}).sort()
+	const reqOf = (s) => [...(s?.required ?? [])].sort()
+	const mismatches = []
+	for (const def of orchestratorToolDefs) {
+		const handler = orchestratorToolHandlers.get(def.name)
+		if (!handler) continue // names-parity test owns the missing-handler case
+		const dk = keysOf(def.inputSchema)
+		const hk = keysOf(handler.inputSchema)
+		const sameKeys = JSON.stringify(dk) === JSON.stringify(hk)
+		const sameReq =
+			JSON.stringify(reqOf(def.inputSchema)) ===
+			JSON.stringify(reqOf(handler.inputSchema))
+		if (!sameKeys || !sameReq) {
+			mismatches.push(
+				`${def.name} (advertised props [${dk}] req [${reqOf(def.inputSchema)}] vs handler props [${hk}] req [${reqOf(handler.inputSchema)}])`,
+			)
+		}
+	}
+	assert.deepStrictEqual(
+		mismatches,
+		[],
+		`Tools whose advertised contract ≠ handler contract — the agent sees the wrong params. Feed both from one jsonSchemaOf(SHARED_SCHEMA):\n${mismatches.join("\n")}`,
 	)
 })
 
@@ -261,9 +309,13 @@ test("haiku_unit_start requires intent, unit", () => {
 	assert.deepStrictEqual(tool.inputSchema.required, ["intent", "unit"])
 })
 
-test("haiku_unit_reject_hat requires intent, unit", () => {
+test("haiku_unit_reject_hat requires intent, unit, message", () => {
 	const tool = stateToolDefs.find((t) => t.name === "haiku_unit_reject_hat")
-	assert.deepStrictEqual(tool.inputSchema.required, ["intent", "unit"])
+	assert.deepStrictEqual(tool.inputSchema.required, [
+		"intent",
+		"unit",
+		"message",
+	])
 })
 
 test("haiku_unit_set requires intent, stage, unit, field, value", () => {
@@ -296,13 +348,18 @@ test("haiku_run_next has optional external_review_url", () => {
 	assert.ok("external_review_url" in tool.inputSchema.properties)
 })
 
-test("haiku_intent_create requires title and description", () => {
+test("haiku_intent_create requires title, description, and studio_candidates", () => {
 	const tool = orchestratorToolDefs.find(
 		(t) => t.name === "haiku_intent_create",
 	)
-	assert.deepStrictEqual(tool.inputSchema.required, ["title", "description"])
+	assert.deepStrictEqual(tool.inputSchema.required, [
+		"title",
+		"description",
+		"studio_candidates",
+	])
 	assert.ok("title" in tool.inputSchema.properties)
 	assert.ok("description" in tool.inputSchema.properties)
+	assert.ok("studio_candidates" in tool.inputSchema.properties)
 })
 
 test("haiku_intent_create has optional slug and context", () => {

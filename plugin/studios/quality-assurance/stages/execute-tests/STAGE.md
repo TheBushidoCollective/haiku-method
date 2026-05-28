@@ -14,22 +14,22 @@ inputs:
 
 # Execute Tests
 
-Execute the test suite, capture evidence, log defects, and produce the test-results record that downstream stages analyze and certify against. Execution discipline — fidelity to the planned environment, completeness of evidence, accuracy of defect reports — determines whether the analysis can trust the data.
+Run the designed test suite against the planned environment, capture evidence, and log defects — producing the test-results record that analyze and certify depend on. Execution discipline here is what makes the downstream data trustworthy.
 
-## Per-unit baton
+## Scope
 
-Units in this stage are **test-execution slices** — typically one slice per area or quality dimension from the upstream test-suite spec. Each unit walks the three hats in `plan → do → verify` order:
+Test execution and evidence: running cases at the planned environment fidelity, recording each result with proof, and writing accurate defect reports. Execute-tests decides *what actually happened when the tests ran*, not what the tests are (design-tests) or what the results imply (analyze).
 
-- **`tester`** (plan / do for execution) confirms the environment matches the planned fidelity, runs the cases, captures evidence per result, flags any blocked or unexecutable cases
-- **`reporter`** (do for defects + metrics) writes the defect reports with reproduction information and severity, tracks execution-progress metrics
-- **`verifier`** (verify) validates the execution record's substance and integrity
+## What to do
 
-The baton is the unit body: executed results → results-plus-defects-plus-metrics → validated record.
+- Confirm the environment matches the planned fidelity before running anything — results from the wrong environment are noise.
+- Capture concrete evidence for every result, pass or fail, so the record stands on its own.
+- Write defect reports with enough reproduction detail and accurate severity that someone else could confirm them.
+- Flag blocked or unexecutable cases explicitly rather than silently skipping them.
 
-## Inputs and outputs
+## What NOT to do
 
-The frontmatter declares the I/O contract. `design-tests/test-suite-spec` and `plan/test-strategy` feed in; outputs (test-results) feed `analyze` and `certify`.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, tester, feedback-assessor]` dispatches per finding. The classifier routes; `tester` is the implementer (re-running cases, capturing missing evidence, correcting blocked-test rationale); the assessor decides closure. The gate is `auto`. Project overlays at `.haiku/studios/quality-assurance/stages/execute-tests/` may add house conventions (defect-tracker IDs, evidence-storage location, named environment URLs) without modifying the plugin defaults.
+- Don't redesign or reinterpret cases mid-run to make them pass — a wrong case is feedback to design-tests.
+- Don't analyze trends, compute quality verdicts, or recommend release/defer/block — that's analyze.
+- Don't record a result without the evidence that backs it.
+- Don't leave a case's outcome unrecorded or its blocked status unexplained.

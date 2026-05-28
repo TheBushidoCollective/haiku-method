@@ -1,7 +1,7 @@
 ---
 name: intake
 description: Understand legal requirements and assess risk
-hats: [paralegal, risk-assessor]
+hats: [paralegal, risk-assessor, verifier]
 fix_hats: [classifier, paralegal, feedback-assessor]
 review: auto
 elaboration: collaborative
@@ -13,21 +13,22 @@ outputs:
 
 # Intake
 
-Capture the matter before any drafting or research starts. Intake is a research-class stage: each unit corresponds to one knowledge surface (a party, a jurisdiction, a fact pattern, a risk category) that the rest of the studio will consume. The output is a `LEGAL-BRIEF.md` per unit plus the risk classification that downstream stages need to scope their work. **Nothing here is legal advice**; intake organizes facts and surfaces issues for the licensed attorney who owns the matter.
+The opening stage of a legal matter: capture the facts, the parties, the jurisdictions, and the risk picture before anyone researches law or drafts a document. This is where a raw request becomes an organized brief the rest of the studio can work from. Nothing produced here is legal advice — intake organizes facts and surfaces issues for the licensed attorney who owns the matter.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the hats in plan → do order, with the second hat carrying the verify responsibility for its own output:
+Fact-gathering and risk classification: who the parties are, which jurisdictions and governing law apply, what documents already exist, and which risk categories the matter touches. Intake decides *what the matter is* — not what the law says about it (research), not what the document should say (draft), and not whether it's legally sufficient (review).
 
-- **`paralegal`** (plan / do for facts) — gathers and structures the matter's facts, parties, jurisdictions, governing law, and existing documents into the unit's slice of `LEGAL-BRIEF.md`
-- **`risk-assessor`** (do / verify for risk) — reads the paralegal's fact pattern, identifies risk categories (regulatory, contractual, IP, dispute, reputational), and proposes mitigation options for the responsible attorney to evaluate; calls `haiku_unit_advance_hat` when the unit is internally consistent and substantive, `haiku_unit_reject_hat` if the fact pattern is too thin to assess
+## What to do
 
-Process detail lives in each hat's md file — this stage enforces the chain, not the per-hat process.
+- Capture the fact pattern in the client's own terms — parties, jurisdictions, governing law, existing documents — and cite the source for each fact.
+- Classify the matter's risks by category (regulatory, contractual, IP, dispute, reputational) so downstream stages can scope against them.
+- Surface open questions and conflicts now, while they're cheap to resolve, rather than carrying ambiguity forward.
+- Flag anything that calls for legal judgment to the attorney instead of resolving it.
 
-## Inputs and outputs
+## What NOT to do
 
-Intake has no upstream stage. The frontmatter declares one output artifact — `LEGAL-BRIEF.md` per unit at intent scope — which feeds `research`, `draft`, `review`, and `execute`. Adding a new fact pattern or risk category means a new intake unit, not editing a completed one (forward-only per architecture §1.3).
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, paralegal, feedback-assessor]` dispatches per finding. The classifier routes the FB to the right unit; the paralegal re-authors the affected brief section; the assessor independently decides closure. The gate is `auto` — intake findings rarely require a separate approval step beyond verifier sign-off and the next-stage handoff. Project overlays at `.haiku/studios/legal/stages/intake/` may add house-style conventions (matter-number formats, conflict-check workflows, billing-code prefixes) without modifying the plugin defaults.
+- Don't render legal opinions or recommend a course of action — that's the attorney's call, informed by research.
+- Don't draft clauses or document language; that belongs to the draft stage.
+- Don't leave a material fact unsourced or a known conflict unflagged — a gap here distorts every stage downstream.
+- Don't editorialize the facts into a position; intake records, it doesn't argue.

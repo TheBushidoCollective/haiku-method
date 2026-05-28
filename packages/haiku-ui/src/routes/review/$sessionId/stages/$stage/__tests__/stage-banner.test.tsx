@@ -187,3 +187,107 @@ describe("PhaseStepper — bubble + tooltip per phase", () => {
 		expect(screen.getByLabelText(/^phase progress$/i)).toBeTruthy()
 	})
 })
+
+// ── Granular milestone track ──────────────────────────────────────────
+//
+// When the session payload carries `current_state.milestones` (the same
+// per-cursor-action track the status line shows), the stepper renders one
+// bubble per milestone instead of the coarse four-phase strip. The labels
+// arrive pre-worded from the engine; the stepper doesn't re-derive them.
+
+const SAMPLE_MILESTONES = [
+	{ key: "elaborate", label: "elaborate", status: "done" as const },
+	{ key: "review:spec", label: "spec review", status: "done" as const },
+	{ key: "execute", label: "execute", status: "active" as const },
+	{
+		key: "approve:quality_gates",
+		label: "quality gates",
+		status: "pending" as const,
+	},
+	{ key: "observations", label: "observations", status: "pending" as const },
+]
+
+describe("PhaseStepper — granular milestone track", () => {
+	it("renders one bubble per milestone, not the coarse four-phase strip", () => {
+		const { container } = render(
+			<PhaseStepper
+				phase="execute"
+				stageStatus="current"
+				milestones={SAMPLE_MILESTONES}
+				progressIndex={2}
+			/>,
+		)
+		const list = container.querySelector("ol")
+		expect(list).toBeTruthy()
+		// 5 milestones, not the 4 coarse phases.
+		expect(list?.children.length).toBe(5)
+	})
+
+	it("marks the active milestone with aria-current='step' and spells out its label", () => {
+		render(
+			<PhaseStepper
+				phase="execute"
+				stageStatus="current"
+				milestones={SAMPLE_MILESTONES}
+				progressIndex={2}
+			/>,
+		)
+		const active = screen.getByLabelText(/execute — active/i)
+		expect(active.getAttribute("aria-current")).toBe("step")
+		// The active milestone's label renders twice — its bubble tooltip
+		// and the trailing spelled-out label after the count.
+		expect(screen.getAllByText("execute").length).toBe(2)
+	})
+
+	it("uses progressIndex for the count slot (N/M form)", () => {
+		const { container } = render(
+			<PhaseStepper
+				phase="execute"
+				stageStatus="current"
+				milestones={SAMPLE_MILESTONES}
+				progressIndex={2}
+			/>,
+		)
+		const countSlot = container.querySelector(".font-mono")
+		// progressIndex 2 (0-based) → milestone 3 of 5.
+		expect(countSlot?.textContent).toBe("3/5")
+	})
+
+	it("falls back to progressIndex from milestone status when not supplied", () => {
+		render(
+			<PhaseStepper
+				phase="execute"
+				stageStatus="current"
+				milestones={SAMPLE_MILESTONES}
+			/>,
+		)
+		// No progressIndex prop → derived from the first `active` milestone
+		// (execute, index 2). aria-label reflects "Milestone 3 of 5".
+		expect(screen.getByLabelText(/^milestone 3 of 5$/i)).toBeTruthy()
+	})
+
+	it("a complete stage shows every milestone done, no active bubble", () => {
+		const { container } = render(
+			<PhaseStepper
+				phase=""
+				stageStatus="completed"
+				milestones={SAMPLE_MILESTONES}
+				progressIndex={2}
+			/>,
+		)
+		// Stage-complete overrides per-milestone status: nothing is active.
+		expect(screen.queryAllByLabelText(/— active/i).length).toBe(0)
+		const countSlot = container.querySelector(".font-mono")
+		expect(countSlot?.textContent).toBe("done")
+		expect(screen.getByLabelText(/all milestones complete/i)).toBeTruthy()
+	})
+
+	it("empty milestones array falls back to the coarse four-phase strip", () => {
+		const { container } = render(
+			<PhaseStepper phase="execute" stageStatus="current" milestones={[]} />,
+		)
+		// Empty track → coarse strip with its 4 numbered bubbles.
+		const list = container.querySelector("ol")
+		expect(list?.children.length).toBe(4)
+	})
+})

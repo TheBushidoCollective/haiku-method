@@ -305,7 +305,7 @@ async function buildApp(): Promise<FastifyInstance> {
 	registerAssessmentsRoutes(instance)
 	registerBaselineContentRoutes(instance)
 
-	// ── /haiku:debug admin SPA + admin op endpoints ──────────────────
+	// ── /haiku:haiku-debug admin SPA + admin op endpoints ──────────────────
 	registerDebugRoutes(instance)
 
 	// ── WebSocket upgrade ──────────────────────────────────────────────

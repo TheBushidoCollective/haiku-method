@@ -19,22 +19,22 @@ outputs:
 
 # Review
 
-Substantive review of the draft against the brief, the research memo, and applicable compliance requirements. Review is a validation-class stage: each unit corresponds to one review surface — a specific clause family, a regulatory regime, a risk category, or a counterparty markup. The output is a `REVIEW-FINDINGS.md` per unit that the execute stage and the licensed attorney use to close gaps before execution.
+Substantive review of the draft against the brief, the research memo, and the applicable compliance requirements, producing the findings the execute stage will close before signature. Review surfaces issues for the attorney; it does not certify legal sufficiency. A finding marked critical means "the attorney should look here first," not "this is legally defective."
 
-Review surfaces issues; review does NOT certify legal sufficiency. Findings classified `critical` mean "the licensed attorney should look here first," not "this is legally defective." The attorney is always the final arbiter of legal judgment.
+## Scope
 
-## Per-unit baton
+Examining the draft for unintended exposure, unaddressed risks, and compliance gaps, and recording specific, traceable findings. Review decides *where the draft falls short of the brief and the regulations* — not what the document should have said in the first place (draft), and not the final go/no-go on execution (the attorney, at the gate).
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`reviewer`** (plan / do for legal lens) — reads the draft against the brief and memo, identifies provisions that create unintended exposure or fail to address an identified risk, and categorizes findings by severity
-- **`compliance-officer`** (do for compliance lens) — maps the draft against the applicable regulatory regimes identified in research, flags compliance gaps, and notes specific provisions that need attention
-- **`verifier`** (verify) — confirms findings are specific, severity-tagged, and traceable to a source (a clause + a brief or memo reference)
+- Read the draft against the brief and memo, and flag provisions that create unintended exposure or fail to address an identified risk.
+- Map the draft against the regulatory regimes research identified and note specific compliance gaps.
+- Make every finding specific, severity-tagged, and traceable to a clause plus its brief or memo reference.
+- Route a finding that requires rewriting a clause back to the draft stage rather than fixing it in place.
 
-## Inputs and outputs
+## What NOT to do
 
-Review consumes the upstream draft, memo, and brief. It produces `REVIEW-FINDINGS.md` per unit at intent scope. Findings feed `execute` (where the closer hat incorporates the resolved items into the final document).
-
-## Fix loop and gate
-
-`fix_hats: [classifier, reviewer, feedback-assessor]` dispatches per finding. Classifier routes; reviewer re-authors the finding with additional specificity (or escalates back to draft via cross-stage feedback if a clause needs rewriting); assessor closes. The gate is `external` — the workflow waits for the licensed attorney's external sign-off (in whichever review channel the firm uses) before advancing to `execute`. Approval is detected by branch merge or external-system signal; the agent does not advance the gate itself.
+- Don't certify the document as legally sufficient — that judgment is the attorney's.
+- Don't rewrite clauses here; review produces findings, draft produces language.
+- Don't file a vague finding ("tighten this up") with no clause anchor or severity.
+- Don't advance with an open critical finding that hasn't been resolved or formally waived.

@@ -1,7 +1,8 @@
 ---
 name: negotiate
 description: Negotiate terms and review contract provisions
-hats: [negotiator, legal-reviewer]
+optional: true
+hats: [negotiator, legal-reviewer, verifier]
 fix_hats: [classifier, negotiator, feedback-assessor]
 review: external
 elaboration: collaborative
@@ -14,21 +15,22 @@ inputs:
 
 # Negotiate
 
-Convert the selected vendor's evaluated position into agreed contractual terms — pricing, SLAs, exit provisions, data handling, liability, IP. The output is the master record of what the organization and the vendor agreed to; downstream stages execute against it.
+Convert the selected vendor's evaluated position into agreed contractual terms — pricing, SLAs, exit provisions, data handling, liability, IP. The output is the master record of what the organization and the vendor agreed to; the downstream stages execute against it.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the hat chain in order:
+Term negotiation and risk review: settling commercial terms, defining SLAs with measurable thresholds, and reviewing the risk clauses (exit, IP, data, liability) for legal and commercial exposure. Negotiate decides *what both parties commit to* — not which vendor was chosen (evaluate) or standing the relationship up operationally (onboard).
 
-- **`negotiator`** (plan / do) negotiates commercial terms, defines SLA thresholds and remedies, and documents agreed pricing, payment, duration, renewal, and exit terms with comparison to the initial position
-- **`legal-reviewer`** (verify lens) reviews material risk clauses (liability, indemnification, IP ownership, data handling), verifies regulatory compliance (data privacy, industry-specific regulations), and either confirms terms or recommends specific contract language modifications
+## What to do
 
-The baton is the negotiated terms document. The legal reviewer either confirms the terms stand or files findings naming the exact clauses that need rework, with recommended language.
+- Negotiate commercial terms and SLAs with measurable thresholds, not aspirational language no one can enforce.
+- Review risk clauses (exit, IP, data, liability) and categorize each by legal vs commercial exposure with recommended language.
+- Keep the terms document authoritative — onboard and monitor compare against exactly what's recorded here.
+- Surface non-standard terms for the right approval authority rather than absorbing them quietly.
 
-## Inputs and outputs
+## What NOT to do
 
-`evaluate/vendor-scorecard` plus `requirements/rfp-document` feed in. The output is the negotiation terms document (`outputs/NEGOTIATION-TERMS.md`) — agreed commercial terms, SLAs with measurable thresholds, reviewed risk clauses — which feeds `onboard`.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, negotiator, feedback-assessor]` dispatches per finding — the classifier routes, the negotiator re-opens the affected terms with the vendor and updates the document, and the assessor independently decides closure. The gate is `external` — final signoff happens in the organization's external contracting / approval system (legal, finance, executive sponsor) and the engine waits for that approval signal before advancing. Project overlays may add organization-specific risk thresholds, industry-specific clause templates, or contract-lifecycle-management URLs without modifying the plugin defaults.
+- Don't re-score or re-shortlist vendors — a flawed selection is a revisit to evaluate.
+- Don't provision accounts or wire integrations; that's onboard.
+- Don't agree to an SLA without a measurable threshold behind it.
+- Don't leave a negotiated term out of the master record that downstream stages depend on.

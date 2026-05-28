@@ -225,11 +225,11 @@ test("spec drift: signed review + later commit on unit.md → drift_detected", a
 	})
 })
 
-// ── Output drift ────────────────────────────────────────────────────
+// ── Output mutation is NOT drift (premise-witness model) ─────────────
 
-test("output drift: signed approval + commit on declared output → drift_detected", async () => {
+test("output mutation does NOT trip drift — outputs are downstream of the signature, allowed to evolve", async () => {
 	if (!HAS_GIT) return
-	await withRepo("drift-output", async ({ root, intentDir, slug: _slug }) => {
+	await withRepo("output-no-drift", async ({ root, intentDir, slug: _slug }) => {
 		const fixedAt = "2026-05-01T00:00:00Z"
 		const outputRel = "stages/design/SPEC.md"
 		const outputAbs = join(intentDir, outputRel)
@@ -252,8 +252,6 @@ test("output drift: signed approval + commit on declared output → drift_detect
 			],
 			outputs: [outputRel],
 		})
-		// Re-stamp with witness hashes (review hashes the unit body,
-		// approval hashes declared outputs).
 		writeFileSync(
 			unitPath,
 			matter.stringify(matter(readFileSync(unitPath, "utf8")).content, {
@@ -270,18 +268,18 @@ test("output drift: signed approval + commit on declared output → drift_detect
 				],
 				reviews: { spec: buildReviewRecord(unitPath) },
 				approvals: {
-					spec: buildApprovalRecord(intentDir, [outputRel]),
-					user: buildApprovalRecord(intentDir, [outputRel]),
+					spec: buildApprovalRecord(),
+					user: buildApprovalRecord(),
 				},
 				outputs: [outputRel],
 			}),
 		)
 		git(root, "add", "-A")
 		git(root, "commit", "-m", "initial", "--date", fixedAt)
-		// Drift the output.
-		writeFileSync(outputAbs, "Modified spec — drift.\n")
+		// Mutate the output (the case that USED to fire drift in v3).
+		writeFileSync(outputAbs, "Modified spec — agent iteration.\n")
 		git(root, "add", "-A")
-		git(root, "commit", "-m", "drift: output edited")
+		git(root, "commit", "-m", "agent: output revised")
 
 		const { runDriftSweep } = await import(
 			"../src/orchestrator/workflow/drift-sweep.js"
@@ -292,10 +290,14 @@ test("output drift: signed approval + commit on declared output → drift_detect
 			studio: "test",
 			repoRoot: root,
 		})
-		const outputDrift = result.events.filter((e) => e.kind === "output")
-		assert.ok(
-			outputDrift.length >= 1,
-			`expected output drift event; got events: ${JSON.stringify(result.events)}`,
+		// No drift event — outputs are bookkeeping-only under the
+		// premise-witness model. Producers freely evolve their
+		// outputs; only CONSUMERS detect input drift on their own
+		// premise set.
+		assert.strictEqual(
+			result.events.length,
+			0,
+			`expected zero drift events for output mutation; got: ${JSON.stringify(result.events)}`,
 		)
 	})
 })

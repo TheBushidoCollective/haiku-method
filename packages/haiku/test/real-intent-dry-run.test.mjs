@@ -300,31 +300,43 @@ function applyResponse(intentDir, action, root, slug) {
 			}
 			break
 		}
+		case "write_brief": {
+			// Briefer stand-in: write the user-facing BRIEF.md so the cursor
+			// advances past the pre-execute brief step.
+			writeFileSync(join(stageDir, "BRIEF.md"), "# Brief (test fixture)\n")
+			break
+		}
 		case "dispatch_review": {
-			const unitFiles = existsSync(unitsDir)
-				? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-				: []
-			for (const f of unitFiles) {
-				const path = join(unitsDir, f)
-				const fm = readFm(path)
-				const reviews =
-					fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
-				reviews[action.role] = { at }
-				writeFm(path, { ...fm, reviews })
+			const reviewDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+			for (const d of reviewDispatches) {
+				const unitFiles = existsSync(unitsDir)
+					? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+					: []
+				for (const f of unitFiles) {
+					const path = join(unitsDir, f)
+					const fm = readFm(path)
+					const reviews =
+						fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
+					reviews[d.role] = { at }
+					writeFm(path, { ...fm, reviews })
+				}
 			}
 			break
 		}
 		case "dispatch_approval": {
-			const unitFiles = existsSync(unitsDir)
-				? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-				: []
-			for (const f of unitFiles) {
-				const path = join(unitsDir, f)
-				const fm = readFm(path)
-				const approvals =
-					fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
-				approvals[action.role] = { at }
-				writeFm(path, { ...fm, approvals })
+			const approvalDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+			for (const d of approvalDispatches) {
+				const unitFiles = existsSync(unitsDir)
+					? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+					: []
+				for (const f of unitFiles) {
+					const path = join(unitsDir, f)
+					const fm = readFm(path)
+					const approvals =
+						fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
+					approvals[d.role] = { at }
+					writeFm(path, { ...fm, approvals })
+				}
 			}
 			break
 		}
@@ -423,6 +435,9 @@ test("real-intent: drive software studio to sealed via run_next handler", {
 				started_at: now,
 				approvals: {},
 				sealed_at: null,
+				// e2e fixture predates the autotune cursor walk; keep
+				// off for legacy action-sequence assertions.
+				autotune: false,
 				design_directions: {
 					design: { archetype: "modular-cards", at: now },
 				},

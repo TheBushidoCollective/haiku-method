@@ -35,7 +35,8 @@ import {
 	parseFrontmatter,
 	writeFeedbackFile,
 } from "../state-tools.js"
-import { readStageArtifactDefs } from "../studio-reader.js"
+import { readOutputBody, readStageArtifactDefs } from "../studio-reader.js"
+import { studioReadRef } from "./prompts/_helpers.js"
 import { resolveStudioFilePath } from "./studio.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
@@ -223,23 +224,42 @@ export function buildOutputRequirements(
 	studio: string,
 	stage: string,
 	heading = "## Output Requirements",
+	/** Intent slug — when present, each template is snapshotted into the
+	 *  intent's prompts/refs/ tree and emitted as a "Read <snapshot>"
+	 *  breadcrumb (same resolution as `haiku_read_output`). Omitted by the
+	 *  legacy/dead caller, which falls back to a plugin-path hint. */
+	intent?: string,
 ): string {
 	const artifactDefs = readStageArtifactDefs(studio, stage)
 	const outputDefs = artifactDefs.filter((d) => d.kind === "output")
 	if (outputDefs.length === 0) return ""
 	const parts = [
 		heading,
-		"Full template bodies live at the paths below — read each one you're expected to produce.",
+		"Read the template for each artifact you're expected to produce:",
 		"",
 	]
 	for (const od of outputDefs) {
-		const templatePath = resolveStudioFilePath(
-			join(studio, "stages", stage, "outputs", `${od.name}.md`),
-		)
-		const pathHint = templatePath ? ` | **Template:** \`${templatePath}\`` : ""
-		parts.push(
-			`- **${od.name}**${od.required ? " (REQUIRED)" : ""} — location: \`${od.location}\`, format: ${od.format}${pathHint}`,
-		)
+		const meta = `**${od.name}**${od.required ? " (REQUIRED)" : ""} — location: \`${od.location}\`, format: ${od.format}`
+		if (intent) {
+			const ref = studioReadRef({
+				resolveBody: () => readOutputBody(studio, stage, od.name),
+				toolName: "haiku_read_output",
+				toolArgs: { studio, stage, name: od.name },
+				intent,
+				stage,
+				kind: "output",
+				name: od.name,
+			})
+			parts.push(`- ${meta} | ${ref}`)
+		} else {
+			const templatePath = resolveStudioFilePath(
+				join(studio, "stages", stage, "outputs", `${od.name}.md`),
+			)
+			const pathHint = templatePath
+				? ` | **Template:** \`${templatePath}\``
+				: ""
+			parts.push(`- ${meta}${pathHint}`)
+		}
 	}
 	return parts.join("\n")
 }

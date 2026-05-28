@@ -13,8 +13,14 @@
 //
 // Agent-authorable fields (creation + select_mode/select_studio):
 //   - title, description, slug, mode, studio, granularity
-//   - skip_stages (mode config)
 //   - follows (parent-link, creation-time only)
+//
+// `stages` is the canonical, materialized, ordered stage plan for the
+// intent (engine-managed — see FSM list). The studio's `stages:` is the
+// superset *template*; the intent owns the live list. A stage drops out
+// of the plan via haiku_drop_stage (removed from `stages`), so "what got
+// dropped" is `studio.stages − intent.stages`. The old `skip_stages`
+// deny-list was removed 2026-05-27 — one canonical list, no second filter.
 //
 // Intent-completion review is universal: every intent runs the studio's
 // review-agents after the final stage gate. The only knob is a studio
@@ -26,7 +32,7 @@
 // with a stable named code.
 //
 // `mode` is engine-managed: set via haiku_select_mode (with elicitation),
-// never via haiku_intent_create or haiku_intent_set. /haiku:change-mode
+// never via haiku_intent_create or haiku_intent_set. /haiku:haiku-change-mode
 // drives mid-flight changes through the same tool.
 
 import { type Static, Type } from "@sinclair/typebox"
@@ -104,9 +110,18 @@ export const INTENT_FRONTMATTER_SCHEMA = Type.Object(
 		// `mode` accepted by AJV (so on-disk reads + tests validate)
 		// but engine-only at write time — see FSM list.
 		mode: Type.Optional(Type.String({ enum: [...INTENT_MODES] })),
-		skip_stages: Type.Optional(Type.Array(Type.String())),
 		studio: Type.Optional(Type.String()),
-		granularity: Type.Optional(Type.String()),
+		// Agent-authored studio shortlist (creation-time hint). The agent
+		// has the description in context when it calls haiku_intent_create,
+		// so it picks the 2–4 best-fit studios and stamps them here. The
+		// inline studio picker (haiku_select_studio, driven by the
+		// select_studio tick) reads this and presents the shortlist FIRST,
+		// with the remaining studios behind a "Show all" expansion — so the
+		// user isn't scrolling the whole registry on every intent. Purely a
+		// presentation hint: not FSM-driven, not immutable, and the locked
+		// `studio` field is what the workflow actually keys on. Empty/absent
+		// → the picker falls back to the full registry.
+		studio_candidates: Type.Optional(Type.Array(Type.String())),
 		// Parent-link (creation-time only). Stores a slug reference.
 		// If the referenced intent is renamed (unsupported but possible
 		// out-of-band), the link breaks gracefully — `follows` is
@@ -135,6 +150,14 @@ export const INTENT_FRONTMATTER_SCHEMA = Type.Object(
 		// time per the FSM list above.
 		verified_at: Type.Optional(Type.String()),
 		verified_notes: Type.Optional(Type.String()),
+		// External-system references, keyed by provider-kind or
+		// provider-kind-suffix (e.g. `ticket_epic`, `spec_prd`,
+		// `design_brief`). Populated by the agent when a provider is
+		// active and a sync is performed. Values are opaque strings —
+		// ticket keys, URLs, file refs. Engine doesn't interpret them;
+		// agents use them as the durable handle between H·AI·K·U state
+		// and the external system. (2026-05-19, provider-injection wave.)
+		external_refs: Type.Optional(Type.Record(Type.String(), Type.String())),
 	},
 	{
 		propertyNames: { not: { enum: [...FSM_DRIVEN_INTENT_FIELDS_LIST] } },

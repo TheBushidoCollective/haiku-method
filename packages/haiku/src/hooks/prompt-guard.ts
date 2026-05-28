@@ -1,6 +1,7 @@
 // prompt-guard — Advisory scan for prompt injection in spec file writes
 
 import { defineHook } from "./define.js"
+import { isHaikuProject } from "./utils.js"
 
 const INJECTION_PATTERNS =
 	/ignore previous|disregard|override instructions|you are now|system prompt|<system>|<\/system>/i
@@ -9,6 +10,9 @@ export async function promptGuard(
 	input: Record<string, unknown>,
 	_pluginRoot: string,
 ): Promise<void> {
+	// Project-scope gate — nothing to scan outside a haiku project.
+	if (!isHaikuProject()) return
+
 	const toolName = input.tool_name as string
 	if (toolName !== "Write" && toolName !== "Edit") return
 

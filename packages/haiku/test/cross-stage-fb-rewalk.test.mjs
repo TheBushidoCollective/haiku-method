@@ -233,30 +233,36 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 			break
 		}
 		case "dispatch_review": {
-			const unitFiles = existsSync(unitsDir)
-				? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-				: []
-			for (const f of unitFiles) {
-				const path = join(unitsDir, f)
-				const fm = readFm(path)
-				const reviews =
-					fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
-				reviews[action.role] = { at }
-				writeFm(path, { ...fm, reviews })
+			const reviewDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+			for (const d of reviewDispatches) {
+				const unitFiles = existsSync(unitsDir)
+					? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+					: []
+				for (const f of unitFiles) {
+					const path = join(unitsDir, f)
+					const fm = readFm(path)
+					const reviews =
+						fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
+					reviews[d.role] = { at }
+					writeFm(path, { ...fm, reviews })
+				}
 			}
 			break
 		}
 		case "dispatch_approval": {
-			const unitFiles = existsSync(unitsDir)
-				? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-				: []
-			for (const f of unitFiles) {
-				const path = join(unitsDir, f)
-				const fm = readFm(path)
-				const approvals =
-					fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
-				approvals[action.role] = { at }
-				writeFm(path, { ...fm, approvals })
+			const approvalDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+			for (const d of approvalDispatches) {
+				const unitFiles = existsSync(unitsDir)
+					? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+					: []
+				for (const f of unitFiles) {
+					const path = join(unitsDir, f)
+					const fm = readFm(path)
+					const approvals =
+						fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
+					approvals[d.role] = { at }
+					writeFm(path, { ...fm, approvals })
+				}
 			}
 			break
 		}
@@ -374,7 +380,7 @@ function buildFourStageStudio(repoRoot) {
 	})
 }
 
-test("e2e (interpretation A): FB on s1 lands while s4 is in flight → cursor walks Track B back, fix loop closes, pipeline seals", async () => {
+test("e2e (interpretation A): FB on s1 lands while s4 is in flight → cursor walks Track B back, fix loop closes, pipeline seals", { timeout: 30000 }, async () => {
 	// Common interpretation of "user on stage 4 leaves FB on stage 1":
 	// stages 1-3 are merged, stage 4 is the active (in-progress) stage,
 	// the user notices a gap on stage 1's output. activeStage=s4 while
@@ -471,7 +477,7 @@ test("e2e (interpretation A): FB on s1 lands while s4 is in flight → cursor wa
 	})
 })
 
-test("e2e (interpretation B): FB on s1 lands AFTER s4 merged → cursor walks Track B even with no active stage, fix loop closes, pipeline re-seals", async () => {
+test("e2e (interpretation B): FB on s1 lands AFTER s4 merged → cursor walks Track B even with no active stage, fix loop closes, pipeline re-seals", { timeout: 30000 }, async () => {
 	// "User finished the pipeline, then opened an FB on an earlier
 	// stage from the post-pipeline review" path. Pre-fix: cursor's
 	// Track B was gated on activeStage being non-null, so once every

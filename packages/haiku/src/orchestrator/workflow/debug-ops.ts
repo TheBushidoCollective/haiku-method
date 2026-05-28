@@ -1,5 +1,5 @@
 // orchestrator/workflow/debug-ops.ts — Admin/recovery operations for
-// the `/haiku:debug` skill (PR adding `haiku_debug` tool, 2026-05-15).
+// the `/haiku:haiku-debug` skill (PR adding `haiku_debug` tool, 2026-05-15).
 //
 // Every operation here mutates state in ways the normal workflow
 // engine WOULD NOT — bypassing FSM guards, signing approvals without
@@ -149,8 +149,15 @@ export function forceStageComplete(args: {
 			plan.fm.reviews && typeof plan.fm.reviews === "object"
 				? { ...(plan.fm.reviews as Record<string, unknown>) }
 				: {}
+		const unitInputs = Array.isArray(plan.fm.inputs)
+			? (plan.fm.inputs as string[])
+			: []
 		for (const role of plan.reviewRoles) {
-			if (!reviews[role]) reviews[role] = buildReviewRecord(plan.unitPath)
+			if (!reviews[role])
+				reviews[role] = buildReviewRecord(plan.unitPath, {
+					intentDir: dir,
+					unitInputs,
+				})
 		}
 		const approvals =
 			plan.fm.approvals && typeof plan.fm.approvals === "object"
@@ -184,7 +191,7 @@ export function forceStageComplete(args: {
 		const elabPath = join(stageDir, "elaboration.md")
 		const nowIso = new Date().toISOString()
 		if (!existsSync(elabPath)) {
-			const synthesizedBody = `# Elaboration (synthesized by /haiku:debug)\n\nThis stage's units terminal-advanced through every hat without an elaboration.md being recorded. The debug recovery op synthesized this artifact so the cursor can walk past the elaborate phase.\n`
+			const synthesizedBody = `# Elaboration (synthesized by /haiku:haiku-debug)\n\nThis stage's units terminal-advanced through every hat without an elaboration.md being recorded. The debug recovery op synthesized this artifact so the cursor can walk past the elaborate phase.\n`
 			const fm: Record<string, unknown> = {
 				recorded_at: nowIso,
 				verified_at: nowIso,
@@ -340,8 +347,12 @@ export function resetDrift(args: {
 				fm.reviews && typeof fm.reviews === "object"
 					? { ...(fm.reviews as Record<string, unknown>) }
 					: {}
+			const unitInputs = Array.isArray(fm.inputs) ? (fm.inputs as string[]) : []
 			for (const role of Object.keys(reviews)) {
-				reviews[role] = buildReviewRecord(unitPath)
+				reviews[role] = buildReviewRecord(unitPath, {
+					intentDir: dir,
+					unitInputs,
+				})
 				reviewsRefreshed++
 			}
 			const approvals =
@@ -433,6 +444,23 @@ export function setUnitIterations(args: {
 		}
 	}
 	const unitPath = join(unitsDir, found)
+
+	// Footgun guard (bug report Issue 4): an EXPLICIT empty array is the
+	// intuitive "reset this unit" call, but the synthesize-branch below would
+	// instead mark it COMPLETED (one advance per hat) — the opposite. There
+	// is now a real recovery primitive; point the caller at it. `undefined`
+	// (the arg omitted) still falls through to synthesize — that's the
+	// documented force_stage_complete recovery shape.
+	if (Array.isArray(args.iterations) && args.iterations.length === 0) {
+		return {
+			ok: false,
+			error: "use_haiku_unit_reset",
+			details: {
+				message:
+					"Passing iterations: [] does NOT reset a unit — set_unit_iterations with no entries synthesizes a COMPLETED state (one advance per hat). To return a unit to pending (clear iterations, discard its worktree), use haiku_unit_reset { intent, stage, unit }.",
+			},
+		}
+	}
 
 	let iterations: Array<{ hat: string; result: string; at: string }>
 	if (args.iterations && args.iterations.length > 0) {

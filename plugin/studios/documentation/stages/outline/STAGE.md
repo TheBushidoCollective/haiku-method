@@ -1,7 +1,7 @@
 ---
 name: outline
 description: Structure the documentation with clear information architecture
-hats: [architect, outline-reviewer]
+hats: [architect, outline-reviewer, verifier]
 fix_hats: [classifier, architect, feedback-assessor]
 review: ask
 elaboration: collaborative
@@ -12,21 +12,22 @@ inputs:
 
 # Outline
 
-Translate the audit's ranked gap list into a navigable information architecture. The outline stage decides what gets written, in what mode (tutorial / how-to / reference / explanation), in what order, and how the pieces connect — before any prose lands.
+The information-architecture stage of the documentation lifecycle: translate the audit's ranked gaps into a navigable structure before any prose lands. This is where the shape of the docs gets decided — what gets written, in what mode, in what order, and how the pieces connect.
 
-## Per-unit baton
+## Scope
 
-Each outline unit walks two hats in `plan → do/verify` order:
+Designing the section hierarchy, the per-section purpose, the doc mode (tutorial / how-to / reference / explanation), and the navigation paths between pieces. Outline decides *the structure* — it does not assess the existing docs (audit) or write the content that fills the structure (draft).
 
-- **`architect`** (plan / do) designs the IA for the unit's scope — section hierarchy, doc-mode per piece, navigation paths, cross-references
-- **`outline-reviewer`** (verify) walks user journeys through the proposed structure and either advances or rejects with the responsible failure named
+## What to do
 
-The baton: ranked gaps + named audience → drafted IA with per-section purpose statements and Diátaxis mode tags → validated IA ready for drafting.
+- Translate each prioritized gap into a placed section with a stated purpose.
+- Tag each section with its doc mode and keep the modes from blurring into one another.
+- Lay out the navigation paths a reader takes between sections, not just a flat list.
+- Check the structure against real reader journeys before drafting commits to it.
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes the audit stage's `audit-report` (the ranked gap list with recommended doc modes). Produces `DOCUMENT-OUTLINE.md` — the structure draft uses as its plan.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, architect, feedback-assessor]` dispatches per finding. The classifier targets the FB; the architect re-structures or re-sequences; the assessor decides closure. The gate is `ask` — outline benefits from a human pass on the proposed structure before drafting begins, since IA changes after drafting are expensive.
+- Don't re-audit the existing docs or re-rank gaps — carry forward what audit established.
+- Don't write the prose, code samples, or visuals — that's the draft stage.
+- Don't leave a section without a clear purpose statement.
+- Don't defer structural decisions to drafting; IA changes after prose lands are expensive.

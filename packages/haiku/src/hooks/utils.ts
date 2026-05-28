@@ -47,19 +47,24 @@ export function writeJson(
 }
 
 /**
+ * Cheap project-scope gate for hooks. Returns true only when the
+ * current repo root has a `.haiku/` directory. Hooks that have no
+ * meaning outside a haiku project (workflow guards, agent-write
+ * stamping, haiku-branded UX nudges) should early-return on
+ * `!isHaikuProject()` so they don't fire global noise in unrelated
+ * sessions.
+ */
+export function isHaikuProject(): boolean {
+	return existsSync(join(getRepoRoot(), ".haiku"))
+}
+
+/**
  * Find the first active intent directory.
  * Scans .haiku/intents/{slug}/intent.md for status: active.
  * Returns the full path to the intent directory, or null if none found.
  */
 export function findActiveIntent(): string | null {
-	let repoRoot: string
-	try {
-		repoRoot = execSync("git rev-parse --show-toplevel", {
-			encoding: "utf8",
-		}).trim()
-	} catch {
-		repoRoot = process.cwd()
-	}
+	const repoRoot = getRepoRoot()
 	const intentsDir = join(repoRoot, ".haiku", "intents")
 	if (!existsSync(intentsDir)) return null
 
@@ -119,12 +124,18 @@ export function getCurrentBranch(): string {
 }
 
 /**
- * Get the git repo root.
+ * Get the git repo root. Falls back to cwd in non-git filesystems.
+ *
+ * Stderr is piped (not inherited) so git's "fatal: not a git
+ * repository" never reaches the user's terminal. Without this, every
+ * hook that calls `getRepoRoot()` in a non-git cwd would surface that
+ * line to the agent's tool output.
  */
 export function getRepoRoot(): string {
 	try {
 		return execSync("git rev-parse --show-toplevel", {
 			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
 		}).trim()
 	} catch {
 		return process.cwd()

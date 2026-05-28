@@ -27,6 +27,20 @@ export {
 	dedupeTopLevelYamlKeys,
 	isDuplicateKeyError,
 } from "./frontmatter"
+// Granular per-stage progress milestone track — shared order/labels/
+// finalize so the engine status line and the browse UI can't drift.
+export type {
+	MilestoneRoleFlag,
+	ProgressStep,
+	StageMilestoneInputs,
+	StepStatus,
+} from "./progress-milestones"
+export {
+	approvalMilestoneLabel,
+	buildStageMilestones,
+	finalizeSteps,
+	reviewMilestoneLabel,
+} from "./progress-milestones"
 export type {
 	CriterionItem,
 	HaikuArtifact,

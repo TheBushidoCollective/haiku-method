@@ -17,6 +17,7 @@
 
 import { Header as HeaderLandmark, Main } from "../a11y"
 import { ThemeToggle } from "../atoms/ThemeToggle"
+import { AnnotationModeFab } from "../organisms/AnnotationModeFab"
 
 export interface SessionShellProps {
 	/** Page-kind label rendered after the brand wordmark (e.g. "Question",
@@ -25,12 +26,17 @@ export interface SessionShellProps {
 	/** Optional title shown after the kind label — typically the question
 	 *  prompt or design-direction title. */
 	title?: string
+	/** When true, mount the global annotation pen FAB. Set on surfaces
+	 *  that render annotatable artifacts (question, design-direction);
+	 *  left off for read-only shells (picker, view). */
+	annotatable?: boolean
 	children: React.ReactNode
 }
 
 export function SessionShell({
 	kind,
 	title,
+	annotatable = false,
 	children,
 }: SessionShellProps): React.ReactElement {
 	return (
@@ -67,6 +73,7 @@ export function SessionShell({
 					{children}
 				</div>
 			</Main>
+			{annotatable && <AnnotationModeFab />}
 		</div>
 	)
 }

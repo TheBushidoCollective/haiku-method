@@ -15,11 +15,11 @@ export const config: DemoConfig = {
 	],
 	completionText: "All 6 stages passed. add-oauth-login delivered.",
 	steps: [
-		// Step 1: User invokes /haiku:start
+		// Step 1: User invokes /haiku:haiku-start
 		{
 			delay: 800,
 			actions: [
-				{ type: "msg", role: "user", label: "you", text: "/haiku:start" },
+				{ type: "msg", role: "user", label: "you", text: "/haiku:haiku-start" },
 			],
 		},
 		{ delay: 1200, actions: [{ type: "typing" }] },

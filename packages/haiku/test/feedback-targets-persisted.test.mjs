@@ -128,7 +128,16 @@ test("user-visual default invalidates user", () => {
 	assert.deepStrictEqual(data.targets.invalidates, ["user"])
 })
 
-test("drift default invalidates user", () => {
+test("drift default invalidates = [] (engine restamps at detect, classifier sets material explicitly)", () => {
+	// Pre-2026-05-17 this defaulted to ["user"] to force user-gate
+	// escalation, because the close hook needed the invalidation path
+	// to neutralize the drift signal (and the agent was the one filing
+	// the FB). Under engine-internal drift handling, the engine
+	// restamps witnesses at DETECT time (so the signal is already
+	// neutralized when the FB is filed) and the classifier hat in the
+	// stage's fix_hats chain decides cosmetic vs material — setting
+	// `targets.invalidates: [role]` ONLY when the shift is material.
+	// Default is empty: cosmetic-by-default, agent escalates.
 	freshIntent()
 	const r = writeFeedbackFile(intentSlug, stage, {
 		title: "drift on artifact",
@@ -136,7 +145,7 @@ test("drift default invalidates user", () => {
 		origin: "drift",
 	})
 	const { data } = matter(readFileSync(join(projDir, r.file), "utf8"))
-	assert.deepStrictEqual(data.targets.invalidates, ["user"])
+	assert.deepStrictEqual(data.targets.invalidates, [])
 })
 
 test("agent default = [] (informational)", () => {
@@ -171,6 +180,7 @@ test("MCP create with target_unit + target_invalidates persists both", () => {
 		title: "regression — close should clear approvals.user",
 		body: "the bug from 2026-05-15",
 		origin: "user-chat",
+		severity: "medium",
 		target_unit: "unit-02",
 		target_invalidates: ["user"],
 	})
@@ -196,6 +206,7 @@ test("MCP create with origin alone defaults invalidates from origin", () => {
 		title: "user pushback",
 		body: "no",
 		origin: "user-chat",
+		severity: "medium",
 	})
 	assert.ok(!result.isError, `MCP create failed: ${JSON.stringify(result)}`)
 	assert.ok(
@@ -215,6 +226,7 @@ test("MCP create with target_invalidates: [] respects explicit empty (overrides 
 		title: "user FYI",
 		body: "no closure invalidation",
 		origin: "user-chat",
+		severity: "medium",
 		target_invalidates: [],
 	})
 	assert.ok(!result.isError, `MCP create failed: ${JSON.stringify(result)}`)

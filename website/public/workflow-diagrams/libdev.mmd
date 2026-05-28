@@ -7,13 +7,9 @@ stateDiagram-v2
   inception --> development
   development --> security
   security --> release
-  release --> intent_completion_review
-  intent_completion_review --> intent_completion_gate : review.clean
-  intent_completion_review --> intent_completion_fix : review.findings
-  intent_completion_fix --> intent_completion_gate : feedback.closed
-  intent_completion_fix --> intent_completion_fix : feedback.open
-  intent_completion_gate --> complete : gate.approved
-  intent_completion_gate --> release : gate.changes_requested
+  release --> intent_review
+  intent_review --> seal_intent : approvals.signed
+  seal_intent --> complete
 
   state inception {
     [*] --> inception_start_stage
@@ -137,8 +133,10 @@ stateDiagram-v2
     state security_execute {
       [*] --> security_execute_threat_modeler
       security_execute_threat_modeler --> security_execute_security_reviewer : hat.advance
-      security_execute_security_reviewer --> security_execute_done : hat.advance
+      security_execute_security_reviewer --> security_execute_verifier : hat.advance
       security_execute_security_reviewer --> security_execute_threat_modeler : hat.reject
+      security_execute_verifier --> security_execute_done : hat.advance
+      security_execute_verifier --> security_execute_security_reviewer : hat.reject
       security_execute_done --> [*]
     }
     security_execute --> security_review

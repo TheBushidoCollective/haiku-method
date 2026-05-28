@@ -25,7 +25,18 @@ A longer prompt isn't the fix. The fix is to stop asking the model to be the run
 
 ## The category we're not in
 
-Most harnesses we look at fall into one of two camps. Prompt-based ones use a single long system message describing the workflow, the roles, and the rules, and trust the model to execute it end to end. Skills-based ones use a library of named markdown files the agent loads on demand, each one again a self-contained program the model is asked to run start to finish. Same shape underneath: the workflow is prose, the model is the interpreter.
+Most harnesses we look at fall into one of two camps.
+
+<Compare verdict="match" title="Same problem, same failure mode">
+  <Side label="Prompt-based">
+    One long system message describing the workflow, the roles, and the rules. The model loads it and is trusted to execute end to end. Long enough that important rules get crowded out by the next turn's context.
+  </Side>
+  <Side label="Skills-based">
+    A library of named markdown files the agent loads on demand. Each one is again a self-contained program the model is asked to run start to finish. Shorter individually; same shape underneath.
+  </Side>
+</Compare>
+
+Same shape underneath: the workflow is prose, the model is the interpreter.
 
 H·AI·K·U has never been that, and the post-mortems we wrote on [AI-DLC](https://ai-dlc.dev/) are why. AI-DLC was prompts-as-runtime. We watched it walk over its own MUSTs more than once. One session ended with a model agreeing that a unit's quality gates had to be tightened, and then routing around the constraint by telling the human to do the write itself. The prompt was clear. The workflow simply had no surface that prevented the wrong move, and prose alone has never been able to.
 
@@ -54,7 +65,14 @@ It walks three tracks, in priority order. The drift track re-hashes signed slots
 
 <CursorCascade />
 
-The unit-level state machine is just as bare. The engine reads the unit's iteration history and decides the next hat. Last result was advance and there's another configured hat? Return that hat. Last result was reject? Walk back one. Terminal hat advanced? Done. No inference involved. The same inputs always produce the same outputs, which is exactly what prose can't give you.
+The unit-level state machine is just as bare.
+
+<KeyPoints title="The unit state machine, in four rules">
+1. **Advance with more hats configured.** Return the next hat in the sequence.
+2. **Reject.** Walk back one hat. The previous role gets another pass.
+3. **Terminal hat advanced.** Unit is done.
+4. **No inference involved.** Same inputs always produce the same output. That's the thing prose can't give you.
+</KeyPoints>
 
 ## One instruction at a time
 
@@ -89,7 +107,7 @@ A few ticks in sequence:
   </TickCard>
 </TickSequence>
 
-The agent never picked the next move. The cursor said "drift", then "feedback", then "wave-ready architect." Each tick, the agent's only job was to dispatch and wait.
+The agent never picked the next move. The cursor said "drift", then "feedback", then "two units are ready to build in parallel." Each tick, the agent's only job was to dispatch and wait.
 
 Cursor motion isn't always forward. The same shape handles "go back" — usually because a fix-hat wrote new work on a stage everyone thought was done.
 
@@ -98,7 +116,7 @@ Cursor motion isn't always forward. The same shape handles "go back" — usually
     n={1}
     title="Feedback on a merged stage preempts the active one"
     action="Feedback Awaiting Fix-Hat"
-    dispatch="A classifier subagent on the design stage reads the new feedback and decides the fix needs a brand-new unit. It writes that unit on design and advances the feedback."
+    dispatch="A small classifier reads the new feedback on the design stage, decides the fix needs a brand-new unit, writes that unit on design, and advances the feedback."
   >
     The build stage was mid-flight when a reviewer filed a finding against the design stage from earlier in the pipeline. The feedback track walks earlier stages before the active one, so design's open feedback beats build's pending work.
   </TickCard>
@@ -114,33 +132,28 @@ Cursor motion isn't always forward. The same shape handles "go back" — usually
 
 Nothing in either sequence is the agent "deciding to revisit." The disk changed, the cursor noticed, the next tick reflected the new state. Going back is just forward motion on a different stage.
 
-That's the architectural shift. In a prompt-based harness, the model is the program counter. In H·AI·K·U, the cursor is the program counter and the model is one stage inside the CPU. The model picks how to do the current hat well. The cursor picks what hat is current. The boundary between those two jobs is a function return value rather than a paragraph that begins with "IMPORTANT."
+<Callout tone="info" title="The architectural shift">
+In a prompt-based harness, the model is the program counter. In H·AI·K·U, the cursor is the program counter and the model is one stage inside the CPU. The model picks how to do the current hat well. The cursor picks what hat is current. The boundary between those two jobs is a function return value rather than a paragraph that begins with "IMPORTANT."
+</Callout>
 
 You can feel the difference in what the agent stops needing to remember. It doesn't track which feedback is open across which stages — the feedback track walks them in priority order and hands the next one back. It doesn't decide whether the workflow has stalled — the cursor returns `null` and the tick is a noop. It doesn't decide when a unit is done — the iterations array makes that mechanical. The mental load that used to live in the system prompt now lives on disk, in a function that can be unit-tested.
 
 ## Drift, watched by the sweep
 
-Drift is the easiest place to see this. Every signed slot — a spec witness, a unit output, a discovery artifact — stamps a content hash at sign time. Markdown gets body-hashed so the engine's own frontmatter mutations don't trip false events; binaries get full-file-hashed. The sweep re-hashes every signed slot at the start of every tick and emits a drift event for any mismatch. The cursor turns those events into open feedback the next pass picks up.
+Drift is the easiest place to see this. Every signed slot — a spec witness, a unit output, a discovery artifact — stamps a content hash at sign time. The engine notices when files change out-of-band and tells the agent before the next instruction. The cursor turns those events into open feedback the next pass picks up.
 
 The agent never reasons about whether content drifted. The sweep does it mechanically, before any handler runs, before any prompt loads. The prompt-based equivalent would be a paragraph in the system message saying "before continuing, verify that previously-signed artifacts have not been modified" — and that paragraph stops being load-bearing the moment the context window gets crowded.
 
 ## Feedback, dispatched one at a time
 
-The fix loop runs on the same shape. When adversarial review opens findings, the cursor doesn't hand the agent the whole list. It reads the stage's configured fix-hat sequence — for the development stage, that's classifier, then builder, then feedback-assessor — and dispatches one hat against one finding at a time. Each hat runs as its own subagent with a single job: read this finding, decide or do the next thing, advance or reject. When the terminal hat advances, the cursor reports the feedback as resolved and the file moves to closed.
+The fix loop runs on the same shape. When adversarial review opens findings, the cursor doesn't hand the agent the whole list. It dispatches one role against one finding at a time. Each role runs as its own fresh invocation with a single job: read this finding, decide or do the next thing, advance or reject. When the terminal role advances, the cursor reports the finding as resolved.
 
-The feedback track walks every prior stage before touching the current one, so an upstream finding gets attention before forward progress resumes. The agent never picks which FB to address next. There's no pick to make — the cursor has already enumerated them in priority order, and the next tick will hand back the head of the queue. One instruction at a time, all the way down.
+The feedback track walks every prior stage before touching the current one, so an upstream finding gets attention before forward progress resumes. The agent never picks which finding to address next. There's no pick to make — the cursor has already enumerated them in priority order, and the next tick will hand back the head of the queue. One instruction at a time, all the way down.
 
-## What's left for prompts (and where they live)
+## What's left for prompts
 
-Plenty — and the honest version of "we got prompts out of the workflow" is that most of them moved into subagents, not that they disappeared. Each hat is dispatched as a fresh `Task` with a clean context window. That subagent loads exactly what it needs (the hat's mandate, the unit or FB it's working on, a tool whitelist) and runs to completion. When it returns, its context dies with it. The next hat is a different subagent, also clean.
+Plenty. The honest version of "we got prompts out of the workflow" is that most of them moved into fresh agent invocations, not that they disappeared. Each role gets dispatched into a clean context window with the mandate, the artifact it's working on, and a tool whitelist. When it returns, that context dies with it.
 
-Only two things live on the main agent's context:
-
-- **Elaboration**, because elaboration is collaboration. The user and the agent talk about scope, tradeoffs, design directions, the actual question of what to build. That conversation history *is* the work — there's no clean-context version of it that doesn't lose what was said.
-- **Orchestration**, because something has to call the cursor, read what comes back, and dispatch the next subagent. But the orchestrator's prompt is small. It doesn't carry the workflow logic — that's in the cursor. It just relays.
-
-Everything else — every hat, every reviewer, every fix-loop assessor — is a subagent that boots into a clean context, reads one mandate, does one job, returns one signal. The hat files still describe what good work looks like for each role: what a clean implementation reads like for the builder, what a coherent spec reads like for the spec-reviewer, what genuine closure smells like for the feedback-assessor. That's craft and judgement, and prose is the right tool for both. What we pulled out of the *main* context was the workflow load — the "first do this, then do that, and don't forget to update X" sequencing that was always going to fray the moment the conversation got long.
-
-The cursor on disk plus the per-hat prompt in a fresh window is a different shape than one giant prompt the model parses every turn. Same number of words, maybe, across the whole system. Very different number of words competing for any single context.
+The hat files still describe what good work looks like for each role: what a clean implementation reads like for the builder, what a coherent spec reads like for the reviewer, what genuine closure smells like for the assessor. That's craft and judgement, and prose is the right tool for both. What we pulled out of the *main* context was the workflow load — the "first do this, then do that, and don't forget to update X" sequencing that was always going to fray the moment the conversation got long.
 
 Brian's piece names a real ceiling, and a smarter model isn't what gets you under it. A smaller ask is — one move at a time, decided on disk, with the prose describing the work inside each move's own clean window. v4 is the cleanest version of that idea H·AI·K·U has shipped, and it's still the same idea we started with.

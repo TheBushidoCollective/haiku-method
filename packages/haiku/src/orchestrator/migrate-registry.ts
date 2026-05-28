@@ -62,6 +62,15 @@ export type MigrationStepDetails = {
 	feedback_relocated: number
 	state_json_deleted: number
 	drift_artifacts_deleted: number
+	/** v8→v9: signed review slots that gained an `input_witnesses` block
+	 *  backfilled from the unit's current `inputs:`. */
+	review_slots_backfilled: number
+	/** v8→v9: approval slots that had their legacy output `witnesses` map
+	 *  stripped (the `at` audit timestamp survives). */
+	approval_slots_stripped: number
+	/** v8→v9: iteration entries whose legacy `reason` field was moved to
+	 *  the unified `message` handoff field (units + feedback). */
+	iterations_message_migrated: number
 }
 
 export function emptyMigrationDetails(): MigrationStepDetails {
@@ -76,6 +85,9 @@ export function emptyMigrationDetails(): MigrationStepDetails {
 		feedback_relocated: 0,
 		state_json_deleted: 0,
 		drift_artifacts_deleted: 0,
+		review_slots_backfilled: 0,
+		approval_slots_stripped: 0,
+		iterations_message_migrated: 0,
 	}
 }
 
@@ -193,6 +205,10 @@ export function migrateIntent(
 			aggregate.feedback_relocated += stepDetails.feedback_relocated
 			aggregate.state_json_deleted += stepDetails.state_json_deleted
 			aggregate.drift_artifacts_deleted += stepDetails.drift_artifacts_deleted
+			aggregate.review_slots_backfilled += stepDetails.review_slots_backfilled
+			aggregate.approval_slots_stripped += stepDetails.approval_slots_stripped
+			aggregate.iterations_message_migrated +=
+				stepDetails.iterations_message_migrated
 		}
 	}
 	return {

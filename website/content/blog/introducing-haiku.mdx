@@ -1,0 +1,132 @@
+---
+title: "Introducing H·AI·K·U: Why We Rebranded and What Changes"
+description: From AI-DLC to H·AI·K·U — a methodology evolution from software-specific lifecycle to domain-agnostic work orchestration.
+date: 2026-04-02
+---
+
+We started with **AI-DLC** — the AI-Driven Development Lifecycle. It was a methodology built for software teams working with AI agents. Hats, units, bolts, quality gates. It worked. It worked well enough that people kept asking the same question: *can I use this for things that aren't code?*
+
+The answer was always "sort of, but you'd have to bend it." The git-centric persistence, the software-specific stages, the development-flavored language — it all assumed you were writing software. That assumption was baked into every layer.
+
+So we rebuilt the layers. **H·AI·K·U** is what came out the other side.
+
+## Why H·AI·K·U
+
+The name stands for **H**uman + **AI** **K**nowledge **U**nification — what's actually happening when a person who knows the domain and an agent that can execute meet through a structured loop. Like the poetry form it echoes, H·AI·K·U treats constraint as a creative force. Strict structure. Clear boundaries. Surprising depth inside them.
+
+The core insight that drove the rebrand: **all structured work flows through the same pattern**. A marketing team creating a campaign goes through research, creative, review, and publish. A software team goes through inception, design, development, and operations. A hardware team goes through requirements, PCB design, firmware, and integration testing. The pattern is the same. The domain is the variable.
+
+AI-DLC encoded one instance of this pattern. H·AI·K·U encodes the pattern itself.
+
+<Callout tone="info" title="The rebrand in one line">
+The domain is the variable. The pattern stays the same.
+</Callout>
+
+## What changed
+
+### Studios
+
+The biggest conceptual addition. A **studio** is a named lifecycle for a specific domain. It defines the stage order and the persistence layer — how work is saved, versioned, and delivered.
+
+<Grid>
+  <Card eyebrow="Software" title="Code shaped by git" accent="info">
+    Inception, design, product, development, operations, security. Persistence via branches, commits, pull requests.
+  </Card>
+  <Card eyebrow="Marketing" title="Content shaped by review" accent="info">
+    Research, creative, copy, review, publish. Persistence via Notion or filesystem.
+  </Card>
+  <Card eyebrow="Ideation" title="The universal default" accent="good">
+    Research, create, review, deliver. The studio that works when no domain-specific studio fits.
+  </Card>
+  <Card eyebrow="Custom" title="Build your own" accent="info">
+    A studio is a config plus a persistence adapter. New domains slot in without touching the engine.
+  </Card>
+</Grid>
+
+Studios aren't just configuration. They're the mechanism that makes H·AI·K·U domain-agnostic. You pick a studio (or build your own), and the entire lifecycle adapts — stages, hats, quality gates, persistence, delivery.
+
+### Stages replace phases
+
+The old model had phases (elaboration, construction, operation). The new model has **stages** — and they're defined by the studio, not hardcoded. Each stage runs the same internal loop.
+
+<TickSequence>
+  <TickCard label="Plan" title="Decompose into units">
+    The stage looks at its inputs and breaks the work into units with criteria the next phase can verify.
+  </TickCard>
+  <TickCard label="Build" title="Execute the units">
+    Hats run on each unit. Builder writes the work, verifier checks it.
+  </TickCard>
+  <TickCard label="Review" title="Adversarial check">
+    Review agents argue against the work from different perspectives before any human is asked.
+  </TickCard>
+  <TickCard label="Gate" title="Advance, revise, or revisit">
+    The gate decides: move forward, loop within the stage, or go back to an earlier stage.
+  </TickCard>
+</TickSequence>
+
+The review gate at the end of each stage can be automatic, ask the user, or require external approval.
+
+### Persistence is an adapter now
+
+Git was previously the only way to save work. Now, persistence is an adapter declared by the studio.
+
+<Grid>
+  <Card title="Git" accent="info">
+    Branches, commits, pull requests. The default for software.
+  </Card>
+  <Card title="Notion" accent="info">
+    Pages, blocks, shares. Where content teams already live.
+  </Card>
+  <Card title="Filesystem" accent="info">
+    Directories and files. Works for anything that doesn't fit the other two.
+  </Card>
+  <Card title="Custom" accent="info">
+    Bring your own adapter when none of the above match the shape of the work.
+  </Card>
+</Grid>
+
+The core loop doesn't know or care how work is saved. It just calls the persistence interface.
+
+### New commands
+
+The plugin commands shifted from `/ai-dlc:*` to `/haiku:*`:
+
+- `/haiku:haiku-start` — create a new intent and select a studio
+- `/haiku:haiku-pickup` — run the stage pipeline (continuous mode)
+- `/haiku:execute` — drive unit implementations within a stage
+- `/haiku:elaborate` — collaborative planning and elaboration
+- `/haiku:haiku-gate-review` — pre-delivery quality review
+
+The old commands still work as aliases during the transition period.
+
+### Knowledge architecture
+
+H·AI·K·U formalizes two layers of accumulated context that every stage reads:
+
+1. **Global knowledge pool** — project-level understanding that persists across intents (architecture decisions, conventions, domain knowledge)
+2. **Intent artifacts** — accumulated outputs from completed stages within the current intent
+
+This means later stages always have the full context of what earlier stages produced. No information loss between stages.
+
+## What didn't change
+
+The core philosophy is the same.
+
+<KeyPoints title="WHAT WE STILL BELIEVE">
+1. **Elaboration is the investment that makes execution autonomous.** Clear criteria mean an autonomous AI. Vague criteria mean constant human intervention.
+2. **Hats create focused agents.** Each hat starts with a clean context window and a specific mandate. No context drift.
+3. **Quality gates enforce standards, not suggestions.** Hard gates that reject non-conforming work, not optional checklists.
+4. **Human oversight scales with task clarity.** Supervised, observed, or autonomous — choose based on how well-defined the work is.
+</KeyPoints>
+
+The three-layer hierarchy — **intent** (the what), **unit** (the work), **bolt** (the cycle) — remains unchanged. These concepts are domain-agnostic by nature.
+
+## The philosophy
+
+We kept hearing from teams that weren't writing software but needed the same rigor: marketing teams, operations teams, research teams, legal teams. They all had the same problem: AI agents are powerful but undirected. Without structure, they produce quantity without quality.
+
+H·AI·K·U is the answer. It's not a software development methodology with domain bolted on. It's a work orchestration system where software development is one studio among many.
+
+If your team does structured work with AI — any kind of structured work — H·AI·K·U gives you the lifecycle, the quality gates, and the persistence layer to make that work reliable.
+
+Read the full methodology in the [H·AI·K·U paper](/paper/).

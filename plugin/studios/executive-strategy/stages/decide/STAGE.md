@@ -14,22 +14,22 @@ inputs:
 
 # Decide
 
-Convert the evaluation into a recommendation that a decision-maker (executive, board, investment committee) can ratify or reject. The deliverable is a **decision brief** — clear recommendation, strongest arguments for and against, named dissents, accountability for who decided what.
+Convert the evaluation into a recommendation a decision-maker — executive, board, investment committee — can ratify or reject. The deliverable is a decision brief: a clear recommendation, the strongest arguments for and against, named dissents, and accountability for who decided what.
 
-Units in this stage are **decision artifacts** — operational ratification steps with concrete preconditions, the decision action itself, and verifiable post-conditions (e.g. "board ratification", "investment committee approval", "executive sign-off with named dissents recorded"). The stage output `DECISION-BRIEF.md` carries the recommendation and the decision record.
+## Scope
 
-## Per-unit baton
+Drafting the recommendation from the evaluation evidence, running the decision conversation, and recording the ratified decision with its dissents. Decide decides *what the recommendation is and captures the ratification* — it does not re-score the options (evaluate) or build the rollout and messaging (communicate).
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`advisor`** (plan) drafts the recommendation following from the evaluation evidence — supporting case + counterarguments + acknowledged risks
-- **`facilitator`** (do) runs the decision conversation, captures areas of agreement and disagreement, and documents dissents transparently
-- **`verifier`** (verify) checks preconditions, action, post-condition, and rollback are all stated; checks decision-register consistency
+- Draft the recommendation as a chain back to the evaluation evidence — supporting case, counterarguments, acknowledged risks.
+- Run the decision conversation and capture both agreement and disagreement honestly.
+- Document dissents by name rather than smoothing them over.
+- State the decision's preconditions, the decision action, and its verifiable post-condition (ratification, sign-off recorded).
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes `evaluate/evaluation-report` and `options/options-matrix`. Produces `decision-brief` at intent scope, including the recorded decision, dissents, and the rationale chain back to the evaluation.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, advisor, feedback-assessor]` dispatches per finding. The gate is `external` — the brief goes out for external ratification (board / investment committee / executive sign-off), and the workflow blocks until the external decision system signals approval (typically branch merge in the project's tracking system, or an explicit external acknowledgement). Project overlays may add house-style decision-record formats, signoff routing, and dissent-capture conventions.
+- Don't re-evaluate or re-weight the options — a contested score is a revisit to evaluate, not a quiet re-run here.
+- Don't build the communications or rollout plan — that's the communicate stage.
+- Don't present a recommendation that doesn't trace back to the evaluation evidence.
+- Don't bury the dissents; an undocumented disagreement resurfaces during execution.

@@ -16,7 +16,7 @@
 
 import assert from "node:assert"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -44,6 +44,27 @@ const HAS_GIT = (() => {
 		return false
 	}
 })()
+
+/** Engine pre-execute review roles (2026-05-17 split). The cursor's
+ *  reviewRoles walk fires BEFORE wave-ready hat dispatch, so any test
+ *  that wants to advance past the pre-execute review track must
+ *  pre-sign all three engine roles in the unit's `reviews:` block.
+ *  Spread this into `reviews: { ...ENGINE_REVIEWS_SIGNED }` and add
+ *  any studio agents (and `user`) the test needs signed beyond that. */
+const ENGINE_REVIEWS_SIGNED = {
+	spec: { at: "t" },
+	continuity: { at: "t" },
+	"cross-stage-consistency": { at: "t" },
+}
+
+/** Post-execute engine approval roles (same three engine roles fire in
+ *  the approval walk after every hat sequence completes). Tests that
+ *  want to skip past the post-execute approval track include this. */
+const ENGINE_APPROVALS_SIGNED = {
+	spec: { at: "t" },
+	continuity: { at: "t" },
+	"cross-stage-consistency": { at: "t" },
+}
 
 async function withTmpRepo(slug, fn) {
 	const dir = mkdtempSync(join(tmpdir(), "haiku-cursor-walk-"))
@@ -109,10 +130,12 @@ function writeUnit(intentDir, stage, name, fm, body = "") {
 
 /**
  * Drive a tick — alias for `runTickWithBranchAlignment` so tests call
- * the same dance the production engine performs.
+ * the same dance the production engine performs. `opts` forwards through
+ * (e.g. `{ autoBrief: false }` to observe the raw `write_brief` action
+ * instead of letting the fixture auto-write BRIEF.md and re-tick).
  */
-async function runTick(repoRoot, slug) {
-	return runTickWithBranchAlignment(repoRoot, slug)
+async function runTick(repoRoot, slug, opts) {
+	return runTickWithBranchAlignment(repoRoot, slug, opts)
 }
 
 // ── Track A scenarios ────────────────────────────────────────────────
@@ -149,7 +172,13 @@ test("cursor: wave-ready unit (started_at null) → start_unit_hat", async () =>
 				depends_on: [],
 				started_at: null,
 				iterations: [],
-				reviews: {},
+				// Pre-execute reviews + user gate signed so cursor walks
+				// past the PRE-execute review track and reaches wave dispatch.
+				reviews: {
+					...ENGINE_REVIEWS_SIGNED,
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})
@@ -197,7 +226,13 @@ test("cursor: open iter on a started unit → re-emit start_unit_hat for the ope
 						result: null,
 					},
 				],
-				reviews: {},
+				// Pre-execute review track must be signed before the
+				// cursor reaches start_unit_hat (2026-05-17 split).
+				reviews: {
+					...ENGINE_REVIEWS_SIGNED,
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})
@@ -233,7 +268,12 @@ test("cursor: hat advanced → next start_unit_hat", async () => {
 						result: "advance",
 					},
 				],
-				reviews: {},
+				// Pre-execute review track must be signed (2026-05-17 split).
+				reviews: {
+					...ENGINE_REVIEWS_SIGNED,
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})
@@ -248,10 +288,85 @@ test("cursor: hat advanced → next start_unit_hat", async () => {
 	)
 })
 
-test("cursor: all hats done → dispatch_review for spec role", async () => {
+test("cursor: unstarted unit, no reviews → dispatch_review for spec role", async () => {
 	if (!HAS_GIT) return
 	await withTmpRepo(
 		"cursor-spec-review",
+		async ({ repoRoot, intentDir, slug }) => {
+			makeStudio({ repoRoot, studio: "test" })
+			makeIntent({ intentDir, slug, studio: "test" })
+			seedVerifiedElaboration({ intentDir, stage: "design" })
+			// Pre-execute review fires BEFORE a unit executes — the canonical
+			// precondition is started_at: null, iterations: []. (Pre-2026-05-22
+			// this fixture set started_at + full iterations as a brief-skip
+			// shortcut; the frozen-spec churn fix made execution state matter,
+			// so the genuine pre-execute scenario is an unstarted unit.)
+			writeUnit(intentDir, "design", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				started_at: null,
+				iterations: [],
+				reviews: {},
+				approvals: {},
+				discovery: {},
+			})
+			const action = await runTick(repoRoot, slug)
+			assert.strictEqual(
+				action.action,
+				"dispatch_review",
+				`expected dispatch_review, got: ${action.action} — ${action.message}`,
+			)
+			assert.strictEqual(action.role, "spec", "spec runs first in role list")
+		},
+	)
+})
+
+test("cursor: spec review signed → dispatch_review for configured agent", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo(
+		"cursor-agent-review",
+		async ({ repoRoot, intentDir, slug }) => {
+			makeStudio({ repoRoot, studio: "test" })
+			makeIntent({ intentDir, slug, studio: "test" })
+			seedVerifiedElaboration({ intentDir, stage: "design" })
+			writeUnit(intentDir, "design", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				// Unstarted: pre-execute review is forward-only, so the genuine
+				// review-routing scenario is an un-executed unit.
+				started_at: null,
+				iterations: [],
+				// All three engine roles signed; cursor advances to the
+				// next reviewRole (the configured studio agent).
+				reviews: { ...ENGINE_REVIEWS_SIGNED },
+				approvals: {},
+				discovery: {},
+			})
+			const action = await runTick(repoRoot, slug)
+			assert.strictEqual(action.action, "dispatch_review")
+			assert.strictEqual(
+				action.role,
+				"code-reviewer",
+				"after engine roles (spec, continuity, cross-stage-consistency), the next reviewRole is the configured studio agent",
+			)
+		},
+	)
+})
+
+test("cursor: executed unit with an invalidated pre-execute review is NOT re-reviewed → falls through to post-execute approval (frozen-spec churn fix)", async () => {
+	// Regression lock for the frozen-spec ↔ fix-loop non-convergence churn
+	// (bug reports 2026-05-20 admin-portal-reimagine/development +
+	// twelve-week-plan-accountability-app/security). A unit that has fully
+	// executed (started_at set, every hat advanced) but whose `reviews.spec`
+	// got cleared post-hoc — e.g. a post-execute code-finding closure with
+	// `targets.invalidates: [spec]` — must NOT re-enter the pre-execute
+	// review track. Pre-execute review audits the SPEC before code lands;
+	// the spec is frozen and the fix loop can't edit it, so re-reviewing it
+	// can only churn. The cursor must skip the executed unit here and walk
+	// on to the post-execute approval track (which audits the WORK).
+	if (!HAS_GIT) return
+	await withTmpRepo(
+		"cursor-frozen-spec",
 		async ({ repoRoot, intentDir, slug }) => {
 			makeStudio({ repoRoot, studio: "test" })
 			makeIntent({ intentDir, slug, studio: "test" })
@@ -280,6 +395,9 @@ test("cursor: all hats done → dispatch_review for spec role", async () => {
 						result: "advance",
 					},
 				],
+				// reviews.spec invalidated (cleared) on an already-executed unit
+				// — the exact churn precondition. Approvals unsigned so the
+				// post-execute track has work to route to.
 				reviews: {},
 				approvals: {},
 				discovery: {},
@@ -287,105 +405,105 @@ test("cursor: all hats done → dispatch_review for spec role", async () => {
 			const action = await runTick(repoRoot, slug)
 			assert.strictEqual(
 				action.action,
-				"dispatch_review",
-				`expected dispatch_review, got: ${action.action} — ${action.message}`,
-			)
-			assert.strictEqual(action.role, "spec", "spec runs first in role list")
-		},
-	)
-})
-
-test("cursor: spec review signed → dispatch_review for configured agent", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo(
-		"cursor-agent-review",
-		async ({ repoRoot, intentDir, slug }) => {
-			makeStudio({ repoRoot, studio: "test" })
-			makeIntent({ intentDir, slug, studio: "test" })
-			seedVerifiedElaboration({ intentDir, stage: "design" })
-			writeUnit(intentDir, "design", "unit-01", {
-				title: "u1",
-				depends_on: [],
-				started_at: "t",
-				iterations: [
-					{
-						hat: "planner",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-					{
-						hat: "builder",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-					{
-						hat: "verifier",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-				],
-				reviews: { spec: { at: "t" } },
-				approvals: {},
-				discovery: {},
-			})
-			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(action.action, "dispatch_review")
-			assert.strictEqual(
-				action.role,
-				"code-reviewer",
-				"second review role is the configured agent",
+				"dispatch_approval",
+				`executed unit must skip pre-execute review and reach the post-execute approval track; got: ${action.action} — ${action.message}`,
 			)
 		},
 	)
 })
 
-test("cursor: all reviews signed → user_gate spec", async () => {
+// ── Stage BRIEF (2026-05-22): pre-execute, after adversarial review,
+// before the user gate. User-facing summary of the planned work. ──────
+
+const PRE_EXECUTE_UNIT = {
+	title: "u1",
+	depends_on: [],
+	started_at: null,
+	iterations: [],
+	approvals: {},
+	discovery: {},
+}
+
+test("cursor: reviews signed, units not started, no BRIEF → write_brief before the user gate", async () => {
 	if (!HAS_GIT) return
-	await withTmpRepo(
-		"cursor-user-spec",
-		async ({ repoRoot, intentDir, slug }) => {
-			makeStudio({ repoRoot, studio: "test" })
-			makeIntent({ intentDir, slug, studio: "test" })
-			seedVerifiedElaboration({ intentDir, stage: "design" })
-			writeUnit(intentDir, "design", "unit-01", {
-				title: "u1",
-				depends_on: [],
-				started_at: "t",
-				iterations: [
-					{
-						hat: "planner",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-					{
-						hat: "builder",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-					{
-						hat: "verifier",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-				],
-				reviews: {
-					spec: { at: "t" },
-					"code-reviewer": { at: "t" },
-				},
-				approvals: {},
-				discovery: {},
-			})
-			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(action.action, "user_gate")
-			assert.strictEqual(action.gate_kind, "spec")
-		},
-	)
+	await withTmpRepo("cursor-brief", async ({ repoRoot, intentDir, slug }) => {
+		makeStudio({ repoRoot, studio: "test" })
+		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
+		writeUnit(intentDir, "design", "unit-01", {
+			...PRE_EXECUTE_UNIT,
+			reviews: { ...ENGINE_REVIEWS_SIGNED, "code-reviewer": { at: "t" } },
+		})
+		// Spec + adversarial reviews signed, nothing executing yet, no BRIEF.md
+		// → the briefer fires before the (still-pending) user gate.
+		// autoBrief:false so we observe write_brief instead of the fixture
+		// auto-writing the brief and re-ticking.
+		let action = await runTick(repoRoot, slug, { autoBrief: false })
+		assert.strictEqual(
+			action.action,
+			"write_brief",
+			`expected write_brief, got ${action.action} — ${action.message ?? ""}`,
+		)
+		assert.strictEqual(action.stage, "design")
+		// Once BRIEF.md exists the cursor advances to the review user gate.
+		onStageBranch(repoRoot, slug, "design", () => {
+			writeFileSync(
+				join(intentDir, "stages", "design", "BRIEF.md"),
+				"# Brief\nWhat this stage delivers.\n",
+			)
+		})
+		action = await runTick(repoRoot, slug, { autoBrief: false })
+		assert.strictEqual(action.action, "user_gate")
+		assert.strictEqual(action.gate_kind, "spec")
+	})
+})
+
+test("cursor: brief is forward-only — a stage already executing is never pulled back to write one", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo("cursor-brief-fwd", async ({ repoRoot, intentDir, slug }) => {
+		makeStudio({ repoRoot, studio: "test" })
+		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
+		writeUnit(intentDir, "design", "unit-01", {
+			title: "u1",
+			depends_on: [],
+			started_at: "t",
+			iterations: [
+				{ hat: "planner", started_at: "t", completed_at: "t", result: "advance" },
+			],
+			reviews: { ...ENGINE_REVIEWS_SIGNED, "code-reviewer": { at: "t" } },
+			approvals: {},
+			discovery: {},
+		})
+		// Unit has started executing; no BRIEF.md exists. The brief must NOT
+		// fire — it would interrupt an in-flight stage (the grandfather case
+		// for any intent already past this point when the feature shipped).
+		const action = await runTick(repoRoot, slug, { autoBrief: false })
+		assert.notStrictEqual(
+			action.action,
+			"write_brief",
+			`forward-only: a started stage must not be pulled back to write_brief; got ${action.action}`,
+		)
+	})
+})
+
+test("cursor: brief opt-out (brief: false) → straight to the user gate, no write_brief", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo("cursor-brief-opt", async ({ repoRoot, intentDir, slug }) => {
+		makeStudio({ repoRoot, studio: "test" })
+		makeIntent({ intentDir, slug, studio: "test", extraFm: { brief: false } })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
+		writeUnit(intentDir, "design", "unit-01", {
+			...PRE_EXECUTE_UNIT,
+			reviews: { ...ENGINE_REVIEWS_SIGNED, "code-reviewer": { at: "t" } },
+		})
+		const action = await runTick(repoRoot, slug, { autoBrief: false })
+		assert.strictEqual(
+			action.action,
+			"user_gate",
+			`brief: false must skip the briefer; got ${action.action}`,
+		)
+	})
 })
 
 test("cursor: all reviews + user signed → dispatch_approval spec (post-execute track)", async () => {
@@ -421,7 +539,7 @@ test("cursor: all reviews + user signed → dispatch_approval spec (post-execute
 					},
 				],
 				reviews: {
-					spec: { at: "t" },
+					...ENGINE_REVIEWS_SIGNED,
 					"code-reviewer": { at: "t" },
 					user: { at: "t" },
 				},
@@ -472,12 +590,17 @@ test("cursor: spec approval signed → dispatch_quality_gates (engine actor)", a
 				},
 			],
 			reviews: {
-				spec: { at: "t" },
+				...ENGINE_REVIEWS_SIGNED,
 				"code-reviewer": { at: "t" },
 				user: { at: "t" },
 			},
 			approvals: {
-				spec: { at: "t" },
+				...ENGINE_APPROVALS_SIGNED,
+				// quality_gates trails the adversarial fan-out, so the agent
+				// reviewer signs before the walk reaches quality_gates. Sign it
+				// here so this test isolates the quality_gates → engine-actor
+				// transition (not the agent dispatch that precedes it).
+				"code-reviewer": { at: "t" },
 			},
 			discovery: {},
 		})
@@ -542,7 +665,13 @@ test("cursor: closed FB does NOT preempt → cursor walks Track A", async () => 
 				depends_on: [],
 				started_at: null,
 				iterations: [],
-				reviews: {},
+				// Pre-execute reviews signed so cursor reaches start_unit_hat
+				// after correctly skipping the closed FB (2026-05-17 split).
+				reviews: {
+					...ENGINE_REVIEWS_SIGNED,
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})
@@ -634,6 +763,195 @@ test("cursor: fully signed unit (qg done) → complete_stage", async () => {
 	)
 })
 
+// Drives the REAL haiku_run_next handler (not just the cursor walk) so the
+// forward-only observations gate — which lives in run_next's complete_stage
+// path, not in derivePosition — is exercised. Bug 2026-05-20: observations.md
+// was never written at stage close. The fix hands the agent
+// record_observations the moment a stage is about to merge, and refuses to
+// merge until the file lands — WITHOUT a units-only-isStageComplete change
+// that would rewind every legacy intent.
+async function runNextOnce(slug) {
+	const { orchestratorToolHandlers } = await import(
+		"../src/tools/orchestrator/index.js"
+	)
+	const tool = orchestratorToolHandlers.get("haiku_run_next")
+	const resp = await tool.handle({ intent: slug })
+	const txt = resp.content?.[0]?.text ?? ""
+	const m = txt.match(/```json\s*([\s\S]*?)\s*```/)
+	if (m) {
+		try {
+			return JSON.parse(m[1])
+		} catch {
+			/* fall through */
+		}
+	}
+	// Selection/await responses may be bare JSON head before the "---".
+	const head = txt.split("\n\n---")[0].trim()
+	try {
+		return JSON.parse(head)
+	} catch {
+		return { action: "unparsed", raw: txt.slice(0, 200) }
+	}
+}
+
+test("run_next: reflection-on stage merges only after observations.md is recorded", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo(
+		"obs-gate",
+		async ({ repoRoot, intentDir, slug }) => {
+			// Two stages: design completes, build is next. With design done
+			// and build the cursor's stage, run_next synthesizes
+			// complete_stage(design) — the path the observations gate sits
+			// on. (The terminal stage routes to intent-completion instead, a
+			// separate path.)
+			makeStudio({
+				repoRoot,
+				studio: "test",
+				stages: [
+					{
+						name: "design",
+						hats: ["planner", "builder", "verifier"],
+						fix_hats: ["builder", "feedback-assessor"],
+						review: "ask",
+						review_agents: ["code-reviewer"],
+					},
+					{
+						name: "build",
+						hats: ["planner", "builder", "verifier"],
+						fix_hats: ["builder", "feedback-assessor"],
+						review: "ask",
+						review_agents: ["code-reviewer"],
+					},
+				],
+			})
+			// autotune:true => reflection enabled (the real default).
+			makeIntent({ intentDir, slug, studio: "test", extraFm: { autotune: true } })
+			seedVerifiedElaboration({ intentDir, stage: "design" })
+			// Fully-signed unit, COMMITTED to the design branch (writeUnit
+			// goes through onStageBranch), so design has real merge debt.
+			writeUnit(intentDir, "design", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				started_at: "t",
+				iterations: [
+					{ hat: "planner", started_at: "t", completed_at: "t", result: "advance" },
+					{ hat: "builder", started_at: "t", completed_at: "t", result: "advance" },
+					{ hat: "verifier", started_at: "t", completed_at: "t", result: "advance" },
+				],
+				reviews: { spec: { at: "t" }, "code-reviewer": { at: "t" }, user: { at: "t" } },
+				approvals: {
+					spec: { at: "t" },
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+					quality_gates: { at: "t" },
+				},
+				discovery: {},
+			})
+
+			// The raw handler resolves the project from process.cwd (the
+			// runTick helper chdirs internally; withTmpRepo does not), and
+			// reads the current branch's tree — so sit on the design branch
+			// where the signed unit lives, like a real run would.
+			process.chdir(repoRoot)
+			execFileSync("git", ["checkout", "-q", `haiku/${slug}/design`], {
+				cwd: repoRoot,
+				stdio: "ignore",
+			})
+
+			// design is signed and build is next, but design's
+			// observations.md is absent → run_next must hand back
+			// record_observations instead of merging design.
+			const first = await runNextOnce(slug)
+			assert.strictEqual(
+				first.action,
+				"record_observations",
+				`expected record_observations before merge; got: ${first.action} — ${JSON.stringify(first).slice(0, 200)}`,
+			)
+			assert.strictEqual(first.stage, "design")
+
+			// Agent writes observations.md (committed to the design branch,
+			// as the agent's Write + the engine's commit would leave it).
+			onStageBranch(repoRoot, slug, "design", () => {
+				writeFileSync(
+					join(intentDir, "stages", "design", "observations.md"),
+					"# design — Observations\n\nRan clean.\n",
+				)
+			})
+
+			// Now the gate passes — design merges and the cursor moves on;
+			// it must NOT loop back on record_observations for design.
+			const second = await runNextOnce(slug)
+			assert.notStrictEqual(
+				second.action === "record_observations" && second.stage === "design",
+				true,
+				`design should advance once its observations.md exists; still got record_observations/design`,
+			)
+			// observations.md must have landed on intent main with the merge.
+			execFileSync("git", ["checkout", "-q", `haiku/${slug}/main`], {
+				cwd: repoRoot,
+				stdio: "ignore",
+			})
+			assert.ok(
+				existsSync(join(intentDir, "stages", "design", "observations.md")),
+				"design observations.md must be on intent main after the stage merged",
+			)
+		},
+	)
+})
+
+test("run_next: the TERMINAL stage also records observations before it closes", async () => {
+	if (!HAS_GIT) return
+	// The last/only stage routes to the intent-completion walk (the cursor
+	// returns intent_review, stage ""), which the synthesis used to skip —
+	// so observations were recorded for every stage EXCEPT the last
+	// (2026-05-20 probe). Case (e) synthesizes complete_stage for the stage
+	// we're physically on whenever the cursor's answer leaves it (including
+	// intent-scope), so the terminal stage's close also hits the gate.
+	await withTmpRepo(
+		"obs-gate-terminal",
+		async ({ repoRoot, intentDir, slug }) => {
+			// Single-stage studio → "design" IS the terminal stage.
+			makeStudio({ repoRoot, studio: "test" })
+			makeIntent({ intentDir, slug, studio: "test", extraFm: { autotune: true } })
+			seedVerifiedElaboration({ intentDir, stage: "design" })
+			writeUnit(intentDir, "design", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				started_at: "t",
+				iterations: [
+					{ hat: "planner", started_at: "t", completed_at: "t", result: "advance" },
+					{ hat: "builder", started_at: "t", completed_at: "t", result: "advance" },
+					{ hat: "verifier", started_at: "t", completed_at: "t", result: "advance" },
+				],
+				reviews: { spec: { at: "t" }, "code-reviewer": { at: "t" }, user: { at: "t" } },
+				approvals: {
+					spec: { at: "t" },
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+					quality_gates: { at: "t" },
+				},
+				discovery: {},
+			})
+			process.chdir(repoRoot)
+			execFileSync("git", ["checkout", "-q", `haiku/${slug}/design`], {
+				cwd: repoRoot,
+				stdio: "ignore",
+			})
+
+			// Terminal stage signed, no observations.md → must record
+			// observations before advancing to intent completion (NOT route
+			// straight to intent_review / seal).
+			const first = await runNextOnce(slug)
+			assert.strictEqual(
+				first.action,
+				"record_observations",
+				`terminal stage must record observations before close; got: ${first.action} — ${JSON.stringify(first).slice(0, 200)}`,
+			)
+			assert.strictEqual(first.stage, "design")
+		},
+	)
+})
+
 test("cursor: open FB on earlier stage preempts current-stage work", async () => {
 	if (!HAS_GIT) return
 	await withTmpRepo(
@@ -696,23 +1014,31 @@ test("cursor: open FB on earlier stage preempts current-stage work", async () =>
 	)
 })
 
-test("cursor: one open-iter unit + one wave-ready sibling → wave-ready dispatches first", async () => {
-	// Pre-2026-05-13: cursor returned noop on the theory that any
-	// open iter was an "in-flight subagent" and you shouldn't
-	// dispatch siblings during a wave. But the in-flight read was
-	// wrong (the parent only calls run_next AFTER all subagents
-	// return), AND it blocked the wave-ready sibling from starting.
+test("cursor: one open-iter unit + one wave-ready sibling → in-flight unit advances first (wave barrier)", async () => {
+	// Wave barrier (2026-05-21): a new wave does not open while any unit
+	// is still in flight (started, with hats remaining). unit-01 has an
+	// open planner iteration, so it's in flight; the cursor advances IT
+	// (re-emits the open hat) and holds unit-02 back even though unit-02
+	// is wave-ready with started_at=null. unit-02 starts on a later tick,
+	// once unit-01 has run all its hats.
 	//
-	// New behavior: wave-ready clause fires first (unit-02 with
-	// started_at=null), so the cursor returns start_unit_hat for
-	// hat[0] dispatching unit-02. The open-iter unit-01 stays
-	// pending for the next tick — it'll be picked up by the
-	// needNextHat clause once unit-02's wave dispatch returns.
+	// Pre-barrier this dispatched unit-02 first (wave-ready took priority
+	// over the in-flight unit). The barrier inverts that so concurrency
+	// stays bounded and waves complete before the next opens.
 	if (!HAS_GIT) return
 	await withTmpRepo("cursor-midwave", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
 		seedVerifiedElaboration({ intentDir, stage: "design" })
+
+		// Both units need pre-execute reviews signed so the cursor
+		// reaches the wave dispatch (2026-05-17 split). Per-unit because
+		// reviewRoles is signed on each unit's FM, not stage-level.
+		const preExecuteSigned = {
+			...ENGINE_REVIEWS_SIGNED,
+			"code-reviewer": { at: "t" },
+			user: { at: "t" },
+		}
 
 		// Unit 1: open-iter on planner (engine pre-opened or orphaned).
 		writeUnit(intentDir, "design", "unit-01-open-iter", {
@@ -727,7 +1053,7 @@ test("cursor: one open-iter unit + one wave-ready sibling → wave-ready dispatc
 					result: null,
 				},
 			],
-			reviews: {},
+			reviews: { ...preExecuteSigned },
 			approvals: {},
 			discovery: {},
 		})
@@ -738,7 +1064,7 @@ test("cursor: one open-iter unit + one wave-ready sibling → wave-ready dispatc
 			depends_on: [],
 			started_at: null,
 			iterations: [],
-			reviews: {},
+			reviews: { ...preExecuteSigned },
 			approvals: {},
 			discovery: {},
 		})
@@ -747,12 +1073,51 @@ test("cursor: one open-iter unit + one wave-ready sibling → wave-ready dispatc
 		assert.strictEqual(
 			action.action,
 			"start_unit_hat",
-			`wave-ready unit must dispatch; got: ${action.action} — ${action.message ?? ""}`,
+			`in-flight unit must advance; got: ${action.action} — ${action.message ?? ""}`,
 		)
 		assert.strictEqual(action.hat, "planner")
-		// Wave-ready dispatches the wave-ready unit first; the
-		// open-iter unit comes through the next tick.
-		assert.deepStrictEqual(action.units, ["unit-02-wave-ready"])
+		// Barrier: the in-flight unit-01 advances; unit-02 waits for the
+		// next wave (after unit-01 finishes all hats).
+		assert.deepStrictEqual(action.units, ["unit-01-open-iter"])
+	})
+})
+
+test("cursor: wave dispatch is capped at MAX_CONCURRENT_SUBAGENTS", async () => {
+	// 14 independent wave-ready units, no in-flight units. The wave
+	// opens at most MAX_CONCURRENT_SUBAGENTS units (default 10); the rest
+	// wait for the next wave once this one drains. (2026-05-21 cap.)
+	if (!HAS_GIT) return
+	await withTmpRepo("cursor-wave-cap", async ({ repoRoot, intentDir, slug }) => {
+		makeStudio({ repoRoot, studio: "test" })
+		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
+
+		const preExecuteSigned = {
+			...ENGINE_REVIEWS_SIGNED,
+			"code-reviewer": { at: "t" },
+			user: { at: "t" },
+		}
+		for (let i = 1; i <= 14; i++) {
+			writeUnit(intentDir, "design", `unit-${String(i).padStart(2, "0")}`, {
+				title: `u${i}`,
+				depends_on: [],
+				started_at: null,
+				iterations: [],
+				reviews: { ...preExecuteSigned },
+				approvals: {},
+				discovery: {},
+			})
+		}
+
+		const { MAX_CONCURRENT_SUBAGENTS } = await import("../src/state-tools.js")
+		const action = await runTick(repoRoot, slug)
+		assert.strictEqual(action.action, "start_unit_hat")
+		assert.strictEqual(action.hat, "planner")
+		assert.strictEqual(
+			action.units.length,
+			Math.min(14, MAX_CONCURRENT_SUBAGENTS),
+			`wave must cap at ${MAX_CONCURRENT_SUBAGENTS}; got ${action.units.length}`,
+		)
 	})
 })
 
@@ -941,7 +1306,13 @@ test("cursor: reject_hat re-entry routes back to prior hat", async () => {
 						reason: "Spec mismatch",
 					},
 				],
-				reviews: {},
+				// Pre-execute reviews signed so cursor reaches the unit
+				// reject-rewind path (2026-05-17 split).
+				reviews: {
+					...ENGINE_REVIEWS_SIGNED,
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})

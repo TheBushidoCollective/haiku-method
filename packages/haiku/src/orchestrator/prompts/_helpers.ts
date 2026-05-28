@@ -21,17 +21,22 @@
 //     omitted the cascade starts at the stage's `default_model:` (when
 //     a stage is provided) or the studio's `default_model:`.
 //   - buildInlineSubagentContext — hookless-harness inline context.
-//   - batchDispatchDirective — concurrency-cap discipline (slot pool
-//     vs batch-serial depending on harness capabilities).
+//   - batchDispatchDirective — minimal "spawn in parallel; follow each
+//     subagent's return" directive (engine-threaded chain via the
+//     advance_hat relay breadcrumb; no agent-side pool bookkeeping).
 
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+import { Eta } from "eta"
 import matter from "gray-matter"
 import { features } from "../../config.js"
 import { getCapabilities } from "../../harness.js"
 import { type ModelTier, sanitizeModel } from "../../model-selection.js"
 import {
-	MAX_CONCURRENT_SUBAGENTS,
+	intentDir,
 	parseFrontmatter,
+	readDecisionLog,
+	readFeedbackFiles,
 } from "../../state-tools.js"
 import {
 	readModelFromPath,
@@ -40,8 +45,22 @@ import {
 } from "../../studio-reader.js"
 import {
 	formatSubagentDispatchBlock,
+	materializeReferenceFile,
 	writeSubagentPrompt,
 } from "../../subagent-prompt-file.js"
+import { loadTemplate } from "./_load-template.js"
+import { providersForSplicePoint } from "./_provider-loader.js"
+import { providerBlockRef } from "./_shared/index.js"
+
+const helperEta = new Eta({ autoEscape: false, useWith: true })
+const INLINE_SUBAGENT_CTX_TPL = loadTemplate(
+	import.meta.url,
+	"_shared/inline-subagent-context.eta.md",
+)
+const CONCURRENT_ELABORATE_TPL = loadTemplate(
+	import.meta.url,
+	"_shared/concurrent-elaborate-loop.eta.md",
+)
 
 /** Read the `interpretation:` field from a hat-like frontmatter file.
  *  Returns "lens" | "strict" | undefined (unset). Universal field on
@@ -89,6 +108,36 @@ export function buildInterpretationBlock(
 	].join("\n")
 }
 
+/** Inline a list of files into a single concatenated block. Used by
+ *  subagent prompt builders to pre-load every file the subagent will
+ *  need to read — the subagent is short-lived and pays a Read-tool
+ *  cost for each separate file, so bundling them into one prompt body
+ *  trades a small upfront token cost for zero Read calls in the
+ *  subagent's session.
+ *
+ *  Use ONLY for subagent prompts. The parent agent's <subagent
+ *  prompt_file="..."> dispatch is written to a tmpfile and the parent
+ *  is explicitly told not to read it (the file is sized for the
+ *  subagent's context), so the expansion stays behind the file-backed
+ *  boundary. Inlining a file the parent will see would just bloat the
+ *  parent's context.
+ *
+ *  Empty heading → skipped silently. Missing file path → skipped
+ *  silently (consistent with `inlineFile`'s behavior). Returns an
+ *  empty string when no entries resolve. */
+export function inlineFiles(
+	entries: Array<{ heading: string; path: string }>,
+): string {
+	if (entries.length === 0) return ""
+	const blocks: string[] = []
+	for (const { heading, path } of entries) {
+		if (!heading || !path) continue
+		const block = inlineFile(path, heading)
+		if (block) blocks.push(block)
+	}
+	return blocks.join("\n")
+}
+
 /** Strip YAML frontmatter and emit a fenced inline block. Frontmatter
  *  carries workflow metadata that the orchestrator already consumed — the
  *  subagent should see only the authoritative body. ~~~~ fences survive
@@ -106,6 +155,66 @@ export function inlineFile(absPath: string, heading: string): string {
 	return `### ${heading}\n\n*Source: \`${absPath}\`*\n\n~~~~\n${body}\n~~~~\n`
 }
 
+/**
+ * Emit a "Read `<snapshot>`" reference for a studio/project asset that a
+ * prompt would otherwise tell the agent to "call `haiku_read_X(...)`"
+ * for. At build time we resolve the asset (caller passes the path its
+ * `haiku_read_X` tool would resolve), snapshot its FM-stripped BODY —
+ * the text, not the tool's JSON envelope — into the intent's
+ * `prompts/<scope>/refs/<kind>/<name>.md` tree, and emit a Read of that
+ * immutable snapshot. The snapshot is the followable breadcrumb for
+ * debugging and reflection: open the dispatched prompt, follow the
+ * Read, see byte-for-byte what the agent was handed.
+ *
+ * Resolution stays single-source — the caller uses the SAME resolver
+ * the tool's handler uses (`resolveHatPath`, `resolveReviewAgentPath`,
+ * …); this helper owns snapshot + emit + fallback only. If the asset
+ * isn't resolvable at build time (`sourcePath` null/absent), fall back
+ * to the live `haiku_read_X` tool-call directive so the agent resolves
+ * it at runtime instead of getting a dangling Read.
+ *
+ * For engine-GENERATED bodies (review/approval engine roles) there is no
+ * source file — the caller materializes the rendered string directly via
+ * `materializeReferenceFile` and emits its own Read; this helper is for
+ * file-backed studio/project assets only.
+ */
+export function studioReadRef(opts: {
+	/** The SAME underlying read the `haiku_read_X` tool handler runs
+	 *  (e.g. `() => readHatBody(studio, stage, hat)`). Returns the
+	 *  FM-stripped body or null. Passing the tool's own reader is what
+	 *  keeps the tool and the snapshot on one resolution path. */
+	resolveBody: () => string | null
+	/** Tool name for the live fallback directive, e.g. `haiku_read_hat`. */
+	toolName: string
+	/** Args rendered in the fallback directive (object-literal form). */
+	toolArgs: Record<string, unknown>
+	/** Intent slug — snapshot scope. */
+	intent: string
+	/** Stage for snapshot placement; omit for intent-scope. */
+	stage?: string
+	/** `refs/<kind>/` subdir. */
+	kind: string
+	/** Snapshot file basename. */
+	name: string
+}): string {
+	const { resolveBody, toolName, toolArgs, intent, stage, kind, name } = opts
+	const body = resolveBody()
+	if (body?.trim()) {
+		const snap = materializeReferenceFile({
+			intent,
+			stage,
+			kind,
+			name,
+			body: body.trim(),
+		})
+		return `**Read** \`${snap}\``
+	}
+	const argStr = Object.entries(toolArgs)
+		.map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+		.join(", ")
+	return `**Call** \`${toolName} { ${argStr} }\``
+}
+
 /** Read a unit's iterations frontmatter and emit a "Prior rejection" block
  *  for the next bolt. The most-recent completed iteration with
  *  `result === "reject"` and a non-empty `reason` is surfaced so the next
@@ -120,93 +229,290 @@ export function inlineFile(absPath: string, heading: string): string {
  *
  *  Returns "" when no completed reject is found (first hat / first bolt /
  *  unit file missing). */
-export function buildPriorRejectBlock(unitFilePath: string): string {
-	if (!existsSync(unitFilePath)) return ""
-	let iters: Array<{
-		hat?: unknown
-		completed_at?: unknown
-		result?: unknown
-		reason?: unknown
-	}> = []
-	try {
-		const { data } = parseFrontmatter(readFileSync(unitFilePath, "utf8"))
-		if (Array.isArray(data.iterations)) {
-			iters = data.iterations as typeof iters
-		}
-	} catch {
-		return ""
-	}
-	for (let i = iters.length - 1; i >= 0; i--) {
-		const it = iters[i]
-		if (!it) continue
-		if (!it.completed_at) continue
-		if (it.result !== "reject") continue
-		if (typeof it.reason !== "string" || !it.reason.trim()) continue
-		const hatName = typeof it.hat === "string" ? it.hat : "previous hat"
-		return [
-			"## Prior rejection — address this before advancing",
-			"",
-			`The previous bolt's **${hatName}** hat rejected the work with this reason:`,
-			"",
-			"~~~~",
-			it.reason.trim(),
-			"~~~~",
-			"",
-			"Treat each item as a hard requirement: your hat is NOT done until every issue above is resolved. Reference the specific items in your final commit message and your hat-completion summary so the next reviewer can verify closure. Do NOT call `haiku_unit_advance_hat` while any of these remain open — call `haiku_unit_reject_hat` with what's still outstanding.",
-		].join("\n")
-	}
-	return ""
-}
-
-/** Mirror of `buildPriorRejectBlock` for fix-loop prompts. Reads a
- *  feedback file's `iterations:` frontmatter (shape: FeedbackIteration —
- *  `result: "advanced" | "closed" | "reopened" | "rejected"`) and surfaces
- *  the most-recent `rejected` entry's reason so a fix-loop bolt N+1 hat
- *  knows what the previous attempt was rejected for (assessor reject,
- *  fixer-side `haiku_feedback_reject`, etc).
+/** Shared renderer for the prior-hat handoff baton. Walks a unit's or
+ *  feedback's `iterations:` newest-first and surfaces the most-recent
+ *  COMPLETED iteration's handoff `message` (falling back to the legacy
+ *  `reason` for pre-v9 entries). The framing adapts to the transition:
  *
- *  Returns "" when no rejected iteration is found (first fix bolt, fresh
- *  finding, missing file). */
-export function buildPriorFeedbackRejectBlock(
-	feedbackFilePath: string,
+ *   - a REJECT bounce → a "address this before advancing" block (the
+ *     re-run hat must close the prior objection),
+ *   - a forward ADVANCE → a "Handoff from <prior hat>" baton (what the
+ *     prior hat did + what to pick up).
+ *
+ *  This is how the handoff message becomes visible to the NEXT hat
+ *  (the rally-race baton). Returns "" when no completed iteration with a
+ *  message exists (first hat, fresh artifact, missing file). */
+function renderPriorHandoff(
+	filePath: string,
+	opts: {
+		rejectResults: ReadonlySet<string>
+		rejectAdvanceTool: string
+		rejectHatTool: string
+		fixLoop: boolean
+	},
 ): string {
-	if (!existsSync(feedbackFilePath)) return ""
+	if (!existsSync(filePath)) return ""
 	let iters: Array<{
 		bolt?: unknown
 		hat?: unknown
 		completed_at?: unknown
 		result?: unknown
+		message?: unknown
 		reason?: unknown
 	}> = []
 	try {
-		const { data } = parseFrontmatter(readFileSync(feedbackFilePath, "utf8"))
+		const { data } = parseFrontmatter(readFileSync(filePath, "utf8"))
 		if (Array.isArray(data.iterations)) {
 			iters = data.iterations as typeof iters
 		}
 	} catch {
 		return ""
 	}
+	// Collect every completed iteration that carries a handoff message,
+	// newest-first. The most recent is the PRIMARY (actionable) baton; the
+	// rest become de-weighted BACKGROUND so a bounced-to hat can see the
+	// whole chain (full-chain visibility) WITHOUT treating ten old notes as
+	// ten current directives. Visible ≠ equal weight.
+	const entries: Array<{
+		hatName: string
+		boltStr: string
+		isReject: boolean
+		text: string
+	}> = []
 	for (let i = iters.length - 1; i >= 0; i--) {
 		const it = iters[i]
 		if (!it) continue
 		if (!it.completed_at) continue
-		if (it.result !== "rejected") continue
-		if (typeof it.reason !== "string" || !it.reason.trim()) continue
-		const hatName = typeof it.hat === "string" ? it.hat : "previous fixer"
-		const boltStr = typeof it.bolt === "number" ? ` (bolt ${it.bolt})` : ""
-		return [
-			"## Prior fix-bolt rejection — address this before advancing",
-			"",
-			`The previous fix attempt's **${hatName}** hat${boltStr} was rejected with this reason:`,
-			"",
-			"~~~~",
-			it.reason.trim(),
-			"~~~~",
-			"",
-			"Treat each item as a hard requirement on this bolt: do NOT repeat the same approach the previous bolt took unless you've identified a meaningfully different root cause. Reference the items by name in your bolt summary and the commit message so the next assessor can verify closure.",
-		].join("\n")
+		// `message` is the v9 handoff field; `reason` is the legacy reject
+		// text (read until every active artifact has re-stamped).
+		const text =
+			typeof it.message === "string" && it.message.trim()
+				? it.message.trim()
+				: typeof it.reason === "string" && it.reason.trim()
+					? it.reason.trim()
+					: ""
+		if (!text) continue
+		entries.push({
+			hatName: typeof it.hat === "string" ? it.hat : "previous hat",
+			boltStr:
+				opts.fixLoop && typeof it.bolt === "number" ? ` (bolt ${it.bolt})` : "",
+			isReject:
+				typeof it.result === "string" && opts.rejectResults.has(it.result),
+			text,
+		})
 	}
-	return ""
+	if (entries.length === 0) return ""
+
+	// PRIMARY — the single most-recent baton, framed as the directive.
+	const p = entries[0]
+	const primaryBlock = p.isReject
+		? [
+				"## Prior rejection — address this before advancing",
+				"",
+				`The previous ${opts.fixLoop ? "fix attempt" : "bolt"}'s **${p.hatName}** hat${p.boltStr} rejected the work and handed back:`,
+				"",
+				"~~~~",
+				p.text,
+				"~~~~",
+				"",
+				`Treat each item as a hard requirement: your hat is NOT done until every issue above is resolved. Reference them in your work summary and commit message so the next reviewer can verify closure. Do NOT call \`${opts.rejectAdvanceTool}\` while any remain open — call \`${opts.rejectHatTool}\` with what's still outstanding.`,
+			].join("\n")
+		: [
+				`## Handoff from \`${p.hatName}\`${p.boltStr}`,
+				"",
+				"The prior hat completed and passed you this baton:",
+				"",
+				"~~~~",
+				p.text,
+				"~~~~",
+				"",
+				"Pick up where it left off — honor its decisions, resolve any open questions it flagged, and don't redo work it already landed.",
+			].join("\n")
+
+	// BACKGROUND — older chain entries, collapsed to gists and explicitly
+	// fenced off so they inform without competing with the primary directive.
+	const BG_CAP = 8
+	const GIST = 240
+	const older = entries.slice(1, 1 + BG_CAP)
+	if (older.length === 0) return primaryBlock
+	const bgLines = older.map((e) => {
+		const flat = e.text
+			.replace(/```[\s\S]*?```/g, " ")
+			.replace(/\s+/g, " ")
+			.trim()
+		const gist = flat.length > GIST ? `${flat.slice(0, GIST)}…` : flat
+		return `- **${e.hatName}**${e.boltStr} ${e.isReject ? "rejected" : "handed off"}: ${gist}`
+	})
+	const remaining = entries.length - 1 - older.length
+	const overflow = remaining > 0 ? [`_(+${remaining} earlier)_`] : []
+	const backgroundBlock = [
+		"### Earlier in this chain — context only, do NOT act on this",
+		"",
+		"Background from prior hats on this work item, newest first. This is reference, not your task: act on the block above, stay in your hat's lane, and do not jump ahead, re-open settled decisions, or do another hat's job.",
+		"",
+		...bgLines,
+		...overflow,
+	].join("\n")
+	return `${primaryBlock}\n\n${backgroundBlock}`
+}
+
+/** Prior-hat handoff baton for UNIT hat dispatch (advance or reject). */
+export function buildPriorRejectBlock(unitFilePath: string): string {
+	return renderPriorHandoff(unitFilePath, {
+		rejectResults: new Set(["reject"]),
+		rejectAdvanceTool: "haiku_unit_advance_hat",
+		rejectHatTool: "haiku_unit_reject_hat",
+		fixLoop: false,
+	})
+}
+
+/** Prior-fixer handoff baton for FIX-LOOP hat dispatch (advance or
+ *  reject). Feedback iterations use `result: "advanced" | "closed" |
+ *  "reopened" | "rejected"`. */
+export function buildPriorFeedbackRejectBlock(
+	feedbackFilePath: string,
+): string {
+	return renderPriorHandoff(feedbackFilePath, {
+		rejectResults: new Set(["rejected"]),
+		rejectAdvanceTool: "haiku_feedback_advance_hat",
+		rejectHatTool: "haiku_feedback_reject_hat",
+		fixLoop: true,
+	})
+}
+
+/** Build the "existing feedback — don't re-raise" context block for a
+ *  review / approval / intent-review subagent.
+ *
+ *  Review agents that re-flag a finding the engine is already tracking
+ *  (open, being fixed, addressed, answered) — or one a human/agent already
+ *  decided (closed, dismissed) — burn a fix-loop cycle on noise and erode
+ *  trust in the review. So we hand every review subagent the findings
+ *  already on its scope and tell it to dedupe.
+ *
+ *  Scope: for a stage walk (`stage` set) we read the stage's own findings
+ *  PLUS the intent-scope dir (cross-cutting findings the studio-completion
+ *  review filed); for an intent-completion walk (`stage` empty) we read just
+ *  the intent-scope dir. Each is rendered as `FB-NN [status · origin · scope]
+ *  title — gist`. Returns "" when nothing is on record. Capped so a
+ *  long-running stage doesn't bloat every dispatch. */
+export function buildExistingFeedbackBlock(
+	slug: string,
+	stage: string,
+): string {
+	const items: ReturnType<typeof readFeedbackFiles> = []
+	try {
+		const stageItems = stage ? readFeedbackFiles(slug, stage) : []
+		const intentItems = readFeedbackFiles(slug, "")
+		const seen = new Set<string>()
+		for (const it of [...stageItems, ...intentItems]) {
+			if (seen.has(it.file)) continue
+			seen.add(it.file)
+			items.push(it)
+		}
+	} catch {
+		return ""
+	}
+	if (items.length === 0) return ""
+
+	const CAP = 50
+	const shown = items.slice(0, CAP)
+	const clip = (s: string, n: number): string =>
+		s.length > n ? `${s.slice(0, n)}…` : s
+	const lines = shown.map((it) => {
+		const scopeTag = it.file.includes("/stages/") ? "stage" : "intent"
+		const sevTag = it.severity ? `${it.severity} · ` : ""
+		const gistRaw = (it.body || "")
+			.replace(/```[\s\S]*?```/g, " ")
+			.replace(/\s+/g, " ")
+			.trim()
+		const gist = clip(gistRaw, 140)
+		// Surface HOW a terminal finding was settled so a re-reviewing agent
+		// audits the delta (or respects the dismissal) instead of re-deriving
+		// the same critique and re-filing it — the core anti-churn lever.
+		// `resolved:` = the terminal fix-hat's closure_reply (what was done);
+		// `dismissed:` = the reject reason (why it was thrown out, parsed from
+		// the body tail haiku_feedback_reject appends).
+		let resolution = ""
+		const closure = it.closure_reply?.text?.replace(/\s+/g, " ").trim()
+		if (closure) {
+			resolution = ` · resolved: ${clip(closure, 160)}`
+		} else if (it.status === "rejected") {
+			const m = (it.body || "").match(/\*\*Rejection reason:\*\*\s*([\s\S]+)$/)
+			const reason = m ? m[1].replace(/\s+/g, " ").trim() : ""
+			resolution = reason
+				? ` · dismissed: ${clip(reason, 160)}`
+				: " · dismissed"
+		}
+		return `- \`${it.id}\` [${sevTag}${it.status} · ${it.origin} · ${scopeTag}] ${it.title}${
+			gist ? ` — ${gist}` : ""
+		}${resolution}`
+	})
+	const overflow =
+		items.length > CAP ? `\n_(+${items.length - CAP} more on record)_` : ""
+
+	return [
+		"## Existing feedback on this scope — do NOT re-raise",
+		"",
+		"These findings are already on record — open, being fixed, addressed, answered, closed, or dismissed. Read them BEFORE you file anything. If your observation is already captured here, do NOT file a duplicate: the engine is already tracking it, or a human/agent already decided it. A `resolved:` note shows what the fix-hat actually did — verify THAT delta rather than re-deriving your critique from scratch; a `dismissed:` note shows why a prior reviewer threw the finding out — respect it unless you have new evidence. Reserve new findings for genuinely new problems this list doesn't cover. If you think an existing finding was resolved wrong, say so in your closing summary instead of re-filing it.",
+		"",
+		...lines,
+		overflow,
+	]
+		.join("\n")
+		.trimEnd()
+}
+
+/** Build the "decisions already made — don't re-litigate" context block
+ *  for a review / approval / intent-review subagent.
+ *
+ *  BUG-5 (oscillating contradiction findings): when sealed upstream
+ *  artifacts contradict each other (e.g. ACCEPTANCE-CRITERIA says
+ *  `ceil()`, DATA-CONTRACTS says `round()`), review lenses re-derive the
+ *  tension as a fresh finding every round — fixing toward one doc trips
+ *  the other on the next pass. The owner records the ruling once via
+ *  `haiku_decision_record` ("AC is authoritative; the divergence is
+ *  flagged for upstream reconciliation"), but nothing surfaced that
+ *  ruling TO the lenses, so they kept re-flagging it. This block hands
+ *  every reviewer the recorded decisions across the whole intent (any
+ *  stage can record a decision a downstream lens needs to respect) and
+ *  tells it not to re-open a settled call.
+ *
+ *  Aggregates `stages/<stage>/decisions.jsonl` across every stage of the
+ *  intent — a cross-stage contradiction is recorded wherever it surfaced,
+ *  and a lens in any stage must see it. Returns "" when nothing is on
+ *  record. */
+export function buildDecisionsBlock(slug: string): string {
+	const stagesDir = join(intentDir(slug), "stages")
+	if (!existsSync(stagesDir)) return ""
+	const lines: string[] = []
+	try {
+		for (const entry of readdirSync(stagesDir, { withFileTypes: true })) {
+			if (!entry.isDirectory()) continue
+			for (const dec of readDecisionLog(slug, entry.name)) {
+				const topic = String(dec.decision ?? "").trim()
+				const choice = String(dec.choice ?? "").trim()
+				if (!topic || !choice) continue
+				const src = dec.source === "user" ? "user" : "agent-acknowledged"
+				const why =
+					typeof dec.rationale === "string" && dec.rationale.trim()
+						? ` — ${dec.rationale.trim()}`
+						: ""
+				lines.push(`- **${topic}** → chose \`${choice}\` (${src})${why}`)
+			}
+		}
+	} catch {
+		return ""
+	}
+	if (lines.length === 0) return ""
+	return [
+		"## Decisions already made — do NOT re-litigate",
+		"",
+		"These are rulings the owner (or the agent, acknowledged) has already made on this intent — including how to resolve contradictions between upstream artifacts. A finding that re-opens one of these is churn: the call stands. If an upstream doc still contradicts the ruling, that's a known divergence flagged for reconciliation, NOT a fresh finding — do not re-file it. Only raise it if you have genuinely new information the decision didn't account for, and say so explicitly.",
+		"",
+		...lines,
+	]
+		.join("\n")
+		.trimEnd()
 }
 
 /** Emit a `<subagent>` block whose body is a tmpfile pointer instead
@@ -220,19 +526,47 @@ export function emitSubagentDispatchBlock(opts: {
 	unit: string
 	hat: string
 	bolt: number
+	intent: string
+	/** Stage name. Present for stage-scoped dispatches (per-unit hats,
+	 *  discovery, stage fix-loops); absent for intent-scoped dispatches
+	 *  (intent-completion review/fix). Selects the subdirectory under
+	 *  `prompts/`. */
+	stage?: string
 	agentType: string
 	model?: string | null
 	promptBody: string
 	heading?: string
 	toolAttr?: boolean
+	/** When true, force foreground spawn even on harnesses that support
+	 *  backgroundSpawn. Used by autopilot dispatch paths where the parent
+	 *  MUST stay on the turn (no yield) to keep ticking the workflow. */
+	forceForeground?: boolean
+	/** Drop the trailing `-<bolt>` from the prompt filename. Used by
+	 *  discovery dispatches, which never iterate. */
+	omitBolt?: boolean
 }): string {
-	const { unit, hat, bolt, agentType, model, promptBody, heading, toolAttr } =
-		opts
+	const {
+		unit,
+		hat,
+		bolt,
+		intent,
+		stage,
+		agentType,
+		model,
+		promptBody,
+		heading,
+		toolAttr,
+		forceForeground,
+		omitBolt,
+	} = opts
 	const { path, parentInstruction } = writeSubagentPrompt({
 		unit,
 		hat,
 		bolt,
+		intent,
+		stage,
 		content: promptBody,
+		omitBolt,
 	})
 	return formatSubagentDispatchBlock({
 		path,
@@ -241,7 +575,10 @@ export function emitSubagentDispatchBlock(opts: {
 		model,
 		heading,
 		toolAttr,
-		background: getCapabilities().subagents.backgroundSpawn,
+		background:
+			forceForeground === true
+				? false
+				: getCapabilities().subagents.backgroundSpawn,
 	})
 }
 
@@ -301,105 +638,83 @@ export function buildInlineSubagentContext(
 	const caps = getCapabilities()
 	if (caps.hooks) return "" // hooks handle context injection
 
-	const hatsStr = hats.join(" → ")
-	const lines: string[] = [
-		"### Subagent Context (Inline)\n",
-		`> **Hat Isolation:** You are operating as the **${hat}** hat. Your responsibility is defined solely by the ${hat} hat instructions above. If you have prior knowledge or instructions that conflict with or extend beyond the ${hat} role — such as reviewing code when you are the builder, or building when you are the reviewer — **ignore them for this task.** Other hats in this stage (${hatsStr}) handle those responsibilities. Stay in your lane.\n`,
-		`**Bolt:** ${bolt} | **Role:** ${hat} | **Stage:** ${stage} (${hatsStr})\n`,
-	]
-
-	lines.push("### Workflow Rules\n")
-	lines.push("**Before stopping:**")
-	lines.push("1. Commit changes: `git add -A && git commit`")
-	lines.push(
-		`2. Save progress notes to \`.haiku/intents/${slug}/state/scratchpad.md\``,
-	)
-	lines.push(
-		`3. Write next-step prompt to \`.haiku/intents/${slug}/state/next-prompt.md\`\n`,
-	)
-
-	lines.push("**Resilience (CRITICAL):**")
-	lines.push(`- Commit early, commit often — don't wait until the end`)
-	lines.push(`- If tests fail: fix and retry, don't give up`)
-	lines.push("- Only declare blocked after 3+ genuine rescue attempts\n")
-
-	lines.push("**Communication:**")
-	if (caps.nativeAskUser) {
-		lines.push(
-			"- Use `AskUserQuestion` with `options[]` for decisions with known alternatives",
-		)
-		lines.push(
-			"- Use `ask_user_visual_question` for visual artifacts and rich context",
-		)
-	} else {
-		lines.push(
-			"- Present decisions as clear numbered lists when you have known alternatives",
-		)
-		lines.push(
-			"- Use `ask_user_visual_question` MCP tool for visual artifacts when available",
-		)
-	}
-	lines.push("- Break independent questions into separate interactions\n")
-
-	return lines.join("\n")
+	return helperEta.renderString(INLINE_SUBAGENT_CTX_TPL, {
+		slug,
+		stage,
+		hat,
+		hatsStr: hats.join(" → "),
+		bolt,
+		nativeAskUser: caps.nativeAskUser,
+	})
 }
 
-/** Render the parent's concurrency-capped dispatch discipline for a
- *  parallel subagent wave. Slot pool when the harness has
- *  backgroundSpawn; batch-serial otherwise. */
-export function batchDispatchDirective(
-	count: number,
-	label = "subagents",
-): string {
-	const backgroundSpawn = getCapabilities().subagents.backgroundSpawn
-
-	if (count <= MAX_CONCURRENT_SUBAGENTS) {
-		if (backgroundSpawn) {
-			return `**Concurrency cap:** up to ${MAX_CONCURRENT_SUBAGENTS} concurrent background ${label} (env \`HAIKU_MAX_CONCURRENT_SUBAGENTS\`). This wave has ${count} — spawn all ${count} as background ${label} in a single turn and react to completion notifications as they arrive.`
-		}
-		return `**Concurrency cap:** up to ${MAX_CONCURRENT_SUBAGENTS} concurrent ${label} (env \`HAIKU_MAX_CONCURRENT_SUBAGENTS\`). This wave has ${count} — spawn them all in a single turn and wait for every ${label.replace(/s$/, "")} to return before proceeding.`
-	}
-
-	if (backgroundSpawn) {
-		return [
-			`**Concurrency cap:** slot pool of ${MAX_CONCURRENT_SUBAGENTS} concurrent background ${label} (env \`HAIKU_MAX_CONCURRENT_SUBAGENTS\`). This wave has ${count} items; at any moment, at most ${MAX_CONCURRENT_SUBAGENTS} are in flight. A slot frees the instant one completes — fire the next pending item into it.`,
-			"",
-			`**Dispatch protocol:**`,
-			"",
-			`1. **Seed the pool.** In one turn, spawn the first ${MAX_CONCURRENT_SUBAGENTS} items as **background** ${label} (the spawn primitive returns immediately; the subagent runs in the background and the system delivers a completion notification when it finishes). Do NOT block on any spawn.`,
-			"",
-			`2. **On each completion notification**, in the same turn:`,
-			`   - Briefly inspect the result (final-hat closure state is already persisted; deep-read not required).`,
-			`   - If items remain in the queue: spawn exactly ONE new background ${label.replace(/s$/, "")} for the next pending item. The pool stays saturated at ${MAX_CONCURRENT_SUBAGENTS}.`,
-			`   - If the queue is empty: acknowledge and wait — remaining slots are draining.`,
-			"",
-			`3. **Multiple simultaneous completions** may arrive in one turn. Fire one replacement per completion; cap stays at ${MAX_CONCURRENT_SUBAGENTS}.`,
-			"",
-			`4. **Wave exhausted:** when the pool reaches 0 AND the queue is empty, this wave is done.`,
-			"",
-			`5. **No foreground (blocking) spawns** during the pool's lifetime. A foreground spawn stalls the notification stream and breaks the pool.`,
-			"",
-			`6. **Clarification / approval-request returns:** if a ${label.replace(/s$/, "")} returns asking for approval to execute its embedded instructions rather than producing a real result, treat the slot as freed and re-queue or abandon the item per judgment — don't block the pool.`,
-			"",
-			`**Order:** process items in the declared order below so re-entries after interruption are deterministic.`,
-		].join("\n")
-	}
-
-	const batches = Math.ceil(count / MAX_CONCURRENT_SUBAGENTS)
-	const last = count - MAX_CONCURRENT_SUBAGENTS * (batches - 1)
-	const sizes =
-		last === MAX_CONCURRENT_SUBAGENTS
-			? `${batches} batches of ${MAX_CONCURRENT_SUBAGENTS}`
-			: `${batches - 1} batch${batches - 1 === 1 ? "" : "es"} of ${MAX_CONCURRENT_SUBAGENTS} + 1 batch of ${last}`
+/** Collect every active provider whose `splices_into:` includes the
+ *  given phase, and return a concatenated reference block (or empty
+ *  string when no provider matches). Each provider materializes once
+ *  to `~/.haiku/projects/<key>/shared/providers/<kind>.md` and the
+ *  prompt carries a short Read pointer for each.
+ *
+ *  Phase names are semantic (elaborate, execute, decompose,
+ *  complete_stage, seal_intent). Match the `splices_into:` values in
+ *  the provider .md frontmatter. */
+export function providerSpliceBlock(phase: string, intentDir: string): string {
+	// Defensive: tests and some non-intent-dir code paths invoke prompt
+	// builders without a real `intentDir`. Provider lookup walks
+	// `<intentDir>/../.haiku/settings.yml` and crashes on undefined.
+	// No intent dir → no project settings to inspect → no provider
+	// splice block; surface as empty string so the render still works.
+	if (!intentDir) return ""
+	const providers = providersForSplicePoint(phase, intentDir)
+	if (providers.length === 0) return ""
+	const refs = providers.map((p) =>
+		providerBlockRef({
+			kind: p.kind,
+			category: p.category,
+			body: p.body,
+		}),
+	)
 	return [
-		`**Concurrency cap:** ${MAX_CONCURRENT_SUBAGENTS} ${label} in flight at a time (env \`HAIKU_MAX_CONCURRENT_SUBAGENTS\`). This wave has ${count} — split into ${sizes}. Your harness has no background-spawn primitive, so this is batch-serial (slower than a true slot pool but equivalent correctness).`,
+		`## Active providers for this phase`,
 		"",
-		`**Batch discipline:**`,
-		`1. Spawn batch 1 (first ${MAX_CONCURRENT_SUBAGENTS}) in a single turn.`,
-		`2. Wait for **every** ${label.replace(/s$/, "")} in that batch to return.`,
-		`3. Spawn batch 2 in the next turn. Repeat until the wave is exhausted.`,
-		`4. Process items in the order listed below so re-entries after interruption are deterministic.`,
+		`The following provider behavior contracts apply to this prompt. Read each one before drafting your response.`,
+		"",
+		refs.join("\n\n"),
 	].join("\n")
+}
+
+/** Read `mode:` from the intent's `intent.md` frontmatter. Returns the
+ *  raw mode string, or empty string when the file or field is missing.
+ *  Used to gate dispatch behavior (foreground vs background, "wait for
+ *  next tick" vs "tick now") in autopilot. */
+export function readIntentMode(intentDir: string): string {
+	const path = `${intentDir.replace(/\/$/, "")}/intent.md`
+	if (!existsSync(path)) return ""
+	try {
+		const { data } = parseFrontmatter(readFileSync(path, "utf8"))
+		const mode = typeof data.mode === "string" ? (data.mode as string) : ""
+		return mode
+	} catch {
+		return ""
+	}
+}
+
+/** Render the parent's dispatch directive for a parallel subagent
+ *  wave. Pre-2026-05-19 this rendered a slot-pool / batch-serial
+ *  protocol that taught the agent how to mete out spawns against
+ *  `MAX_CONCURRENT_SUBAGENTS`. That mechanism moved into the engine:
+ *  each terminal advance emits `next_subagent_dispatch_block`, the
+ *  subagent relays it, the parent spawns it. No agent-side bookkeeping.
+ *  See `.claude/rules/no-agent-mechanics-teaching.md`.
+ *
+ *  The directive now just says "spawn in parallel; follow each
+ *  subagent's return". `count` / `label` / `forceForeground` are kept
+ *  for callsite compatibility but the body is the same across them. */
+export function batchDispatchDirective(
+	_count: number,
+	label = "subagents",
+	_opts: { forceForeground?: boolean } = {},
+): string {
+	return `Spawn each \`<subagent>\` block below in a single message (parallel \`Task\` calls). When a ${label.replace(/s$/, "")} returns, do what its final message tells you — spawn the relayed \`<subagent>\` block it carries, call \`haiku_run_next\`, or just acknowledge.`
 }
 
 /** The five completion signals that all live inside the single conceptual
@@ -459,19 +774,8 @@ export function buildConcurrentElaborateLoopBlock(
 	const concurrent = activities.filter((a) => a.signal !== primary)
 	if (concurrent.length === 0) return ""
 
-	const lines: string[] = [
-		"### Concurrent elaborate-loop activities (you may stack these into this tick)",
-		"",
-		`The elaborate loop is **one conceptual cursor state** with five completion signals (conversation captured, conversation verified, discovery artifacts present, units drafted, decompose coverage verified). The cursor emits the *first* still-unmet signal per tick — your primary task above — but you are NOT restricted to that one activity. If any of the following preconditions are met right now, addressing them in the same response collapses ticks: the next \`haiku_run_next\` re-walks the signals and skips ahead.`,
-		"",
-		"You may make progress on any of these alongside the primary task:",
-		"",
-		...concurrent.map((a) => `- ${a.line}`),
-		"",
-		`Then call \`haiku_run_next { intent: "${slug}" }\` once. The cursor re-evaluates which signal is still unmet and dispatches the next.`,
-		"",
-		'**Filing user-decision FBs.** If discovery (running or already returned) surfaced a fork the user must resolve, file `haiku_feedback { origin: "discovery", resolution: "question", … }` rather than guessing. Open `origin: discovery, resolution: question` FBs keep the elaborate loop\'s question-completion signal unmet, so the next tick routes Track B\'s `feedback_question` action and the cursor stays in this loop until the user answers.',
-	]
-
-	return lines.join("\n")
+	return helperEta.renderString(CONCURRENT_ELABORATE_TPL, {
+		slug,
+		concurrentLines: concurrent.map((a) => a.line),
+	})
 }

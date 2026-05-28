@@ -83,11 +83,20 @@ test("non-final stage advances to next stage", () => {
 	)
 })
 
-test("final stage advances to intent_completion_review", () => {
+test("final stage advances to intent_review (per-role walk)", () => {
+	// 2026-05-18: `intent_completion_review` was removed as an orphan
+	// cursor action (had a prompt builder but no emit clause). The
+	// post-final-stage progression is now the cursor's per-role
+	// `intent_review` walk (engine roles spec / continuity /
+	// cross-stage-consistency + studio intent-review-agents + user gate
+	// non-autopilot), then `seal_intent` → `complete`. The Mermaid
+	// generator renders this as a single `intent_review` aggregate
+	// state; the per-role fan-out happens inside the cursor, not the
+	// diagram.
 	const last = config.defaultStages[config.defaultStages.length - 1]
 	assert.ok(
-		mermaid.includes(`  ${last} --> intent_completion_review`),
-		`${last} → intent_completion_review missing`,
+		mermaid.includes(`  ${last} --> intent_review`),
+		`${last} → intent_review missing`,
 	)
 })
 
@@ -142,25 +151,21 @@ test("phase progression: start_stage → elaborate_loop → execute → review �
 
 console.log("\n=== Mermaid: intent-completion layer ===")
 
-test("intent_completion_review routes to gate or fix", () => {
+// 2026-05-18: `intent_completion_review` and the matching
+// `intent_completion_gate` aggregate states were removed. The cursor
+// drives intent completion through `intent_review` (per-role) →
+// `seal_intent` → `complete`. The "fix" branch of the old aggregate is
+// covered by the standard Track B feedback walk (intent-scope FBs
+// dispatched via `intent_completion_fix`) — orthogonal to the per-role
+// approval walk surfaced in the diagram.
+test("intent_review walk feeds seal_intent → complete", () => {
 	assert.ok(
-		mermaid.includes(
-			"intent_completion_review --> intent_completion_gate : review.clean",
-		),
-		"review.clean → gate missing",
+		mermaid.includes("intent_review --> seal_intent : approvals.signed"),
+		"intent_review → seal_intent (approvals.signed) missing",
 	)
 	assert.ok(
-		mermaid.includes(
-			"intent_completion_review --> intent_completion_fix : review.findings",
-		),
-		"review.findings → fix missing",
-	)
-})
-
-test("intent_completion_gate finalizes to complete", () => {
-	assert.ok(
-		mermaid.includes("intent_completion_gate --> complete : gate.approved"),
-		"gate.approved → complete missing",
+		mermaid.includes("seal_intent --> complete"),
+		"seal_intent → complete missing",
 	)
 })
 

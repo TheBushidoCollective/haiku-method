@@ -10,6 +10,10 @@ import {
 	type DerivedUnitView,
 	deriveStageStatePure,
 } from "@haiku/shared/derived-stage-state"
+import {
+	buildStageMilestones,
+	type ProgressStep,
+} from "@haiku/shared/progress-milestones"
 import type {
 	HaikuArtifact,
 	HaikuFeedback,
@@ -18,6 +22,48 @@ import type {
 } from "./types"
 import { normalizeIntentStatus, parseFrontmatter } from "./types"
 
+/** Engine review roles that fire on every stage, in cursor order. */
+export const ENGINE_REVIEW_ROLES = [
+	"spec",
+	"continuity",
+	"cross-stage-consistency",
+] as const
+/**
+ * Engine approval roles that are LOAD-BEARING for "is this unit/stage past."
+ *
+ * Mirrors the engine's `approvalRolesFor` (packages/shared/src/derived-stage-
+ * state.ts → `["spec", "quality_gates", ...reviewAgents, "user"]`), the SAME
+ * set `findCurrentStage` → `isStageComplete` → `isUnitComplete` walk uses to
+ * decide the cursor's position. Critically it does NOT include `continuity` or
+ * `cross-stage-consistency`: those are engine review roles, auto-managed by the
+ * per-tick dispatch loop, and the engine deliberately excludes them from the
+ * completeness check (requiring them would be circular — and the first stage
+ * legitimately never stamps `cross-stage-consistency`, there being no prior
+ * stage to cross-check). Seeding them here made the inception stage derive as
+ * forever-incomplete browse-side, so the active-stage walk stopped on it
+ * instead of the stage the cursor is really on. `user` is appended by
+ * `seedRoleList` (non-autopilot); studio review-agents enter via the stamped
+ * union, matching `...reviewAgents`.
+ */
+export const ENGINE_APPROVAL_ROLES = ["spec", "quality_gates"] as const
+
+/** Build the full expected review/approval role list for a stage or unit:
+ *  the always-present engine roles, then any studio agents seen stamped
+ *  (the browse doesn't ship the studio manifest, so configured agents are
+ *  only known once they sign), then the human `user` gate unless the mode is
+ *  autopilot. Mirrors the engine's `stageRoleLists` ordering so the browse's
+ *  derivation + sign-off display can't drift from what actually runs. */
+export function seedRoleList(
+	engine: ReadonlyArray<string>,
+	stamped: Iterable<string>,
+	isAutopilot: boolean,
+): string[] {
+	const agents = [...new Set(stamped)].filter(
+		(r) => !engine.includes(r) && r !== "user",
+	)
+	return [...engine, ...agents, ...(isAutopilot ? [] : ["user"])]
+}
+
 /** Map a filename to the artifact-type the SPA renders. */
 export function classifyArtifact(name: string): HaikuArtifact["type"] {
 	const lower = name.toLowerCase()
@@ -25,6 +71,82 @@ export function classifyArtifact(name: string): HaikuArtifact["type"] {
 	if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html"
 	if (/\.(png|jpe?g|gif|svg|webp|avif|bmp|ico)$/.test(lower)) return "image"
 	return "other"
+}
+
+// ── Stage / intent file discovery ──────────────────────────────────────────
+//
+// The browse providers used to surface ONLY `stages/<stage>/artifacts/`,
+// which meant anything the engine writes elsewhere — runtime-verifier
+// screenshots under `proof/`, stray working files — was invisible on the
+// browse site even though it's committed to the repo. The model is inverted
+// here: walk the whole stage/intent dir, route the KNOWN structured paths to
+// their typed parsers (units, feedback, briefs, …), drop a small set of engine
+// BOOKKEEPING files, and surface EVERYTHING ELSE as a generic asset rendered
+// by extension. A new artifact dir the engine invents later shows up with no
+// provider change.
+
+/** Top-level entries under `stages/<stage>/` that have dedicated typed
+ *  parsers (surfaced as units, feedback, stage status, brief, observations).
+ *  Excluded from the generic artifact sweep so they aren't double-surfaced. */
+export const STAGE_STRUCTURED_ENTRIES: ReadonlySet<string> = new Set([
+	"units",
+	"feedback",
+	"state.json",
+	"elaboration.md",
+	"BRIEF.md",
+	"observations.md",
+])
+
+/** Top-level entries under `intents/<slug>/` with dedicated parsers. Excluded
+ *  from the intent-level generic asset sweep. `stages` is walked separately;
+ *  `knowledge`/`operations`/`feedback` have their own surfaces. */
+export const INTENT_STRUCTURED_ENTRIES: ReadonlySet<string> = new Set([
+	"stages",
+	"knowledge",
+	"operations",
+	"feedback",
+	"intent.md",
+	"reflection.md",
+])
+
+/** Engine bookkeeping — machine state, never shown to a human browsing. Dot-
+ *  files (`.gitignore`, fs-manifests), decision/append logs (`*.jsonl`),
+ *  coverage acks. Matched on the path's basename so it applies at any depth. */
+export function isBookkeepingArtifact(relPath: string): boolean {
+	const base = relPath.split("/").pop() ?? relPath
+	if (base.startsWith(".")) return true
+	if (base.endsWith(".jsonl")) return true
+	if (base === "coverage-decisions.json") return true
+	if (base.endsWith(".manifest") || base.includes("fs-manifest")) return true
+	return false
+}
+
+/** Should a file at `relPath` (relative to `stages/<stage>/`) be surfaced as a
+ *  generic stage artifact? True for everything that isn't a structured entry
+ *  or bookkeeping — `artifacts/**`, `proof/**`, and any stray working file. */
+export function isCollectibleStageFile(relPath: string): boolean {
+	const top = relPath.split("/")[0]
+	if (STAGE_STRUCTURED_ENTRIES.has(top)) return false
+	if (isBookkeepingArtifact(relPath)) return false
+	return true
+}
+
+/** Should a file at `relPath` (relative to `intents/<slug>/`) be surfaced as a
+ *  generic intent-level asset? Excludes the structured top-level entries and
+ *  bookkeeping; collects intent-level `proof/**`, mockups, and strays. */
+export function isCollectibleIntentAsset(relPath: string): boolean {
+	const top = relPath.split("/")[0]
+	if (INTENT_STRUCTURED_ENTRIES.has(top)) return false
+	if (isBookkeepingArtifact(relPath)) return false
+	return true
+}
+
+/** Extensions whose content the browse viewers need as a URL, not raw text
+ *  (images plus the engineering/3D/PDF binaries the specialized viewers take).
+ *  Text artifacts (md/html/txt/json) are delivered inline as `content`. */
+export function artifactNeedsUrl(name: string): boolean {
+	if (classifyArtifact(name) === "image") return true
+	return /\.(glb|gltf|pdf|kicad_sch|kicad_pcb|kicad_pro|gbr|drl)$/i.test(name)
 }
 
 /** Parsed `state.json` slice the providers attach to each stage. */
@@ -109,7 +231,7 @@ export interface IntentRefMeta {
  * `phase` directly, v4 derives the same logical values from
  * `sealed_at` and (eventually) per-unit iterations[].
  */
-function isV4Intent(data: Record<string, unknown>): boolean {
+export function isV4Intent(data: Record<string, unknown>): boolean {
 	const ver = data.plugin_version
 	if (typeof ver !== "string") return false
 	const major = Number.parseInt(ver.split(".")[0] ?? "", 10)
@@ -220,6 +342,39 @@ export function deriveV4ActiveStage(
 }
 
 /**
+ * Enforce the sequential-pipeline invariant on a derived stage-status map:
+ * completing a LATER stage proves every EARLIER stage finished. Returns a new
+ * map with completion propagated backward — `complete*` then at most one
+ * `active`, then `pending*`.
+ *
+ * Why this is needed: each stage's status is derived independently from its own
+ * units (`deriveStageStateFromUnits`). An advanced stage whose unit frontmatter
+ * lacks the full review/approval stamp set the browse heuristic expects reads
+ * as "active" even though the engine moved past it — so the pipeline can show
+ * an earlier stage active while a later one is complete (worker-new-badge:
+ * Operations "active" while Security, after it, "complete"). A sequential
+ * pipeline can't be in that state, so the later completion is the stronger
+ * signal: back-fill the earlier stages to complete. `deriveV4ActiveStage` on
+ * the normalized map then lands on the correct (later) active stage.
+ */
+export function normalizeStageProgression(
+	ordered: ReadonlyArray<string>,
+	statusByName: Record<string, "pending" | "active" | "complete">,
+): Record<string, "pending" | "active" | "complete"> {
+	const out: Record<string, "pending" | "active" | "complete"> = {
+		...statusByName,
+	}
+	let lastComplete = -1
+	for (let i = 0; i < ordered.length; i++) {
+		if (out[ordered[i]] === "complete") lastComplete = i
+	}
+	for (let i = 0; i < lastComplete; i++) {
+		out[ordered[i]] = "complete"
+	}
+	return out
+}
+
+/**
  * Derive a stage's "v3-style" status from its unit list. Delegates to
  * `deriveStageStatePure` — the same function the MCP engine calls so
  * the cursor walk and the browse UI cannot drift on what "completed"
@@ -286,15 +441,22 @@ export function parseFeedback(
 	// Resolution drives the cursor's routing. Surfaced here so the SPA
 	// can label each FB with how the engine will act on it next tick.
 	const resolutionRaw = data.resolution
-	const resolution:
-		| "question"
-		| "inline_fix"
-		| "stage_revisit"
-		| null =
+	const resolution: "question" | "inline_fix" | "stage_revisit" | null =
 		resolutionRaw === "question" ||
 		resolutionRaw === "inline_fix" ||
 		resolutionRaw === "stage_revisit"
 			? resolutionRaw
+			: null
+	// Severity drives the fix-loop dispatch order and the browse badge/filter.
+	// Review agents stamp it at create; user/SPA findings land null until the
+	// classifier backfills (write-once). Only the four known values surface.
+	const severityRaw = data.severity
+	const severity: "blocker" | "high" | "medium" | "low" | null =
+		severityRaw === "blocker" ||
+		severityRaw === "high" ||
+		severityRaw === "medium" ||
+		severityRaw === "low"
+			? severityRaw
 			: null
 	// stage scope unused here but kept in the signature so providers can
 	// disambiguate intent vs stage scope when constructing the path —
@@ -306,6 +468,7 @@ export function parseFeedback(
 		origin: typeof data.origin === "string" ? data.origin : null,
 		author: typeof data.author === "string" ? data.author : null,
 		authorType,
+		severity,
 		body: content,
 		unit: typeof targets.unit === "string" ? targets.unit : null,
 		invalidates: Array.isArray(targets.invalidates)
@@ -402,30 +565,114 @@ export function deriveStageStateFromUnits(
 		stage?: string
 		intentMode?: string
 		elaborationVerified?: boolean | null
+		/** Whether the intent is v4+ (has the per-unit review/approval model).
+		 *  v3 intents predate it — don't seed engine roles or fabricate a
+		 *  granular milestone track for them; fall back to the union + the
+		 *  coarse phase strip. Defaults true so v4 callers/tests are unchanged. */
+		schemaIsV4?: boolean
 	} = {},
 ): {
 	status: "pending" | "active" | "complete"
 	phase: "elaborate" | "execute" | "review" | "approve" | "complete" | ""
+	/** Granular per-stage milestone track (elaborate → each review role →
+	 *  execute → each approval role), built from the same role union +
+	 *  per-unit stamps the coarse phase is derived from. Same shape the
+	 *  status line + SPA render; the browse PhaseStepper consumes it for a
+	 *  fine-grained strip and falls back to the coarse phases when empty. */
+	milestones: ProgressStep[]
 } {
 	const unitViews: DerivedUnitView[] = units.map((u, i) => ({
 		name: `u${i}`,
 		fm: u.raw,
 	}))
+	const mode = options.intentMode ?? "continuous"
+	// Approval / review role sets — derive from what the engine has
+	// actually stamped on units. Each studio mounts a different set of
+	// review-agents per stage (design has accessibility / consistency /
+	// inception-coverage; development has runtime-verifier / code-
+	// reviewer; etc.), and autopilot vs continuous changes whether
+	// `user` is required. We don't ship the studio manifest to the
+	// browse-side, so the safe move is: union every `reviews.*` and
+	// `approvals.*` key seen across the stage's units, then check that
+	// every unit has stamped every key. If even one unit added a role
+	// the others haven't signed, the stage is still "awaiting" that
+	// role — same answer the engine would give.
+	// The engine roles (spec, continuity, cross-stage-consistency, plus
+	// quality_gates on the approval side) fire on EVERY stage, so we seed
+	// them up front rather than waiting to see them stamped. That's what
+	// fixes both the "in-progress stage shows only a few phases" truncation
+	// AND the pre-approval blind spot (a stage that's advanced but unsigned
+	// reads as awaiting approval, not complete, because the seeded roles are
+	// unmet). Studio review-agents aren't shipped browse-side, so they're
+	// still unioned from what's stamped on disk; they appear as they sign.
+	// The human `user` gate is required in every non-autopilot mode, so we
+	// seed it last (after the agents); autopilot drops it.
+	const stampedReview = new Set<string>()
+	const stampedApproval = new Set<string>()
+	for (const u of units) {
+		const r = (u.raw.reviews as Record<string, unknown> | undefined) ?? {}
+		for (const k of Object.keys(r)) stampedReview.add(k)
+		const a = (u.raw.approvals as Record<string, unknown> | undefined) ?? {}
+		for (const k of Object.keys(a)) stampedApproval.add(k)
+	}
+	const isAutopilot = mode === "autopilot"
+	// v3 intents have no review/approval model — don't seed engine roles
+	// (that would fabricate a track of never-signed gates); use only what's
+	// actually stamped, matching the pre-seeding union behavior.
+	const schemaIsV4 = options.schemaIsV4 ?? true
+	const reviewRoles = schemaIsV4
+		? seedRoleList(ENGINE_REVIEW_ROLES, stampedReview, isAutopilot)
+		: [...stampedReview]
+	const approvalRoles = schemaIsV4
+		? seedRoleList(ENGINE_APPROVAL_ROLES, stampedApproval, isAutopilot)
+		: [...stampedApproval]
 	const derived = deriveStageStatePure({
 		stage: options.stage ?? "",
 		units: unitViews,
-		intentMode: options.intentMode ?? "continuous",
-		approvalRoles: ["user"],
+		intentMode: mode,
+		reviewRoles,
+		approvalRoles,
 		elaborationVerified: options.elaborationVerified ?? null,
 	})
 	const status: "pending" | "active" | "complete" =
 		derived.status === "completed" ? "complete" : derived.status
+
+	// Per-unit signals we need both for the blind-spot correction below and
+	// for the milestone track. `everyUnitStamped` mirrors the union rule the
+	// role lists came from; `allUnitsAdvanced` mirrors deriveStatus's
+	// terminal-advance check under the browse's hats=[] ("any advance is
+	// terminal") semantics; `anyApprovalStamped` tells genuinely-complete
+	// stages (the engine always writes approval stamps) apart from the
+	// pre-approval window.
+	const everyUnitStamped = (bucket: "reviews" | "approvals", role: string) =>
+		units.length > 0 &&
+		units.every((u) => {
+			const slot = u.raw[bucket]
+			return (
+				slot !== null &&
+				typeof slot === "object" &&
+				!Array.isArray(slot) &&
+				Boolean((slot as Record<string, unknown>)[role])
+			)
+		})
+	const allUnitsAdvanced =
+		units.length > 0 &&
+		units.every((u) => {
+			const its = u.raw.iterations
+			if (!Array.isArray(its) || its.length === 0) return false
+			const last = its[its.length - 1] as { result?: unknown }
+			return last?.result === "advance"
+		})
+
 	// Map the derivation's per-stage phase to the canonical 5-phase
 	// model the engine emits (ARCHITECTURE.md §2.1). The pure function
 	// still returns the legacy "gate" name for the post-review,
 	// pre-merge slot; rename it to "approve" so the website matches the
 	// SPA's canonical pill set. A `null` phase from `deriveStageStatePure`
-	// means the stage is past every approval — that's `complete`.
+	// means the stage is past every approval — that's `complete`. With the
+	// engine roles seeded above, a stage that's advanced but unsigned no
+	// longer collapses to "complete" — the unmet seeded approval roles keep
+	// it at "gate", so the old pre-approval blind-spot correction is gone.
 	let phase: "elaborate" | "execute" | "review" | "approve" | "complete" | "" =
 		""
 	if (status === "complete") {
@@ -435,7 +682,30 @@ export function deriveStageStateFromUnits(
 	} else if (derived.phase) {
 		phase = derived.phase
 	}
-	return { status, phase }
+
+	// Granular milestone track, built from the same seeded role lists the
+	// status derivation used — so the pips match the phase, and an
+	// in-progress stage shows its full track (every engine role present,
+	// pending until signed) instead of only the roles stamped so far. v3
+	// intents have no review model — return an empty track so the
+	// PhaseStepper falls back to the coarse phase strip rather than
+	// fabricating never-signed gates.
+	const milestones = schemaIsV4
+		? buildStageMilestones({
+				elaborateDone: derived.phase !== "elaborate",
+				reviewRoles: reviewRoles.map((role) => ({
+					role,
+					stamped: everyUnitStamped("reviews", role),
+				})),
+				executeDone: allUnitsAdvanced,
+				approvalRoles: approvalRoles.map((role) => ({
+					role,
+					stamped: everyUnitStamped("approvals", role),
+				})),
+			})
+		: []
+
+	return { status, phase, milestones }
 }
 
 /** Back-compat wrapper for the historical signature — returns just the

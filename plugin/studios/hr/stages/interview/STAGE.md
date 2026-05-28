@@ -14,26 +14,22 @@ inputs:
 
 # Interview
 
-Convert the screening shortlist into a calibrated, evidence-based hire / no-hire recommendation. Interview is the most expensive stage in the lifecycle — real interviewer time per candidate, real candidate time, real opportunity cost on both sides. The structure exists to make that time produce signal, not impressions.
+Convert the screening shortlist into a calibrated, evidence-based hire / no-hire recommendation. This is the most expensive stage in the lifecycle — real interviewer time, real candidate time, real opportunity cost on both sides — and the structure exists to make that time produce signal instead of impressions.
 
-## Per-unit baton
+## Scope
 
-Each unit (a single candidate's interview record) walks the three hats in `plan → do → verify` order:
+Structured evaluation of shortlisted candidates: question planning against competency dimensions, the interviews themselves, and panel synthesis into a recommendation. Interview decides *whether to recommend hiring each candidate, with evidence* — not who reaches the panel (screening) or what the package is (offer).
 
-- **`interviewer`** (plan + do) prepares a structured question set against the competency dimensions, conducts the interview, captures candidate responses with specific examples, and produces an independent assessment
-- **`evaluator`** (do — synthesize) aggregates interviewer scores across the panel, facilitates the debrief, resolves disagreements through evidence review, and produces the hire / no-hire recommendation with rationale
-- **`verifier`** (verify) validates the unit's interview record for substance, evidence completeness, and decision-register consistency — advances or rejects
+## What to do
 
-The interviewer is paired plan-and-do because a single interview run is inseparable: the question plan and the conducted interview produce one artifact. The evaluator runs after every interviewer in the panel has produced an independent assessment; cross-interviewer synthesis is a distinct activity, not part of conducting an individual interview.
+- Plan structured questions against the role's competency dimensions before each interview.
+- Capture candidate responses with specific examples, not adjectives, so the assessment rests on evidence.
+- Have each panelist score independently, then synthesize through a debrief that resolves disagreement on the evidence.
+- Land a clear hire / no-hire recommendation with a rationale tied back to the competencies.
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+## What NOT to do
 
-## Inputs and outputs
-
-Upstream inputs are `requisition/job-spec` (success outcomes, must-have competencies, seniority calibration) and `screening/screening-report` (the ranked shortlist with suggested interview focus areas per candidate). The single output is `INTERVIEW-SCORECARD.md` at intent scope — every interviewed candidate's panel-aggregated scorecard with evidence, debrief synthesis, and hire / no-hire recommendation.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, interviewer, feedback-assessor]` dispatches per finding. The classifier routes; the interviewer re-authors the affected scorecard sections with corrected evidence framing; the assessor decides closure. The gate is `ask` — a human approver signs off because hire / no-hire recommendations are consequential and not safely auto-advanced.
-
-Sensitive topic note: interview decisions are a hot surface for protected-class fairness, ADA accommodations, jurisdictional interview-conduct rules, and reference-check requirements. The fairness review agent looks for bias patterns; where findings touch employment law or accommodation rules, defer to human review and, where applicable, jurisdictional employment counsel — the plugin does not dispense legal interpretations.
+- Don't re-screen or re-source — the shortlist is the input; a problem with it is a revisit upstream.
+- Don't build the compensation package or extend an offer — that's the offer stage.
+- Don't let one interviewer's impression stand in for panel-aggregated evidence.
+- Don't navigate protected-class fairness, ADA accommodations, jurisdictional conduct rules, or reference-check requirements alone; where findings touch these, defer to human review and, where applicable, jurisdictional employment counsel — the plugin does not dispense legal interpretations.

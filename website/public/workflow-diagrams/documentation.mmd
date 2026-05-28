@@ -8,13 +8,9 @@ stateDiagram-v2
   outline --> draft
   draft --> review
   review --> publish
-  publish --> intent_completion_review
-  intent_completion_review --> intent_completion_gate : review.clean
-  intent_completion_review --> intent_completion_fix : review.findings
-  intent_completion_fix --> intent_completion_gate : feedback.closed
-  intent_completion_fix --> intent_completion_fix : feedback.open
-  intent_completion_gate --> complete : gate.approved
-  intent_completion_gate --> publish : gate.changes_requested
+  publish --> intent_review
+  intent_review --> seal_intent : approvals.signed
+  seal_intent --> complete
 
   state audit {
     [*] --> audit_start_stage
@@ -81,8 +77,10 @@ stateDiagram-v2
     state outline_execute {
       [*] --> outline_execute_architect
       outline_execute_architect --> outline_execute_outline_reviewer : hat.advance
-      outline_execute_outline_reviewer --> outline_execute_done : hat.advance
+      outline_execute_outline_reviewer --> outline_execute_verifier : hat.advance
       outline_execute_outline_reviewer --> outline_execute_architect : hat.reject
+      outline_execute_verifier --> outline_execute_done : hat.advance
+      outline_execute_verifier --> outline_execute_outline_reviewer : hat.reject
       outline_execute_done --> [*]
     }
     outline_execute --> outline_review
@@ -134,8 +132,10 @@ stateDiagram-v2
     state draft_execute {
       [*] --> draft_execute_writer
       draft_execute_writer --> draft_execute_technical_reviewer : hat.advance
-      draft_execute_technical_reviewer --> draft_execute_done : hat.advance
+      draft_execute_technical_reviewer --> draft_execute_verifier : hat.advance
       draft_execute_technical_reviewer --> draft_execute_writer : hat.reject
+      draft_execute_verifier --> draft_execute_done : hat.advance
+      draft_execute_verifier --> draft_execute_technical_reviewer : hat.reject
       draft_execute_done --> [*]
     }
     draft_execute --> draft_review
@@ -240,8 +240,10 @@ stateDiagram-v2
     publish_elaborate_loop --> publish_review_fix : verifier.fail
     publish_elaborate_loop --> publish_review_fix : feedback.pending
     state publish_execute {
-      [*] --> publish_execute_publisher
+      [*] --> publish_execute_format_planner
+      publish_execute_format_planner --> publish_execute_publisher : hat.advance
       publish_execute_publisher --> publish_execute_verifier : hat.advance
+      publish_execute_publisher --> publish_execute_format_planner : hat.reject
       publish_execute_verifier --> publish_execute_done : hat.advance
       publish_execute_verifier --> publish_execute_publisher : hat.reject
       publish_execute_done --> [*]

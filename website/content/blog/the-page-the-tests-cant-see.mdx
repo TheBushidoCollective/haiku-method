@@ -1,0 +1,135 @@
+---
+title: "The Page the Tests Can't See"
+description: "Your CI is green, every unit test passes, every reviewer signed off — and the page is still broken. H·AI·K·U's runtime verifiers open a real browser and look."
+date: 2026-05-19T22:00:00Z
+author: Jason Waldrip
+category: Verification
+tags:
+  - verification
+  - runtime
+  - playwright
+  - harness
+  - workflow-engine
+---
+
+You ship a feature. CI goes green. Unit tests, typecheck, lint — all clean. Two reviewers spend forty minutes arguing about an endpoint, find nine issues, you fix them. The release sign-off lands. You merge the PR and load the page.
+
+The button isn't there. Or it is there, but invisible behind a modal. Click it and the page 404s, because the route was never wired up. Or three pieces of the UI render fine in their own little test harnesses and don't render at all on the page a user actually loads, because nothing on the page is mounting them.
+
+Every check the workflow ran audited what the code *said*. None audited what the user *saw*.
+
+<Callout tone="warn" title="The pattern we lived through">
+We ran a six-stage intent earlier this month. The PR opened. Every check went green. Three pieces of the review UI shipped with passing tests. Nothing on the page rendered them. The bug wasn't in the code; it was in the gap between code-on-disk and pixels-on-screen. We wrote about it in [The Continuity Contract](/blog/the-continuity-contract).
+</Callout>
+
+## Every check reads the same surface
+
+H·AI·K·U runs a lot of checks on its way to merge. They all read one surface — text.
+
+<Grid>
+  <Card title="The typechecker" accent="info">
+    Reads the source. Asks: do the types line up?
+  </Card>
+  <Card title="The unit test" accent="info">
+    Reads the source, runs it in isolation, asserts the answer.
+  </Card>
+  <Card title="The linter" accent="info">
+    Reads the source. Reports the smells.
+  </Card>
+  <Card title="The reviewer" accent="info">
+    Reads the source and the spec, then argues whether the two hold together.
+  </Card>
+</Grid>
+
+Open a file, parse it, judge it. Every check works that way.
+
+The integrated app — the thing the user actually loads — sits downstream of all of them. It's where the routes, the components, the styling, the network calls, and the development server collide for the first time. The collision is where the missed bugs live, because no check has ever watched the collision happen.
+
+<Callout tone="info" title="The reframe">
+Visible verification is the check that watches the collision happen. Not by reading a file. By opening the page.
+</Callout>
+
+## What the agent sees
+
+The engine ships a command that does one thing: open the running app where a review agent can drive it.
+
+The agent inspects the project and tells the engine how to bring the app up. For a one-process app, that's one command. For a full stack, it's the same idea expanded:
+
+<TickSequence>
+  <TickCard label="Step 1" title="Agent declares the stack">
+    The agent reads the project — single service, monorepo, polyglot, whatever it is — and names the processes (api, frontend, database, worker) and the order they depend on each other.
+  </TickCard>
+  <TickCard label="Step 2" title="Engine brings it up">
+    Each process gets an ephemeral port. The engine starts them in dependency order, waits for each to be ready, and wires the ports together so dependents can find their dependencies.
+  </TickCard>
+  <TickCard label="Step 3" title="Agent gets a URL">
+    The engine hands back a localhost URL pointing at the part of the system a person would see. The session stays up for thirty minutes; closing it shuts the whole stack back down.
+  </TickCard>
+  <TickCard label="Step 4" title="Browser drives the page">
+    A real browser navigates, clicks, types, takes screenshots, reads what the console shouts about. No file pretending to be a page. The live app.
+  </TickCard>
+</TickSequence>
+
+Then the agent looks for the thing the spec said should be there.
+
+## Looking is not testing
+
+A review agent driving a browser asks a different question from a unit test.
+
+<Compare verdict="diverge" title="What each one actually asks">
+  <Side label="The unit test">
+    When I construct these inputs and call this function, does the output match what I set up?
+  </Side>
+  <Side label="The browser-driving agent">
+    When I navigate to the URL the spec describes and click the thing it says the user clicks, does the page do what the spec said it would?
+  </Side>
+</Compare>
+
+The second question fails where the first one can't reach.
+
+<Grid>
+  <Card title="The unwired button" accent="warn">
+    The submit button is attached to the wrong handler. The unit test passes — the handler under test does the right thing on its own. It's just not the handler the form ended up attached to.
+  </Card>
+  <Card title="The orphan component" accent="warn">
+    A piece of the UI renders fine in its own little preview but never gets mounted by anything on the real page. Typecheck green. Test green. Page empty.
+  </Card>
+  <Card title="The swallowed route" accent="warn">
+    A route exists in the source and 404s in the running app, because the web framework quietly swallowed it. Nobody flagged it.
+  </Card>
+  <Card title="The CSS crash" accent="warn">
+    A class collision in the stylesheet hides the button behind a modal. Both elements exist. Neither test ever asked which one was on top.
+  </Card>
+</Grid>
+
+None of these surface until something actually loads the page in a browser. Runtime verifiers are mandated to find that class of bug, and they fire at three points in an intent.
+
+<KeyPoints title="When verifiers fire">
+1. **When the design lands.** A verifier opens every design file, screenshots it at each declared screen size, and checks that the spacing and colors match what the design system said.
+2. **When the build runs.** Another verifier boots the app, walks every user-facing scenario in the spec, and watches for errors the unit tests can't see.
+3. **When the intent closes.** A third walks the whole journey end-to-end — the seam where every stage shipped clean in isolation and nothing connects.
+</KeyPoints>
+
+## Coverage by screenshot, not by promise
+
+The mandate isn't "look at it." It's "look at it and save what you saw."
+
+Every runtime verifier saves screenshots to a folder next to the work that produced them. Each scenario gets four at minimum — page loaded, after setup, after the action, after the assertion. Each design gets one per screen size. The folder outlives the verifier that produced it, so a human reviewing the merged work later can scroll through the screenshots and walk the journey without re-running anything.
+
+<Callout tone="good" title="The new bar">
+A finding without a screenshot attached gets bounced. The screenshot is what the finding stands on.
+</Callout>
+
+This is what closes the loop. The earlier H·AI·K·U checks already insisted that evidence live on disk rather than in the agent's head — see [The Scavenger Hunt](/blog/the-scavenger-hunt) for why the engine refuses to trust anything an agent claims in passing. Visible verification extends the same discipline one layer further. The proof isn't a sign-off saying "I did it." The proof is the picture of the page, sitting next to the work that claimed delivery.
+
+## Why this lives in the engine, not in a hat
+
+The recent [Anthropic harness post](https://www.anthropic.com/engineering/harness-design-long-running-apps) is mostly about what the harness should and shouldn't decide on the agent's behalf. We argued in [The Harness Series](/blog/the-harness-series) that the engine should hand the agent one instruction at a time and keep state on disk.
+
+Visible verification follows from that. When the next instruction is "go look at the page," the engine has to actually give the agent eyes — not a file path, not a screenshot the build produced, but a live URL pointed at a process the engine just spawned, and a browser the agent drives itself.
+
+The mandates we ship are terse — most are a short list of what to assert and where to put the screenshot. The lever isn't in the mandate. It's that the mandate gets handed to a fresh agent that has both the URL and a browser, fired at the moment in the workflow where the app can actually boot. The shape of the workflow makes the verification possible. The mandate just says to do it.
+
+You can write a passing test for an invisible button. You can ship a piece of the UI that nothing on the page renders. You can pass every check and still ship a page that doesn't work — we did, and the PR was the receipt.
+
+You can't screenshot a button that isn't there.

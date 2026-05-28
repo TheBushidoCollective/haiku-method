@@ -66,6 +66,32 @@ export const validateHaikuUnitSetInputSchema = stateAjv.compile(
 	HAIKU_UNIT_SET_INPUT_SCHEMA,
 )
 
+// ── haiku_unit_get ────────────────────────────────────────────────
+// Read ONE agent-authorable/corrective frontmatter field. The
+// counterpart to haiku_unit_set's corrective exemption: you can write
+// `quality_gates`/`outputs` on an active unit to repair a wrong gate
+// path, but `haiku_unit_set` replaces the WHOLE array — so without a read
+// you'd clobber the unit's other gates. This tool returns the current
+// value so the agent can read → modify one entry → write back safely
+// (2026-05-20 cross-stage-consistency churn report, fix #1). Scoped: the
+// handler refuses FSM-driven fields (iterations/reviews/approvals/
+// started_at) — engine bookkeeping stays hidden per §1.1.
+export const HAIKU_UNIT_GET_INPUT_SCHEMA = Type.Object(
+	{
+		...intentStageUnit,
+		field: Type.String({
+			minLength: 1,
+			description:
+				"Frontmatter field to read. Agent-authorable/corrective fields only (quality_gates, outputs, inputs, depends_on, model, closes, title, description). FSM-driven fields (iterations, reviews, approvals, started_at) return `unit_field_engine_only`.",
+		}),
+	},
+	{ additionalProperties: false },
+)
+export type HaikuUnitGetInput = Static<typeof HAIKU_UNIT_GET_INPUT_SCHEMA>
+export const validateHaikuUnitGetInputSchema = stateAjv.compile(
+	HAIKU_UNIT_GET_INPUT_SCHEMA,
+)
+
 // ── haiku_unit_list ───────────────────────────────────────────────
 
 export const HAIKU_UNIT_LIST_INPUT_SCHEMA = Type.Object(
@@ -119,6 +145,11 @@ export const HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA = Type.Object(
 		intent: Type.String({ minLength: 1 }),
 		unit: Type.String({ minLength: 1 }),
 		stage: optionalStage,
+		message: Type.String({
+			minLength: 1,
+			description:
+				"REQUIRED handoff message — the baton you pass to the next hat. State what you did, what you concluded, and what the next hat needs to know to pick up cleanly (decisions made, open questions, where you left off). Recorded on this iteration and embedded in the next hat's dispatch. Not a status line — write it for the hat that reads it next.",
+		}),
 		state_file: stateFile,
 	},
 	{ additionalProperties: false },
@@ -137,12 +168,11 @@ export const HAIKU_UNIT_REJECT_HAT_INPUT_SCHEMA = Type.Object(
 		intent: Type.String({ minLength: 1 }),
 		unit: Type.String({ minLength: 1 }),
 		stage: optionalStage,
-		reason: Type.Optional(
-			Type.String({
-				description:
-					"Short explanation of why the current hat's output was rejected (e.g. 'touch targets <44px on mobile', 'missing dark-mode tokens'). Recorded in the unit's iterations history.",
-			}),
-		),
+		message: Type.String({
+			minLength: 1,
+			description:
+				"REQUIRED handoff message — the baton back to the hat that gets re-run. Explain why the current hat's output was rejected AND what must change to pass (e.g. 'touch targets <44px on mobile — bump to 44px min and re-check the nav row'). Recorded on this iteration and embedded in the re-dispatched hat's instruction.",
+		}),
 		state_file: stateFile,
 	},
 	{ additionalProperties: false },
@@ -228,4 +258,25 @@ export const HAIKU_UNIT_WRITE_INPUT_SCHEMA = Type.Object(
 export type HaikuUnitWriteInput = Static<typeof HAIKU_UNIT_WRITE_INPUT_SCHEMA>
 export const validateHaikuUnitWriteInputSchema = stateAjv.compile(
 	HAIKU_UNIT_WRITE_INPUT_SCHEMA,
+)
+
+// ── haiku_unit_reset ──────────────────────────────────────────────
+
+export const HAIKU_UNIT_RESET_INPUT_SCHEMA = Type.Object(
+	{
+		intent: Type.String({ minLength: 1, description: "Intent slug" }),
+		stage: Type.String({
+			minLength: 1,
+			description: "Stage the unit lives in",
+		}),
+		unit: Type.String({
+			minLength: 1,
+			description: "Unit to reset (e.g. 'unit-06-pii-masking-granularity')",
+		}),
+	},
+	{ additionalProperties: false },
+)
+export type HaikuUnitResetInput = Static<typeof HAIKU_UNIT_RESET_INPUT_SCHEMA>
+export const validateHaikuUnitResetInputSchema = stateAjv.compile(
+	HAIKU_UNIT_RESET_INPUT_SCHEMA,
 )

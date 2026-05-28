@@ -25,10 +25,16 @@
 import { resolve } from "node:path"
 import { stampAgentWriteForPath } from "../orchestrator/workflow/stamp-agent-write.js"
 import { defineHook } from "./define.js"
+import { findActiveIntent } from "./utils.js"
 
 async function stampAgentWriteHook(
 	input: Record<string, unknown>,
 ): Promise<void> {
+	// Intent-scope gate: attribution requires an active intent. Outside
+	// one, there is no drift surface to stamp against and `stampAgentWriteForPath`
+	// would walk every parent dir looking for one only to no-op.
+	if (!findActiveIntent()) return
+
 	const toolName = (input.tool_name as string) || ""
 	if (toolName !== "Write" && toolName !== "Edit" && toolName !== "MultiEdit") {
 		return

@@ -8,13 +8,9 @@ stateDiagram-v2
   enumeration --> exploitation
   exploitation --> post_exploitation
   post_exploitation --> reporting
-  reporting --> intent_completion_review
-  intent_completion_review --> intent_completion_gate : review.clean
-  intent_completion_review --> intent_completion_fix : review.findings
-  intent_completion_fix --> intent_completion_gate : feedback.closed
-  intent_completion_fix --> intent_completion_fix : feedback.open
-  intent_completion_gate --> complete : gate.approved
-  intent_completion_gate --> reporting : gate.changes_requested
+  reporting --> intent_review
+  intent_review --> seal_intent : approvals.signed
+  seal_intent --> complete
 
   state reconnaissance {
     [*] --> reconnaissance_start_stage
@@ -40,7 +36,8 @@ stateDiagram-v2
       state reconnaissance_review_fix_bolt_1 {
         [*] --> reconnaissance_review_fix_bolt_1_classifier
         reconnaissance_review_fix_bolt_1_classifier --> reconnaissance_review_fix_bolt_1_osint_analyst : fix.advance
-        reconnaissance_review_fix_bolt_1_osint_analyst --> reconnaissance_review_fix_bolt_1_feedback_assessor : fix.advance
+        reconnaissance_review_fix_bolt_1_osint_analyst --> reconnaissance_review_fix_bolt_1_network_mapper : fix.advance
+        reconnaissance_review_fix_bolt_1_network_mapper --> reconnaissance_review_fix_bolt_1_feedback_assessor : fix.advance
         reconnaissance_review_fix_bolt_1_feedback_assessor --> reconnaissance_review_fix_bolt_1_validated : fix.advance
         reconnaissance_review_fix_bolt_1_validated --> [*]
       }
@@ -49,7 +46,8 @@ stateDiagram-v2
       state reconnaissance_review_fix_bolt_2 {
         [*] --> reconnaissance_review_fix_bolt_2_classifier
         reconnaissance_review_fix_bolt_2_classifier --> reconnaissance_review_fix_bolt_2_osint_analyst : fix.advance
-        reconnaissance_review_fix_bolt_2_osint_analyst --> reconnaissance_review_fix_bolt_2_feedback_assessor : fix.advance
+        reconnaissance_review_fix_bolt_2_osint_analyst --> reconnaissance_review_fix_bolt_2_network_mapper : fix.advance
+        reconnaissance_review_fix_bolt_2_network_mapper --> reconnaissance_review_fix_bolt_2_feedback_assessor : fix.advance
         reconnaissance_review_fix_bolt_2_feedback_assessor --> reconnaissance_review_fix_bolt_2_validated : fix.advance
         reconnaissance_review_fix_bolt_2_validated --> [*]
       }
@@ -58,7 +56,8 @@ stateDiagram-v2
       state reconnaissance_review_fix_bolt_3 {
         [*] --> reconnaissance_review_fix_bolt_3_classifier
         reconnaissance_review_fix_bolt_3_classifier --> reconnaissance_review_fix_bolt_3_osint_analyst : fix.advance
-        reconnaissance_review_fix_bolt_3_osint_analyst --> reconnaissance_review_fix_bolt_3_feedback_assessor : fix.advance
+        reconnaissance_review_fix_bolt_3_osint_analyst --> reconnaissance_review_fix_bolt_3_network_mapper : fix.advance
+        reconnaissance_review_fix_bolt_3_network_mapper --> reconnaissance_review_fix_bolt_3_feedback_assessor : fix.advance
         reconnaissance_review_fix_bolt_3_feedback_assessor --> reconnaissance_review_fix_bolt_3_validated : fix.advance
         reconnaissance_review_fix_bolt_3_validated --> [*]
       }
@@ -95,7 +94,8 @@ stateDiagram-v2
       state enumeration_review_fix_bolt_1 {
         [*] --> enumeration_review_fix_bolt_1_classifier
         enumeration_review_fix_bolt_1_classifier --> enumeration_review_fix_bolt_1_enumerator : fix.advance
-        enumeration_review_fix_bolt_1_enumerator --> enumeration_review_fix_bolt_1_feedback_assessor : fix.advance
+        enumeration_review_fix_bolt_1_enumerator --> enumeration_review_fix_bolt_1_vulnerability_scanner : fix.advance
+        enumeration_review_fix_bolt_1_vulnerability_scanner --> enumeration_review_fix_bolt_1_feedback_assessor : fix.advance
         enumeration_review_fix_bolt_1_feedback_assessor --> enumeration_review_fix_bolt_1_validated : fix.advance
         enumeration_review_fix_bolt_1_validated --> [*]
       }
@@ -104,7 +104,8 @@ stateDiagram-v2
       state enumeration_review_fix_bolt_2 {
         [*] --> enumeration_review_fix_bolt_2_classifier
         enumeration_review_fix_bolt_2_classifier --> enumeration_review_fix_bolt_2_enumerator : fix.advance
-        enumeration_review_fix_bolt_2_enumerator --> enumeration_review_fix_bolt_2_feedback_assessor : fix.advance
+        enumeration_review_fix_bolt_2_enumerator --> enumeration_review_fix_bolt_2_vulnerability_scanner : fix.advance
+        enumeration_review_fix_bolt_2_vulnerability_scanner --> enumeration_review_fix_bolt_2_feedback_assessor : fix.advance
         enumeration_review_fix_bolt_2_feedback_assessor --> enumeration_review_fix_bolt_2_validated : fix.advance
         enumeration_review_fix_bolt_2_validated --> [*]
       }
@@ -113,7 +114,8 @@ stateDiagram-v2
       state enumeration_review_fix_bolt_3 {
         [*] --> enumeration_review_fix_bolt_3_classifier
         enumeration_review_fix_bolt_3_classifier --> enumeration_review_fix_bolt_3_enumerator : fix.advance
-        enumeration_review_fix_bolt_3_enumerator --> enumeration_review_fix_bolt_3_feedback_assessor : fix.advance
+        enumeration_review_fix_bolt_3_enumerator --> enumeration_review_fix_bolt_3_vulnerability_scanner : fix.advance
+        enumeration_review_fix_bolt_3_vulnerability_scanner --> enumeration_review_fix_bolt_3_feedback_assessor : fix.advance
         enumeration_review_fix_bolt_3_feedback_assessor --> enumeration_review_fix_bolt_3_validated : fix.advance
         enumeration_review_fix_bolt_3_validated --> [*]
       }
@@ -154,7 +156,8 @@ stateDiagram-v2
       state exploitation_review_fix_bolt_1 {
         [*] --> exploitation_review_fix_bolt_1_classifier
         exploitation_review_fix_bolt_1_classifier --> exploitation_review_fix_bolt_1_exploit_developer : fix.advance
-        exploitation_review_fix_bolt_1_exploit_developer --> exploitation_review_fix_bolt_1_feedback_assessor : fix.advance
+        exploitation_review_fix_bolt_1_exploit_developer --> exploitation_review_fix_bolt_1_attack_operator : fix.advance
+        exploitation_review_fix_bolt_1_attack_operator --> exploitation_review_fix_bolt_1_feedback_assessor : fix.advance
         exploitation_review_fix_bolt_1_feedback_assessor --> exploitation_review_fix_bolt_1_validated : fix.advance
         exploitation_review_fix_bolt_1_validated --> [*]
       }
@@ -163,7 +166,8 @@ stateDiagram-v2
       state exploitation_review_fix_bolt_2 {
         [*] --> exploitation_review_fix_bolt_2_classifier
         exploitation_review_fix_bolt_2_classifier --> exploitation_review_fix_bolt_2_exploit_developer : fix.advance
-        exploitation_review_fix_bolt_2_exploit_developer --> exploitation_review_fix_bolt_2_feedback_assessor : fix.advance
+        exploitation_review_fix_bolt_2_exploit_developer --> exploitation_review_fix_bolt_2_attack_operator : fix.advance
+        exploitation_review_fix_bolt_2_attack_operator --> exploitation_review_fix_bolt_2_feedback_assessor : fix.advance
         exploitation_review_fix_bolt_2_feedback_assessor --> exploitation_review_fix_bolt_2_validated : fix.advance
         exploitation_review_fix_bolt_2_validated --> [*]
       }
@@ -172,7 +176,8 @@ stateDiagram-v2
       state exploitation_review_fix_bolt_3 {
         [*] --> exploitation_review_fix_bolt_3_classifier
         exploitation_review_fix_bolt_3_classifier --> exploitation_review_fix_bolt_3_exploit_developer : fix.advance
-        exploitation_review_fix_bolt_3_exploit_developer --> exploitation_review_fix_bolt_3_feedback_assessor : fix.advance
+        exploitation_review_fix_bolt_3_exploit_developer --> exploitation_review_fix_bolt_3_attack_operator : fix.advance
+        exploitation_review_fix_bolt_3_attack_operator --> exploitation_review_fix_bolt_3_feedback_assessor : fix.advance
         exploitation_review_fix_bolt_3_feedback_assessor --> exploitation_review_fix_bolt_3_validated : fix.advance
         exploitation_review_fix_bolt_3_validated --> [*]
       }

@@ -10,22 +10,22 @@ inputs: []
 
 # Plan
 
-Define the test strategy and execution plan that anchors every downstream QA stage. This stage produces the test strategy (scope, risk-based prioritization, quality dimensions, entry / exit criteria) and the execution plan (resources, environments, scheduling, data) — the contract the rest of the QA lifecycle reads from.
+The opening stage of the QA lifecycle: define the test strategy and execution plan that every downstream QA stage reads from. This is where scope, risk, and what "tested enough" means get decided — before any test is designed, run, or analyzed.
 
-## Per-unit baton
+## Scope
 
-Units in this stage are **test-strategy elements** — distinct facets of the plan (scope definition, risk model, environment requirements, exit criteria). Each unit walks the three hats in `plan → do → verify` order:
+Strategy and planning: what to test, in what risk order, against which quality dimensions, with what entry and exit criteria — and the logistics to make it happen (resources, environments, data, scheduling). Plan decides *what gets tested and why*, not how individual cases are written (design-tests), whether they pass (execute-tests), or what the results mean (analyze).
 
-- **`strategist`** (plan) reads product / requirements inputs, defines scope and risk-based prioritization for this slice of the strategy
-- **`planner`** (do) translates the strategy slice into concrete logistics — resource allocation, environment, data, scheduling
-- **`verifier`** (verify) validates the slice against substance + decision-register consistency and either advances or rejects to the responsible hat
+## What to do
 
-The baton is the unit body itself, accumulating from scope-and-risk to logistics to validated artifact.
+- Anchor scope and prioritization in real risk — concentrate effort where failure costs the most.
+- State entry and exit criteria concretely enough that a later stage can check work against them.
+- Name the quality dimensions in play (functional, performance, security, accessibility, regression) and what coverage each needs.
+- Plan the logistics — environments, data, resources — so execution isn't blocked by something the strategy left unspecified.
 
-## Inputs and outputs
+## What NOT to do
 
-The frontmatter declares the I/O contract. The plan stage has no upstream stages — it reads from the intent's product / requirement context directly. Outputs feed `design-tests`, `execute-tests`, `analyze`, and `certify`.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, strategist, feedback-assessor]` dispatches per finding. The classifier routes the FB; `strategist` is the implementer (re-authoring the strategy slice where the finding lives); the assessor decides closure. The gate is `ask` — a human approves the strategy locally before tests are designed against it. Project overlays at `.haiku/studios/quality-assurance/stages/plan/` may add house conventions (specific risk-rating scales, organizational templates, ticketing-system embeds) without modifying the plugin defaults.
+- Don't write individual test cases or design automation — that belongs to design-tests.
+- Don't run tests or interpret results here.
+- Don't leave exit criteria vague; an unmeasurable criterion can't gate certification.
+- Don't expand scope past the risk the intent actually carries.

@@ -60,9 +60,68 @@
 	--color-rose-700: #be123c;
 }
 
-/* Code highlighting theme */
+/* Code highlighting theme (github-dark palette). The code container
+   (`.prose pre`) is always dark in both light/dark mode, so a single dark
+   token palette is correct everywhere. Without these `.hljs-*` rules
+   rehype-highlight emits token spans but nothing colors them — code renders
+   as flat monospace. */
 .hljs {
 	background: transparent;
+	color: #c9d1d9;
+}
+.hljs-comment,
+.hljs-quote {
+	color: #8b949e;
+	font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-doctag,
+.hljs-section,
+.hljs-name {
+	color: #ff7b72;
+}
+.hljs-string,
+.hljs-attr,
+.hljs-meta .hljs-string,
+.hljs-regexp,
+.hljs-addition {
+	color: #a5d6ff;
+}
+.hljs-number,
+.hljs-literal,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-type {
+	color: #79c0ff;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-function .hljs-title {
+	color: #d2a8ff;
+}
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-symbol,
+.hljs-bullet {
+	color: #ffa657;
+}
+.hljs-attribute,
+.hljs-property {
+	color: #79c0ff;
+}
+.hljs-tag {
+	color: #7ee787;
+}
+.hljs-meta,
+.hljs-deletion {
+	color: #8b949e;
+}
+.hljs-emphasis {
+	font-style: italic;
+}
+.hljs-strong {
+	font-weight: 600;
 }
 
 /* Smooth transitions for theme changes */

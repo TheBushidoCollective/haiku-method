@@ -1,4 +1,4 @@
-// http/debug-routes.ts — /haiku:debug SPA admin layer.
+// http/debug-routes.ts — /haiku:haiku-debug SPA admin layer.
 //
 // Pairs with the `haiku_debug` MCP tool (see
 // `tools/orchestrator/haiku_debug.ts`). The MCP tool exists for agent-driven

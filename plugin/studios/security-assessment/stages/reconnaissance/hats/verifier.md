@@ -9,6 +9,10 @@
 - The agent **MUST NOT** invent rules not in this mandate. Stage scope is the contract.
 - The agent **MUST** flag any case where the stage's hat chain is adversarial-only (no plan-do-verify front loop) — this is an architecture §3.5 violation. Per architecture §3.5 the plan-do-verify triplet MUST come BEFORE adversarial hats. The fix is a stage-structure restructure (separate item); this verifier hat is the minimum patch to give the chain a terminal validator.
 
+## Validate this unit's outputs against its criteria
+
+List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, field: "outputs" }`, then confirm each one satisfies the unit's completion criteria. The outputs are what you validate; the unit's criteria are the bar. Stay scoped to this one unit — sibling units have their own verify passes.
+
 ## What you check (BODY ONLY)
 
 ### 1. Artifact answers its topic

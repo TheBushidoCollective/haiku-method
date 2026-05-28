@@ -12,20 +12,22 @@ inputs:
 
 # Document
 
-Assemble the auditor-facing artifact. The remediate stage produced changes; this stage turns those changes plus their evidence into the package an external auditor will navigate. The output is the intent-scope `EVIDENCE-PACKAGE.md` — an index over the collected evidence with the narrative documentation that ties each piece of evidence back to a specific control.
+Assemble the auditor-facing artifact. Remediate produced the changes; this stage turns those changes and their evidence into a package an external auditor can navigate — an index over the collected evidence plus the narrative that ties each piece back to a specific control.
 
-## Per-unit baton
+## Scope
 
-Each documentation unit walks the three hats in `plan → do → verify` order:
+Gathering evidence with provenance and writing the connecting narrative that lets an auditor follow the compliance story without reverse-engineering the implementation. Document decides *how the existing evidence is organized and explained* — it does not produce new findings (assess) or make remediation changes (remediate).
 
-- **`evidence-collector`** (plan / do for artifacts) gathers the raw evidence — screenshots, log excerpts, config dumps, policy PDFs, attestation records — and records the provenance (source, date, collector, control it supports) for each piece
-- **`documentation-writer`** (do for narrative) writes the connecting narrative: control descriptions, audit trail summaries, the end-to-end compliance story that lets an auditor follow the evidence without reverse-engineering the implementation
-- **`verifier`** (verify) validates that every piece of evidence is mapped to a control, every narrative claim cites specific evidence, and the package is organized to the auditor's expected structure
+## What to do
 
-## Inputs and outputs
+- Collect each piece of evidence with full provenance: source, date, collector, and the control it supports.
+- Map every piece of evidence to a control and back every narrative claim to specific evidence.
+- Organize the package to the structure an auditor expects, so navigation is obvious rather than archaeological.
+- Flag missing or weak evidence as a gap to resolve, not something to narrate around.
 
-`remediate/remediation-log` feeds in. The output `EVIDENCE-PACKAGE.md` is intent-scope and is the primary input to `certify`, where the audit-liaison hat presents it to the external auditor.
+## What NOT to do
 
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, evidence-collector, feedback-assessor]` dispatches per finding — `evidence-collector` re-gathers missing evidence or fixes provenance gaps; narrative-only findings route via the classifier to `documentation-writer` through a separate dispatch. The gate is `ask`: a human approves locally before the package is handed to certify, because evidence sufficiency is a judgment call the auditor will second-guess and the team needs to align before that conversation. Project overlays may add the project's specific evidence-platform conventions (folder structures, naming schemes, redaction rules).
+- Don't generate new compliance findings or re-grade controls — that's assess.
+- Don't make or alter remediation changes — that's remediate.
+- Don't write narrative that asserts a control is met without the cited evidence to prove it.
+- Don't hand off a package with unmapped evidence or unsourced claims.

@@ -1,7 +1,7 @@
 // state/schemas/inputs/long-tail.ts — TypeBox input schemas for
 // the remaining state-tool family beyond unit / intent / stage /
-// feedback. Twenty tools total: registry reads, settings, decision
-// recording, dashboards / reports, repair / seed / backlog.
+// feedback. Nineteen tools total: registry reads, settings, decision
+// recording, reports, repair / seed / backlog.
 //
 // Most are read-mostly with one or two args. We keep them in one
 // file rather than fragmenting further — the surface is too small
@@ -121,10 +121,10 @@ export const validateHaikuKnowledgeReadInputSchema = stateAjv.compile(
 	HAIKU_KNOWLEDGE_READ_INPUT_SCHEMA,
 )
 
-// ── haiku_skill_list / haiku_studio_list / haiku_dashboard /
+// ── haiku_skill_list / haiku_studio_list /
 // haiku_version_info — empty inputs ──────────────────────────────
 //
-// All four are no-arg tools. Sharing one schema keeps the SSOT
+// All three are no-arg tools. Sharing one schema keeps the SSOT
 // honest (additionalProperties: false rejects accidental garbage
 // from any of them).
 
@@ -170,7 +170,7 @@ export const HAIKU_SETTINGS_GET_INPUT_SCHEMA = Type.Object(
 		field: Type.String({
 			minLength: 1,
 			description:
-				"Dot-separated path (e.g. 'studio', 'stack.compute', 'review_agents')",
+				"Dot-separated path (e.g. 'studio', 'providers.ticketing.type', 'providers.spec.config.space')",
 		}),
 		state_file: stateFile,
 	},
@@ -224,18 +224,43 @@ export const validateHaikuCapacityInputSchema = stateAjv.compile(
 	HAIKU_CAPACITY_INPUT_SCHEMA,
 )
 
-// ── haiku_reflect ─────────────────────────────────────────────────
+// ── haiku_zap ─────────────────────────────────────────────────────
+//
+// Stateless zero-ceremony single-task run through a stage's hat
+// loop. No `.haiku/` files, no workflow tick — the tool resolves
+// studio/stage, reads STAGE.md + each hat body via the cascade, and
+// returns ready-to-run markdown instructions (per-hat subagent
+// prompts + the run/verify/commit procedure). The agent drives the
+// sequential loop; the tool never writes prompt files or tracks
+// state. Studio/stage validation is handler-side (against the real
+// studio list + stage list), surfacing `zap_studio_not_found` /
+// `zap_stage_not_found` with the valid options the agent can re-pick.
 
-export const HAIKU_REFLECT_INPUT_SCHEMA = Type.Object(
+export const HAIKU_ZAP_INPUT_SCHEMA = Type.Object(
 	{
-		intent: Type.String({ minLength: 1 }),
+		task: Type.String({
+			minLength: 1,
+			description: "The work to run through the stage's hat loop.",
+		}),
+		studio: Type.Optional(
+			Type.String({
+				description:
+					"Studio slug (e.g. `software`). Defaults to `software` when omitted and present.",
+			}),
+		),
+		stage: Type.Optional(
+			Type.String({
+				description:
+					"Stage within the studio (e.g. `development`). Defaults to the studio's build-class execution stage when omitted.",
+			}),
+		),
 		state_file: stateFile,
 	},
 	{ additionalProperties: false },
 )
-export type HaikuReflectInput = Static<typeof HAIKU_REFLECT_INPUT_SCHEMA>
-export const validateHaikuReflectInputSchema = stateAjv.compile(
-	HAIKU_REFLECT_INPUT_SCHEMA,
+export type HaikuZapInput = Static<typeof HAIKU_ZAP_INPUT_SCHEMA>
+export const validateHaikuZapInputSchema = stateAjv.compile(
+	HAIKU_ZAP_INPUT_SCHEMA,
 )
 
 // ── haiku_review ──────────────────────────────────────────────────
@@ -404,4 +429,141 @@ export const HAIKU_REPAIR_INPUT_SCHEMA = Type.Object(
 export type HaikuRepairInput = Static<typeof HAIKU_REPAIR_INPUT_SCHEMA>
 export const validateHaikuRepairInputSchema = stateAjv.compile(
 	HAIKU_REPAIR_INPUT_SCHEMA,
+)
+
+// ── haiku_view ───────────────────────────────────────────────────
+// Opens a tunnelled URL pointing at the SPA's artifact-browser route
+// (viewer mode) or a spawned project dev server (boot mode). Returns
+// the URL for the agent to hand to the playwright MCP. Lifecycle is
+// managed via `haiku_view_close` + the standard session TTL.
+
+export const HAIKU_VIEW_INPUT_SCHEMA = Type.Object(
+	{
+		intent: Type.String({
+			minLength: 1,
+			description:
+				"Intent slug to scope the view session. The SPA will only serve files under this intent's directory.",
+		}),
+		stage: Type.Optional(
+			Type.String({
+				description:
+					"Optional stage name to narrow the artifact list. Defaults to the intent's active_stage when omitted.",
+			}),
+		),
+		artifact: Type.Optional(
+			Type.String({
+				description:
+					"Optional intent-relative path to deep-link the SPA to a single artifact file (e.g. `stages/design/artifacts/wireframe.svg`). When omitted the SPA lists every artifact in scope.",
+			}),
+		),
+		mode: Type.Optional(
+			Type.String({
+				enum: ["auto", "viewer", "boot"],
+				description:
+					"Mode preference. `auto` (default) tries boot first and falls back to viewer. `boot` forces a spawned dev server and hard-fails when no `command` is supplied and no fast-path is detected. `viewer` forces the SPA artifact-browser route.",
+			}),
+		),
+		command: Type.Optional(
+			Type.Array(Type.String({ minLength: 1 }), {
+				minItems: 1,
+				description:
+					'Single-process boot — explicit command argv (e.g. `["uvicorn", "app:main"]`, `["bin/dev"]`, `["go", "run", "./cmd/server"]`). Engine spawns with `PORT` + `HOST` env vars set so the dev server binds where the supervisor expects. Use this for one-process apps. For monorepos / stacks (api + frontend + db + worker), use `processes` instead.',
+			}),
+		),
+		cwd: Type.Optional(
+			Type.String({
+				description:
+					"Working directory for `command`, relative to the intent dir. Defaults to the intent dir when omitted. Ignored when `processes` is supplied (each process declares its own cwd).",
+			}),
+		),
+		processes: Type.Optional(
+			Type.Array(
+				Type.Object(
+					{
+						name: Type.String({
+							minLength: 1,
+							pattern: "^[a-zA-Z][a-zA-Z0-9_-]*$",
+							description:
+								"Identifier for this process. Used to build service-discovery env vars (`<NAME>_PORT`, `<NAME>_URL`) injected into dependents, and as the `primary` selector. Lowercase letters / digits / `-` / `_`; must start with a letter.",
+						}),
+						command: Type.Array(Type.String({ minLength: 1 }), {
+							minItems: 1,
+							description:
+								'Argv for this process (e.g. `["npm", "run", "api"]`, `["redis-server"]`, `["docker", "compose", "up", "postgres"]`).',
+						}),
+						cwd: Type.Optional(
+							Type.String({
+								description:
+									'Working directory for this process, relative to the intent dir. Defaults to the intent dir when omitted (e.g. `"backend"` for `packages/backend/` in a monorepo).',
+							}),
+						),
+						port_env: Type.Optional(
+							Type.String({
+								minLength: 1,
+								description:
+									'Env-var name the engine assigns the allocated ephemeral port to. Defaults to `PORT`. Override when the process expects a different name (e.g. `"RAILS_PORT"`, `"API_PORT"`).',
+							}),
+						),
+						ready_url: Type.Optional(
+							Type.String({
+								description:
+									'Optional HTTP URL the supervisor polls to confirm this process is ready before starting dependents (e.g. `"http://127.0.0.1:{port}/healthz"`). Use `{port}` as the placeholder for the allocated port. Falls back to TCP port-bind detection when omitted.',
+							}),
+						),
+						depends_on: Type.Optional(
+							Type.Array(Type.String({ minLength: 1 }), {
+								description:
+									"Names of processes that must be ready before this one starts. The supervisor topologically sorts the graph and starts processes in dependency order. Each dependency's `<NAME>_PORT` and `<NAME>_URL` env vars are injected into this process's env so the runtime can do service discovery (e.g. an API depending on `db` sees `DB_PORT` + `DB_URL`).",
+							}),
+						),
+						no_port: Type.Optional(
+							Type.Boolean({
+								description:
+									"Set true for processes that don't listen on a TCP port (queue workers, background daemons, schedulers). The supervisor still tracks lifecycle but skips port allocation and readiness checking.",
+							}),
+						),
+					},
+					{ additionalProperties: false },
+				),
+				{
+					minItems: 1,
+					description:
+						"Process group — boot multiple coordinated processes (api + frontend + db + worker etc.). The supervisor allocates an ephemeral port per process (unless `no_port`), starts them in dependency order, waits for each to be ready, and exposes `<NAME>_PORT` + `<NAME>_URL` env vars to every dependent. Killing the session kills the whole group. Mutually exclusive with `command`.",
+				},
+			),
+		),
+		primary: Type.Optional(
+			Type.String({
+				minLength: 1,
+				description:
+					"Name of the process whose URL is returned as the top-level `url` field — i.e., the one Playwright drives. Required when `processes` has more than one port-bound entry. Ignored for single-process boots.",
+			}),
+		),
+		state_file: stateFile,
+	},
+	{ additionalProperties: false },
+)
+export type HaikuViewInput = Static<typeof HAIKU_VIEW_INPUT_SCHEMA>
+export const validateHaikuViewInputSchema = stateAjv.compile(
+	HAIKU_VIEW_INPUT_SCHEMA,
+)
+
+// ── haiku_view_close ─────────────────────────────────────────────
+// Explicit shutdown for a view session. Boot-mode sessions also
+// terminate the spawned dev server. Idempotent — closing an unknown
+// or already-closed session returns success.
+
+export const HAIKU_VIEW_CLOSE_INPUT_SCHEMA = Type.Object(
+	{
+		session_id: Type.String({
+			minLength: 1,
+			description: "Session ID returned by `haiku_view`.",
+		}),
+		state_file: stateFile,
+	},
+	{ additionalProperties: false },
+)
+export type HaikuViewCloseInput = Static<typeof HAIKU_VIEW_CLOSE_INPUT_SCHEMA>
+export const validateHaikuViewCloseInputSchema = stateAjv.compile(
+	HAIKU_VIEW_CLOSE_INPUT_SCHEMA,
 )

@@ -26,7 +26,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, SectionHeading } from "../../../atoms/Card"
 import { OutputCardMenu } from "../../../molecules/OutputCardMenu"
 import { type TabDef, Tabs } from "../../../molecules/Tabs"
-import { UnitMetaPanel } from "../../../molecules/UnitMetaPanel"
+import {
+	type ArtifactIndex,
+	type ArtifactIndexEntry,
+	UnitMetaPanel,
+} from "../../../molecules/UnitMetaPanel"
 import { ArtifactAnnotator } from "../../../organisms/ArtifactAnnotator"
 import {
 	type InlineCommentEntry,
@@ -39,13 +43,15 @@ import {
 import type { ParsedUnit } from "../../../parsed"
 import type { FeedbackItemData } from "../../../types"
 import { authedAssetUrl } from "../shared/asset-url"
+import { highlightCodeToHtml } from "../shared/codeHighlight"
 import { DeclaringUnitsBanner } from "../shared/DeclaringUnitsBanner"
+import { resolveEmbeddedAssetUrls } from "../shared/inline-asset-urls"
 import {
 	markdownToSimpleHtml,
 	stripFrontmatter,
 } from "../shared/section-helpers"
 import type { ReviewPageSessionData } from "../shared/session-data"
-import type { ReviewDetailKind, ReviewTab } from "../shared/stage-tabs"
+import type { ReviewDetailKind } from "../shared/stage-tabs"
 import { deriveUnitStatus } from "../shared/UnitsTable"
 import {
 	type ArtifactKind,
@@ -71,8 +77,10 @@ export interface StageReviewProps {
 	/** Controlled tab selection — the parent (ReviewPage) owns this so
 	 *  it can mirror tab state to the URL. `undefined` is equivalent to
 	 *  the "overview" default. */
-	tab?: ReviewTab | undefined
-	onTabChange?: (tab: ReviewTab | undefined) => void
+	/** A fixed ReviewTab OR a dynamic per-directory tab id (a stage
+	 *  subdirectory name). Typed `string` to admit the dir tabs. */
+	tab?: string | undefined
+	onTabChange?: (tab: string | undefined) => void
 	/** Controlled detail selection — when set, the matching tab renders
 	 *  the single-item focused view. */
 	detail?: { kind: ReviewDetailKind; name: string } | null
@@ -257,6 +265,24 @@ function deriveExistingAnchorsForUnit(
 	return deriveExistingAnchors(items)
 }
 
+/** Re-paint anchors for a file-backed artifact that has NO per-target
+ *  feedback bucket (the stage brief, observations, etc.). Those findings
+ *  land in the general stage feedback pool — the only thing tying a
+ *  comment to its surface is `inline_anchor.file_path`. Filter the full
+ *  pool by that path, then run the same open-only projection
+ *  `deriveExistingAnchors` applies. */
+export function deriveExistingAnchorsForFile(
+	filePath: string,
+	items: readonly FeedbackItemData[],
+): ReturnType<typeof deriveExistingAnchors> {
+	const matching = items.filter((f) => {
+		const a = (f as unknown as { inline_anchor?: { file_path?: string } })
+			.inline_anchor
+		return a?.file_path === filePath
+	})
+	return deriveExistingAnchors(matching)
+}
+
 function feedbackBadgeColor(status: string): string {
 	switch (status) {
 		case "pending":
@@ -290,6 +316,9 @@ interface ArtifactViewModel {
 	summary: string
 	body: string
 	mime: string
+	/** For `mime === "code"` — the highlight.js language id. Undefined for
+	 *  text with no known grammar (renders as a plain escaped `<pre>`). */
+	language?: string
 	/** Intent-dir-relative path. Set for outputs that came through
 	 *  parseOutputArtifacts (used to look the artifact up in
 	 *  `output_declared_by` for the "Declared by" banner). Optional
@@ -337,7 +366,7 @@ export function StageReview({
 	const setActiveTab = useCallback(
 		(next: string) => {
 			if (onTabChange !== undefined) {
-				onTabChange(next === "overview" ? undefined : (next as ReviewTab))
+				onTabChange(next === "overview" ? undefined : next)
 			} else {
 				setLocalTab(next)
 			}
@@ -389,6 +418,7 @@ export function StageReview({
 	const toArtifactVM = (a: {
 		name: string
 		type: string
+		language?: string
 		content?: string
 		relativePath?: string
 		intentRelativePath?: string
@@ -398,6 +428,7 @@ export function StageReview({
 		summary: summaryFor(a.name, a.content ?? "", a.type),
 		body: a.content ?? "",
 		mime: a.type,
+		language: a.language,
 		intentRelativePath: a.intentRelativePath,
 		// Server rewrote `relativePath` to a tunnel URL (see
 		// `buildStageArtifactUrl` in server/tool-call.ts). Carry it
@@ -408,7 +439,55 @@ export function StageReview({
 		assetUrl: a.relativePath ?? undefined,
 	})
 	const outputVMs: ArtifactViewModel[] = outputArtifacts.map(toArtifactVM)
-	const otherVMs: ArtifactViewModel[] = otherFiles.map(toArtifactVM)
+	// "Other" files split: those living in a subdirectory get a per-directory
+	// tab named after the directory (e.g. `proofs/`); stage-root loose files
+	// (no `directory`) stay in the catch-all "Other" tab. Server tags
+	// `directory` (parser.ts); the SPA groups on it here.
+	const looseOtherVMs: ArtifactViewModel[] = otherFiles
+		.filter((a) => !a.directory)
+		.map(toArtifactVM)
+	const dirTabGroups: Array<{ dir: string; vms: ArtifactViewModel[] }> =
+		(() => {
+			const byDir = new Map<string, ArtifactViewModel[]>()
+			const order: string[] = []
+			for (const a of otherFiles) {
+				if (!a.directory) continue
+				if (!byDir.has(a.directory)) {
+					byDir.set(a.directory, [])
+					order.push(a.directory)
+				}
+				byDir.get(a.directory)?.push(toArtifactVM(a))
+			}
+			order.sort((x, y) => x.localeCompare(y))
+			return order.map((dir) => ({ dir, vms: byDir.get(dir) ?? [] }))
+		})()
+
+	// Artifact index for unit-input/output/depends_on link resolution
+	// (UnitMetaPanel). Built from the FULL session artifact lists — NOT the
+	// per-stage filtered views above — because a unit's input can point at an
+	// artifact produced by ANOTHER stage (e.g. a development unit consumes
+	// `product/ACCEPTANCE-CRITERIA.md`, produced by the product stage). The
+	// index keys each artifact by its intent-dir-relative path (the artifact's
+	// `name`) so `pathToReviewRoute` can resolve a bare intent-relative path
+	// that carries no `stages/`/`knowledge/` prefix to the producing stage's
+	// outputs / knowledge / other tab. First writer wins (output > knowledge >
+	// other) so a path declared as a real output links to its Outputs view.
+	const artifactIndex = useMemo<ArtifactIndex>(() => {
+		const index: ArtifactIndex = new Map()
+		const add = (name: string, entry: ArtifactIndexEntry) => {
+			if (!index.has(name)) index.set(name, entry)
+		}
+		for (const a of session.output_artifacts ?? []) {
+			add(a.name, { stage: a.stage, kind: "outputs", name: a.name })
+		}
+		for (const a of session.stage_artifacts ?? []) {
+			add(a.name, { stage: a.stage, kind: "knowledge", name: a.name })
+		}
+		for (const a of session.other_files ?? []) {
+			add(a.name, { stage: a.stage, kind: "other", name: a.name })
+		}
+		return index
+	}, [session.output_artifacts, session.stage_artifacts, session.other_files])
 
 	// Pre-compute feedback → target maps (keyed by unit slug / knowledge name / output name)
 	const { feedbackByUnit, feedbackByKnowledge, feedbackByOutput } =
@@ -454,6 +533,9 @@ export function StageReview({
 		}, [feedback])
 
 	const stageSummary = resolveStageSummary(session, stageName)
+	const stageBrief = resolveStageBrief(session, stageName)
+	const stageObservations = resolveStageObservations(session, stageName)
+	const stageElaboration = resolveStageElaboration(session, stageName)
 	const seen = useSeenTracker(seenScopeId)
 
 	// Detail mode: when set, the active tab renders a single-item focused
@@ -463,7 +545,9 @@ export function StageReview({
 	// Controlled variant mirrors the `tab` prop pattern — parent owns
 	// detail state for URL sync when `onDetailChange` is wired.
 	const [localDetail, setLocalDetail] = useState<{
-		tab: ReviewDetailKind
+		// `string` not `ReviewDetailKind` — a dynamic per-directory tab id can
+		// open a detail view too (its files reuse the Other render path).
+		tab: string
 		name: string
 	} | null>(
 		detailProp && onDetailChange === undefined
@@ -479,7 +563,7 @@ export function StageReview({
 	const setDetail = useCallback(
 		(
 			next: {
-				tab: ReviewDetailKind
+				tab: string
 				name: string
 			} | null,
 		) => {
@@ -495,7 +579,7 @@ export function StageReview({
 	)
 
 	const openDetail = useCallback(
-		(tab: ReviewDetailKind, name: string) => {
+		(tab: string, name: string) => {
 			setActiveTab(tab)
 			setDetail({ tab, name })
 		},
@@ -554,12 +638,16 @@ export function StageReview({
 		() =>
 			resolveWalkthroughForDetail(
 				gateWalkthroughItems,
-				// The walkthrough doesn't include the "other" catchall —
-				// stray files aren't gate-relevant. When the reviewer is
-				// browsing an "other" item, pass null so the resolver
-				// falls back to the gate set rather than trying to find
-				// the item in units/knowledge/outputs.
-				detail && detail.tab !== "other"
+				// The walkthrough only spans gate-relevant items
+				// (units/knowledge/outputs). "Other" stray files and dynamic
+				// per-directory tabs aren't gate-relevant, so when the reviewer
+				// is browsing one, pass null — the resolver falls back to the
+				// gate set instead of hunting for the item in units/knowledge/
+				// outputs. (Also narrows `detail.tab` to the walkthrough kinds.)
+				detail &&
+					(detail.tab === "units" ||
+						detail.tab === "knowledge" ||
+						detail.tab === "outputs")
 					? { tab: detail.tab, name: detail.name }
 					: null,
 				{ units, knowledgeVMs, outputVMs },
@@ -616,17 +704,78 @@ export function StageReview({
 				<OverviewTab
 					stageName={stageName}
 					stageSummary={stageSummary}
+					stageBrief={stageBrief}
+					stageObservations={stageObservations}
 					units={units}
 					knowledge={knowledgeVMs}
 					outputs={outputVMs}
+					feedback={feedback}
 					feedbackByUnit={feedbackByUnit}
 					feedbackByKnowledge={feedbackByKnowledge}
 					feedbackByOutput={feedbackByOutput}
 					seen={seen}
 					stageId={stageName}
+					intentSlug={intentSlug}
 					onNavigate={openDetail}
 					onStartWalkthrough={startWalkthrough}
+					onInlineCommentsChange={onInlineCommentsChange}
+					onSaveInline={onSaveInline}
+					flashAnchor={flashAnchor ?? null}
+					onFlashCommentConsumed={onFlashCommentConsumed}
 				/>
+			),
+		},
+		{
+			id: "elaboration",
+			label: "Elaboration",
+			// The decompose-phase narrative. Its own tab (BRIEF lives on
+			// Overview); annotatable like the brief so a reviewer can comment
+			// on the planning rationale.
+			disabled: !stageElaboration,
+			content: stageElaboration ? (
+				(() => {
+					const elabBody = stripFrontmatter(stageElaboration)
+					const elabPath = intentSlug
+						? `.haiku/intents/${intentSlug}/stages/${stageName}/elaboration.md`
+						: undefined
+					return (
+						<Card as="article" ariaLabelledBy="stage-elaboration-heading">
+							<SectionHeading id="stage-elaboration-heading" variant="eyebrow">
+								Elaboration{" "}
+								<span className="font-normal normal-case text-stone-500">
+									(how this stage was broken into units)
+								</span>
+							</SectionHeading>
+							{onInlineCommentsChange ? (
+								<InlineComments
+									htmlContent={markdownToSimpleHtml(elabBody)}
+									rawContent={elabBody}
+									location="Elaboration"
+									filePath={elabPath}
+									existingAnchors={
+										elabPath
+											? deriveExistingAnchorsForFile(elabPath, feedback)
+											: []
+									}
+									onCommentsChange={onInlineCommentsChange}
+									onSaveInline={onSaveInline}
+									flashAnchor={flashAnchor ?? null}
+									onFlashCommentConsumed={onFlashCommentConsumed}
+								/>
+							) : (
+								<MarkdownViewer id={`elaboration-${stageName}`}>
+									{stageElaboration}
+								</MarkdownViewer>
+							)}
+						</Card>
+					)
+				})()
+			) : (
+				<Card>
+					<p className="text-stone-500 dark:text-stone-400 italic">
+						This stage hasn't elaborated yet.
+					</p>
+				</Card>
 			),
 		},
 		{
@@ -642,6 +791,7 @@ export function StageReview({
 						stageId={stageName}
 						sessionId={sessionId}
 						intentSlug={intentSlug}
+						artifactIndex={artifactIndex}
 						feedbackByUnit={feedbackByUnit}
 						walkIndex={walkIndex}
 						walkTotal={walkthroughItems.length}
@@ -765,42 +915,99 @@ export function StageReview({
 					/>
 				),
 		},
+		// One tab per asset SUBDIRECTORY under `stages/<stage>/` (e.g.
+		// `proofs/`), named after the directory. Same list + detail render as
+		// the Other tab, keyed off the directory id so the generic detail
+		// mechanism (`openDetail(dir, name)` / `detail?.tab === dir`) works
+		// without per-tab plumbing. Stage-root loose files stay in "Other".
+		...dirTabGroups.map(
+			({ dir, vms }): TabDef => ({
+				id: dir,
+				label: `${dir.charAt(0).toUpperCase() + dir.slice(1)} (${vms.length})`,
+				content:
+					detail?.tab === dir ? (
+						<ArtifactDetailView
+							kind="output"
+							artifacts={vms}
+							currentName={detail.name}
+							seen={seen}
+							stageId={stageName}
+							intentSlug={intentSlug}
+							feedbackByName={new Map()}
+							walkIndex={vms.findIndex((a) => a.name === detail.name)}
+							walkTotal={vms.length}
+							onWalkPrev={() => {
+								const idx = vms.findIndex((a) => a.name === detail.name)
+								if (idx > 0) openDetail(dir, vms[idx - 1].name)
+							}}
+							onWalkNext={() => {
+								const idx = vms.findIndex((a) => a.name === detail.name)
+								if (idx >= 0 && idx < vms.length - 1)
+									openDetail(dir, vms[idx + 1].name)
+							}}
+							hasWalkPrev={vms.findIndex((a) => a.name === detail.name) > 0}
+							hasWalkNext={
+								vms.findIndex((a) => a.name === detail.name) < vms.length - 1
+							}
+							onBack={closeDetail}
+							onInlineCommentsChange={onInlineCommentsChange}
+							onSaveInline={onSaveInline}
+							flashAnchor={flashAnchor ?? null}
+							onFlashCommentConsumed={onFlashCommentConsumed}
+						/>
+					) : (
+						<ArtifactsTab
+							kind="output"
+							artifacts={vms}
+							feedbackByName={new Map()}
+							seen={seen}
+							stageId={stageName}
+							highlightRequestId={null}
+							onHighlightConsumed={() => {}}
+							feedback={feedback}
+							onOpenDetail={(name) => openDetail(dir, name)}
+						/>
+					),
+			}),
+		),
 		// Catchall tab for stray stage files: anything under
 		// `stages/<stage>/` not declared by any unit, not under
-		// `artifacts/`, `knowledge/`, or `discovery/`. Reviewer can
-		// see them and link them if relevant. Disabled when empty so
-		// the tab strip doesn't clutter with a noise tab. Same render
-		// shape as Outputs (no per-file drift / replace surface —
-		// these aren't tracked outputs).
+		// `artifacts/`, `knowledge/`, or `discovery/`, AND not in a
+		// subdirectory (those get their own tab above). Reviewer can see
+		// them and link them if relevant. Disabled when empty so the tab
+		// strip doesn't clutter with a noise tab. Same render shape as
+		// Outputs (no per-file drift / replace surface — not tracked outputs).
 		{
 			id: "other",
-			label: `Other (${otherVMs.length})`,
-			disabled: otherVMs.length === 0,
+			label: `Other (${looseOtherVMs.length})`,
+			disabled: looseOtherVMs.length === 0,
 			content:
 				detail?.tab === "other" ? (
 					<ArtifactDetailView
 						kind="output"
-						artifacts={otherVMs}
+						artifacts={looseOtherVMs}
 						currentName={detail.name}
 						seen={seen}
 						stageId={stageName}
 						intentSlug={intentSlug}
 						feedbackByName={new Map()}
-						walkIndex={otherVMs.findIndex((a) => a.name === detail.name)}
-						walkTotal={otherVMs.length}
+						walkIndex={looseOtherVMs.findIndex((a) => a.name === detail.name)}
+						walkTotal={looseOtherVMs.length}
 						onWalkPrev={() => {
-							const idx = otherVMs.findIndex((a) => a.name === detail.name)
-							if (idx > 0) openDetail("other", otherVMs[idx - 1].name)
+							const idx = looseOtherVMs.findIndex((a) => a.name === detail.name)
+							if (idx > 0) openDetail("other", looseOtherVMs[idx - 1].name)
 						}}
 						onWalkNext={() => {
-							const idx = otherVMs.findIndex((a) => a.name === detail.name)
-							if (idx >= 0 && idx < otherVMs.length - 1)
-								openDetail("other", otherVMs[idx + 1].name)
+							const idx = looseOtherVMs.findIndex((a) => a.name === detail.name)
+							if (idx >= 0 && idx < looseOtherVMs.length - 1)
+								openDetail("other", looseOtherVMs[idx + 1].name)
 						}}
-						hasWalkPrev={otherVMs.findIndex((a) => a.name === detail.name) > 0}
+						hasWalkPrev={
+							looseOtherVMs.findIndex((a) => a.name === detail.name) > 0
+						}
 						hasWalkNext={
-							otherVMs.findIndex((a) => a.name === detail.name) <
-							otherVMs.length - 1
+							looseOtherVMs.findIndex((a) => a.name === detail.name) <
+							looseOtherVMs.length - 1
 						}
 						onBack={closeDetail}
 						onInlineCommentsChange={onInlineCommentsChange}
@@ -811,7 +1018,7 @@ export function StageReview({
 				) : (
 					<ArtifactsTab
 						kind="output"
-						artifacts={otherVMs}
+						artifacts={looseOtherVMs}
 						feedbackByName={new Map()}
 						seen={seen}
 						stageId={stageName}
@@ -834,7 +1041,10 @@ export function StageReview({
 			<Tabs
 				groupId={`stage-${stageName}`}
 				tabs={tabs}
-				activeId={activeTab}
+				// Clamp to a real tab: a stale/typo'd tab id in the URL (e.g. a
+				// dynamic dir tab that no longer exists) falls back to Overview
+				// rather than rendering an empty body with no active tab.
+				activeId={tabs.some((t) => t.id === activeTab) ? activeTab : "overview"}
 				onActiveChange={setActiveTab}
 			/>
 			{replaceArtifact && onReplaceOutput ? (
@@ -863,29 +1073,57 @@ export function StageReview({
 function OverviewTab({
 	stageName,
 	stageSummary,
+	stageBrief,
+	stageObservations,
 	units,
 	knowledge,
 	outputs,
+	feedback,
 	feedbackByUnit,
 	feedbackByKnowledge,
 	feedbackByOutput,
 	seen,
 	stageId,
+	intentSlug,
 	onNavigate,
 	onStartWalkthrough,
+	onInlineCommentsChange,
+	onSaveInline,
+	flashAnchor,
+	onFlashCommentConsumed,
 }: {
 	stageName: string
 	stageSummary: string | null
+	stageBrief: string | null
+	stageObservations: string | null
 	units: ParsedUnit[]
 	knowledge: ArtifactViewModel[]
 	outputs: ArtifactViewModel[]
+	feedback: FeedbackItemData[]
 	feedbackByUnit: Map<string, FeedbackItemData[]>
 	feedbackByKnowledge: Map<string, FeedbackItemData[]>
 	feedbackByOutput: Map<string, FeedbackItemData[]>
 	seen: ReturnType<typeof useSeenTracker>
 	stageId: string
+	intentSlug: string | null
 	onNavigate: (tab: "units" | "knowledge" | "outputs", name: string) => void
 	onStartWalkthrough: () => void
+	onInlineCommentsChange?: (comments: InlineCommentEntry[]) => void
+	onSaveInline?: (entry: {
+		selectedText: string
+		comment: string
+		paragraph: number
+		location: string
+		filePath?: string
+		commentId: string
+		contentSha?: string
+	}) => Promise<void>
+	flashAnchor?: {
+		commentId?: string
+		selectedText: string
+		paragraph?: number
+	} | null
+	onFlashCommentConsumed?: () => void
 }) {
 	return (
 		<div className="space-y-4">
@@ -898,6 +1136,84 @@ function OverviewTab({
 					Start walkthrough →
 				</button>
 			</div>
+
+			{stageBrief &&
+				(() => {
+					const briefBody = stripFrontmatter(stageBrief)
+					const briefPath = intentSlug
+						? `.haiku/intents/${intentSlug}/stages/${stageId}/BRIEF.md`
+						: undefined
+					return (
+						<Card as="article" ariaLabelledBy="stage-brief-heading">
+							<SectionHeading id="stage-brief-heading" variant="eyebrow">
+								Brief{" "}
+								<span className="font-normal normal-case text-stone-500">
+									(what this stage delivers)
+								</span>
+							</SectionHeading>
+							{onInlineCommentsChange ? (
+								<InlineComments
+									htmlContent={markdownToSimpleHtml(briefBody)}
+									rawContent={briefBody}
+									location="Brief"
+									filePath={briefPath}
+									existingAnchors={
+										briefPath
+											? deriveExistingAnchorsForFile(briefPath, feedback)
+											: []
+									}
+									onCommentsChange={onInlineCommentsChange}
+									onSaveInline={onSaveInline}
+									flashAnchor={flashAnchor ?? null}
+									onFlashCommentConsumed={onFlashCommentConsumed}
+								/>
+							) : (
+								<MarkdownViewer id={`brief-${stageName}`}>
+									{stageBrief}
+								</MarkdownViewer>
+							)}
+						</Card>
+					)
+				})()}
+
+			{stageObservations &&
+				(() => {
+					const obsBody = stripFrontmatter(stageObservations)
+					const obsPath = intentSlug
+						? `.haiku/intents/${intentSlug}/stages/${stageId}/observations.md`
+						: undefined
+					return (
+						<Card as="article" ariaLabelledBy="stage-observations-heading">
+							<SectionHeading id="stage-observations-heading" variant="eyebrow">
+								Observations{" "}
+								<span className="font-normal normal-case text-stone-500">
+									(what the agent saw building this stage)
+								</span>
+							</SectionHeading>
+							{onInlineCommentsChange ? (
+								<InlineComments
+									htmlContent={markdownToSimpleHtml(obsBody)}
+									rawContent={obsBody}
+									location="Observations"
+									filePath={obsPath}
+									existingAnchors={
+										obsPath
+											? deriveExistingAnchorsForFile(obsPath, feedback)
+											: []
+									}
+									onCommentsChange={onInlineCommentsChange}
+									onSaveInline={onSaveInline}
+									flashAnchor={flashAnchor ?? null}
+									onFlashCommentConsumed={onFlashCommentConsumed}
+								/>
+							) : (
+								<MarkdownViewer id={`observations-${stageName}`}>
+									{stageObservations}
+								</MarkdownViewer>
+							)}
+						</Card>
+					)
+				})()}
 
 			<Card as="article" ariaLabelledBy="stage-summary-heading">
 				<SectionHeading id="stage-summary-heading" variant="eyebrow">
@@ -1375,6 +1691,7 @@ function UnitDetailView({
 	stageId,
 	sessionId,
 	intentSlug,
+	artifactIndex,
 	feedbackByUnit,
 	walkIndex,
 	walkTotal,
@@ -1394,6 +1711,7 @@ function UnitDetailView({
 	stageId: string
 	sessionId: string
 	intentSlug: string | null
+	artifactIndex?: ArtifactIndex
 	feedbackByUnit: Map<string, FeedbackItemData[]>
 	walkIndex: number
 	walkTotal: number
@@ -1532,6 +1850,7 @@ function UnitDetailView({
 						bolt={fm.bolt}
 						sessionId={sessionId}
 						currentStage={stageId}
+						artifactIndex={artifactIndex}
 					/>
 					{current.rawContent &&
 						(() => {
@@ -2065,21 +2384,24 @@ function ArtifactBody({
 		)
 	}
 	if (artifact.mime === "html") {
-		// Sandbox intentionally omits `allow-same-origin`: wireframes
-		// authored as standalone pages read `window.location` and pull
-		// `allow-same-origin` on a `srcdoc` iframe gives html-to-image
+		// `allow-same-origin` on a `srcDoc` iframe gives html-to-image
 		// access to the inner DOM so annotation screenshots capture the
-		// mockup content instead of a blank rectangle. The document
-		// origin is inherited from the parent — URLs the wireframe
-		// references must therefore resolve against the SPA root (e.g.
-		// `/api/...` reaches our server); self-contained wireframes
-		// (Tailwind CDN + inline styles, which is the convention) aren't
-		// affected. Legacy wireframes that probed `window.location` for
-		// session state have been dropped; re-introducing one means
-		// writing it as fully self-contained HTML.
+		// mockup content instead of a blank rectangle. A `srcDoc` document
+		// has NO artifact base URL — relative `<link href>` / `<img src>`
+		// resolve against the SPA origin, not the artifact's dir on disk.
+		// To keep wireframes styled, `parseOutputArtifacts` (server side)
+		// inlines adjacent `<link rel="stylesheet">` files (and their
+		// relative `@import`s) into `artifact.body` at parse time, so the
+		// body is self-contained here. Tailwind-CDN / inline-style
+		// wireframes were always fine; adjacent-CSS wireframes now are too.
+		// `resolveEmbeddedAssetUrls` then rewrites relative `<img src>` /
+		// `srcset` / CSS `url(…)` refs to authed tunnel URLs so raster
+		// images load inside the srcDoc. Residual: `.js`/`.svg`/font
+		// sub-resources stay octet-stream-blocked (FB-21), so scripts don't
+		// execute and SVG-as-img / custom fonts degrade to fallbacks.
 		const iframe = (
 			<iframe
-				srcDoc={artifact.body}
+				srcDoc={resolveEmbeddedAssetUrls(artifact.body, artifact.assetUrl)}
 				sandbox="allow-scripts allow-same-origin"
 				title={artifact.name}
 				className="w-full h-[60vh] border-0 bg-white"
@@ -2136,6 +2458,83 @@ function ArtifactBody({
 		}
 		return img
 	}
+	if (artifact.mime === "video") {
+		// Binary media — play from the tunnel URL the server prepared.
+		const src = artifact.assetUrl
+			? authedAssetUrl(artifact.assetUrl)
+			: artifact.body
+		if (!src) {
+			return (
+				<p className="text-xs italic text-stone-500">
+					No preview available for {artifact.name}.
+				</p>
+			)
+		}
+		return (
+			<video
+				src={src}
+				controls
+				className="w-full max-h-[70vh] rounded-md bg-black"
+			>
+				<track kind="captions" />
+			</video>
+		)
+	}
+	if (artifact.mime === "code") {
+		// Syntax-highlighted + escaped. Wrapped in InlineComments so a
+		// reviewer can select a span of code and attach a comment — same
+		// annotation contract as markdown.
+		const html = highlightCodeToHtml(artifact.body, artifact.language)
+		if (onInlineCommentsChange) {
+			return (
+				<InlineComments
+					htmlContent={html}
+					rawContent={artifact.body}
+					location={`${kind}: ${artifact.name}`}
+					filePath={filePath}
+					existingAnchors={existingAnchors}
+					onCommentsChange={onInlineCommentsChange}
+					onSaveInline={onSaveInline}
+					flashAnchor={flashAnchor}
+					onFlashCommentConsumed={onFlashCommentConsumed}
+				/>
+			)
+		}
+		return (
+			<div
+				// biome-ignore lint/security/noDangerouslySetInnerHtml: highlight.js output, DOMPurify-sanitized in highlightCodeToHtml // audit-allow: sanitized highlight.js code render
+				dangerouslySetInnerHTML={{ __html: html }}
+			/>
+		)
+	}
+	// Empty content (no inlined body) — DON'T render a blank <pre> (the
+	// "renders as nothing" bug, reported 2026-05-27 on a unit-declared `.tsx`
+	// output whose file resolved outside the intent dir, so `buildArtifactEntry`
+	// couldn't read it → type "file", empty body). Show a clear note + an open
+	// link instead of an empty box.
+	if (!artifact.body || !artifact.body.trim()) {
+		const src = artifact.assetUrl ? authedAssetUrl(artifact.assetUrl) : null
+		return (
+			<div className="rounded-md border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 p-3">
+				<p className="text-xs italic text-stone-500 dark:text-stone-400">
+					No inline preview for{" "}
+					<code className="font-mono">{artifact.name}</code> — the declared
+					output isn't on disk at the expected path (or couldn't be read).
+				</p>
+				{src && (
+					<a
+						href={src}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="mt-1 inline-block text-xs text-teal-600 dark:text-teal-400 hover:underline"
+					>
+						Open file &#8599;
+					</a>
+				)}
+			</div>
+		)
+	}
+	// Unknown / plain text with content — escaped <pre> ASCII floor.
 	return (
 		<pre className="text-xs font-mono text-stone-700 dark:text-stone-300 whitespace-pre-wrap bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-md p-3 max-h-[60vh] overflow-auto">
 			{artifact.body}
@@ -2181,7 +2580,7 @@ function ArtifactThumbnail({
 			className="shrink-0 w-32 h-20 rounded border border-stone-200 dark:border-stone-700 bg-white overflow-hidden relative pointer-events-none"
 		>
 			<iframe
-				srcDoc={artifact.body}
+				srcDoc={resolveEmbeddedAssetUrls(artifact.body, artifact.assetUrl)}
 				sandbox="allow-scripts allow-same-origin"
 				title={`Preview of ${artifact.name || "artifact"}`}
 				tabIndex={-1}
@@ -2269,11 +2668,49 @@ function resolveStageSummary(
 	session: ReviewPageSessionData,
 	stageName: string,
 ): string | null {
-	const summaries = (
-		session as unknown as { stage_summaries?: Record<string, string> }
-	).stage_summaries
+	const summaries = session.stage_summaries
 	if (summaries && typeof summaries[stageName] === "string") {
 		return summaries[stageName]
+	}
+	return null
+}
+
+/** The per-stage user-facing BRIEF (markdown) — the plain-language summary
+ *  the briefer wrote before the gate. Shown first in the Overview tab. */
+function resolveStageBrief(
+	session: ReviewPageSessionData,
+	stageName: string,
+): string | null {
+	const briefs = session.stage_briefs
+	if (briefs && typeof briefs[stageName] === "string" && briefs[stageName]) {
+		return briefs[stageName]
+	}
+	return null
+}
+
+/** The per-stage agent OBSERVATIONS (markdown) — the free-form reflection
+ *  the agent wrote at stage close (mandate ambiguity, engine friction,
+ *  surprises). Shown in the Overview tab beneath the brief. */
+function resolveStageObservations(
+	session: ReviewPageSessionData,
+	stageName: string,
+): string | null {
+	const obs = session.stage_observations
+	if (obs && typeof obs[stageName] === "string" && obs[stageName]) {
+		return obs[stageName]
+	}
+	return null
+}
+
+/** The per-stage ELABORATION (markdown) — the decompose-phase narrative.
+ *  Rendered in its own Elaboration tab. */
+function resolveStageElaboration(
+	session: ReviewPageSessionData,
+	stageName: string,
+): string | null {
+	const elabs = session.stage_elaborations
+	if (elabs && typeof elabs[stageName] === "string" && elabs[stageName]) {
+		return elabs[stageName]
 	}
 	return null
 }

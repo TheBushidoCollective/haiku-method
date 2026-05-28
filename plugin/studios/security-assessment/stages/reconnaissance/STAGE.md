@@ -2,7 +2,7 @@
 name: reconnaissance
 description: Passive and active information gathering about the target
 hats: [osint-analyst, network-mapper, verifier]
-fix_hats: [classifier, osint-analyst, feedback-assessor]
+fix_hats: [classifier, osint-analyst, network-mapper, feedback-assessor]
 review: auto
 elaboration: autonomous
 inputs: []
@@ -13,22 +13,22 @@ outputs:
 
 # Reconnaissance
 
-Passive and active information gathering about the target. The opening stage of the assessment — turns the engagement's scope statement into a structured picture of the target's externally observable footprint. Units are **knowledge artifacts** (per ARCHITECTURE.md §2.2 research/distillation role): one unit per investigable surface (an asset class, a brand, a domain family, a known third-party integration).
+The opening stage of the security assessment: turn the engagement's scope statement into a structured picture of the target's externally observable footprint. Reconnaissance answers "what's out there?" before any deeper probing or exploitation begins.
 
-## Per-unit baton
+## Scope
 
-The three hats execute in `plan → do → verify` order:
+Passive and active information gathering within authorized scope: public OSINT (DNS, certificate transparency, WHOIS, search, public repos, leaked-credential data) and active mapping (live hosts, exposed services, technology fingerprints, ingress points). Reconnaissance decides *what the target's surface looks like* — not what's wrong with each service (enumeration) or whether it can be exploited (exploitation).
 
-- **`osint-analyst`** (plan): gathers public information about the unit's surface — DNS, certificate transparency, WHOIS, search engines, public code repos, public job postings, leaked-credential databases. Produces structured findings cited to sources.
-- **`network-mapper`** (do): turns the OSINT pool into a concrete target profile — live hosts, exposed services, technology fingerprints, ingress points — using active probing within authorized scope.
-- **`verifier`** (verify): validates the artifact's substance, citation, and internal consistency. Body-only per architecture §3.4.
+## What to do
 
-The baton across the hats is the unit's accumulated body content: source findings → target profile → validated profile.
+- Gather public information broadly and cite every finding to its source.
+- Turn the OSINT pool into a concrete, observation-grounded target profile, not a list of guesses.
+- Stay strictly within the engagement's authorized scope when probing actively.
+- Distinguish observed facts from inferences so downstream stages know what's confirmed.
 
-## Inputs and outputs
+## What NOT to do
 
-No upstream inputs — this is the first stage. Produces `TARGET-PROFILE.md` per unit (see `outputs/`), which feeds enumeration's input chain.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, osint-analyst, feedback-assessor]` — the classifier routes the FB to the right unit, `osint-analyst` re-investigates, and the assessor independently decides closure. Gate is `auto` because findings at this stage are knowledge artifacts an internal reviewer (review-agent) is sufficient to validate; downstream stages catch substantive errors when they consume the outputs.
+- Don't enumerate service-level vulnerabilities or pin CVEs — that's enumeration.
+- Don't attempt any exploitation; reconnaissance only observes.
+- Don't probe assets outside the authorized scope.
+- Don't record a finding without the source that backs it.

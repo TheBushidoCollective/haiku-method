@@ -59,6 +59,10 @@ function fixture(slug, frontmatter, stages = {}) {
 		else fmLines.push(`${k}: "${v}"`)
 	}
 	if (!("mode" in frontmatter)) fmLines.push(`mode: "continuous"`)
+	// Reflection (autotune) off by default in fixtures: these tests predate
+	// the observations gate and assert units-only stage completion. Tests
+	// exercising reflection set `autotune: true` explicitly.
+	if (!("autotune" in frontmatter)) fmLines.push(`autotune: false`)
 	fmLines.push("---", "", "# Intent body")
 	writeFileSync(join(iDir, "intent.md"), fmLines.join("\n"))
 
@@ -111,7 +115,12 @@ function fixture(slug, frontmatter, stages = {}) {
 			unitReviews = reviews
 			unitApprovals = approvals
 		} else if (phase === "execute") {
-			// Mid-hat: only first hat advanced.
+			// Mid-hat: only first hat advanced. Reviews are already signed —
+			// the cursor walks the PRE-execute spec review BEFORE any hat
+			// runs, so an executing unit always has its `reviews.*` stamped.
+			// (Without this the derivation correctly reports "review", since
+			// review is checked before execute.)
+			unitReviews = reviews
 			iterations =
 				hats.length > 0
 					? [
@@ -247,7 +256,20 @@ test("returns second stage when first is done and second is active", () => {
 test("returns last stage when every stage is done", () => {
 	const { haikuRoot, cleanup } = fixture(
 		"all-done",
-		{ studio: "software" },
+		{
+			studio: "software",
+			// An application plan that dropped the optional `release` stage —
+			// the canonical intent.stages IS the plan, so `security` is its
+			// last stage even though the studio superset now ends at `release`.
+			stages: [
+				"inception",
+				"design",
+				"product",
+				"development",
+				"operations",
+				"security",
+			],
+		},
 		{
 			inception: { stage: "inception", status: "completed", phase: "gate" },
 			design: { stage: "design", status: "completed", phase: "gate" },

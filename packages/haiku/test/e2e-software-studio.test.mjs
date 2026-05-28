@@ -202,6 +202,10 @@ test("e2e: software-studio pipeline never wheel-spins; every action is actionabl
 				started_at: now,
 				approvals: {},
 				sealed_at: null,
+				// e2e fixture predates the autotune cursor walk; keep
+				// it on the legacy non-autotune path so the test still
+				// asserts on the pre-autotune action sequence.
+				autotune: false,
 				stages: ["inception", "design"],
 				skip_stages: ["product", "development", "operations", "security"],
 				design_directions: {
@@ -494,6 +498,12 @@ function applyResponse(intentDir, action, root, slug) {
 					iterations: its,
 				})
 			}
+			break
+		}
+		case "write_brief": {
+			// Briefer stand-in: write the user-facing BRIEF.md so the cursor
+			// advances past the pre-execute brief step.
+			writeFileSync(join(stageDir, "BRIEF.md"), "# Brief (test fixture)\n")
 			break
 		}
 		case "dispatch_review": {

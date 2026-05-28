@@ -1,6 +1,7 @@
 ---
 name: budget
 description: Allocate resources and set financial targets
+optional: true
 hats: [budget-owner, allocator, verifier]
 fix_hats: [classifier, budget-owner, feedback-assessor]
 review: external
@@ -12,24 +13,22 @@ inputs:
 
 # Budget
 
-Translate the forecast into a resource allocation plan: an envelope sized to the projected revenue, departmental and cost-center allocations traceable to forecast drivers, target levels with measurement criteria, and contingency reserves sized from historical variance patterns rather than arbitrary percentages.
+Turn the forecast into a resource allocation plan. This is where projected revenue becomes an envelope, and the envelope becomes concrete commitments by department, cost center, and line item — the operating plan the rest of the organization spends against.
 
-The stage produces one intent-scope artifact (`BUDGET-PLAN.md` under `stages/budget/artifacts/`) plus per-unit allocation specs.
+## Scope
 
-## Per-unit baton
+Allocation against the forecast: envelope sizing, departmental and cost-center splits, target levels with measurement criteria, and contingency reserves. Budget decides *how the projected resources get committed* — not what's projected (forecast), and not how actuals diverge from the plan later (analysis).
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`budget-owner`** (plan) reads the forecast and sets the envelope, allocation methodology, and priority ranking for this slice of the budget
-- **`allocator`** (do) maps the budget-owner's priorities onto specific departments / cost centers / line items, validates resource availability, and documents allocation rationale
-- **`verifier`** (verify) reads the unit body and advances or rejects on substance, traceability to upstream forecast lines, internal coherence, and decision-register alignment
+- Size the envelope to the forecast's projected revenue, and trace every allocation back to a forecast driver.
+- Set targets concrete enough to be measured against, with stated measurement criteria.
+- Size contingency reserves from historical variance patterns, not from an arbitrary percentage.
+- Make the allocation rationale explicit so a reviewer can see why each slice got what it got.
 
-Detailed process lives in each hat's md file.
+## What NOT to do
 
-## Inputs and outputs
-
-The frontmatter declares the canonical I/O contract. Upstream `forecast/forecast-model` feeds in; `budget-plan` feeds `analysis` (for variance comparisons) and `reporting`.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, budget-owner, feedback-assessor]` dispatches per finding — classifier targets the affected allocation, `budget-owner` re-derives that slice from the envelope and priorities, `feedback-assessor` decides closure. The gate is `external` because budget allocations typically require finance-leadership signoff outside this loop (a budget committee, the CFO, board review); the engine waits for that approval signal to land before advancing. Project overlays may add house-style conventions (chart-of-accounts numbering, internal hierarchy mappings, approval matrix templates).
+- Don't reproject revenue or revise the forecast's drivers — consume the forecast as given; a wrong forecast is a revisit upstream.
+- Don't compare allocations to actual spend — there's no actual yet; that's analysis.
+- Don't allocate beyond the envelope or leave a department untraceable to a driver.
+- Don't pad reserves with round numbers in place of evidence.

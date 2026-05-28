@@ -207,6 +207,12 @@ export function makeIntent({
 		started_at: at,
 		approvals,
 		sealed_at: sealed ? at : null,
+		// Autotune (2026-05-18) is default-on for real intents. Test
+		// fixtures default OFF so e2e suites whose intent shape
+		// predates the autotune cursor walk continue to exercise the
+		// pre-autotune action sequence. Tests that ARE exercising the
+		// autotune flow override via `extraFm: { autotune: true }`.
+		autotune: false,
 		...(verifyOnCreate
 			? { verified_at: at, verified_notes: "test fixture" }
 			: {}),
@@ -244,6 +250,7 @@ export function makeFeedback({
 	body = "test body",
 	origin = "user-chat",
 	author = "user",
+	severity = null, // "blocker" | "high" | "medium" | "low" | null (unclassified)
 	target_unit = null,
 	target_invalidates = [],
 	resolution = null, // "question" | "inline_fix" | "stage_revisit" | null
@@ -257,6 +264,7 @@ export function makeFeedback({
 	const fm = {
 		title,
 		origin,
+		...(severity ? { severity } : {}),
 		author,
 		author_type: author === "user" ? "human" : "agent",
 		created_at: at,
@@ -369,6 +377,13 @@ export function seedVerifiedElaboration({
 /**
  * Initialize a bare-bones git repo + intent dir layout for a test.
  * Returns { repoRoot, intentDir, slug }.
+ *
+ * Side effect: sets `HAIKU_PROJECTS_ROOT` to a tmpdir under `<repoRoot>/
+ * .haiku/_projects-root/` so any prompt-builder calls during the test
+ * write their materialized prompts/shared-blocks there instead of the
+ * user's real `~/.haiku/projects/`. The tmpdir is cleaned up when the
+ * test removes `repoRoot`. Idempotent — overwriting the env var across
+ * tests is fine since the path resolution is recomputed per call.
  */
 export function initTestRepo({ repoRoot, slug }) {
 	if (!existsSync(repoRoot)) mkdirSync(repoRoot, { recursive: true })
@@ -383,6 +398,9 @@ export function initTestRepo({ repoRoot, slug }) {
 	}
 	const intentDir = join(repoRoot, ".haiku", "intents", slug)
 	mkdirSync(intentDir, { recursive: true })
+	const projectsRoot = join(repoRoot, ".haiku", "_projects-root")
+	mkdirSync(projectsRoot, { recursive: true })
+	process.env.HAIKU_PROJECTS_ROOT = projectsRoot
 	return { repoRoot, intentDir, slug }
 }
 
@@ -412,19 +430,36 @@ export function makeStudio({
 			review_agents: ["code-reviewer"],
 		},
 	],
+	studio_fix_hats = [],
 }) {
 	const studioRoot = join(repoRoot, ".haiku", "studios", studio)
 	mkdirSync(studioRoot, { recursive: true })
 
-	// STUDIO.md — declare stage list
+	// STUDIO.md — declare stage list (+ optional intent-scope `fix_hats:`)
 	const studioFm = {
 		stages: stages.map((s) => s.name),
 		default_model: "sonnet",
+		...(studio_fix_hats.length > 0 ? { fix_hats: studio_fix_hats } : {}),
 	}
 	writeFileSync(
 		join(studioRoot, "STUDIO.md"),
 		matter.stringify(`# ${studio}\n`, studioFm),
 	)
+
+	// Studio-level fix-hat mandate files (intent-scope fix loop).
+	if (studio_fix_hats.length > 0) {
+		const studioFixHatsRoot = join(studioRoot, "fix-hats")
+		mkdirSync(studioFixHatsRoot, { recursive: true })
+		for (const hat of studio_fix_hats) {
+			writeFileSync(
+				join(studioFixHatsRoot, `${hat}.md`),
+				matter.stringify(
+					`# ${hat}\n\nStudio fix-hat mandate for ${hat}.\n`,
+					{},
+				),
+			)
+		}
+	}
 
 	for (const stage of stages) {
 		const stageRoot = join(studioRoot, "stages", stage.name)
@@ -507,11 +542,22 @@ export function makeStudio({
  * No "switch to main, compute, switch back" dance. No activeStageHint.
  * The disk after pre-tick merge IS the source of truth.
  */
-export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
+export async function runTickWithBranchAlignment(
+	repoRootOrSlug,
+	maybeSlug,
+	opts = {},
+) {
 	// Two call shapes: (repoRoot, slug) or (slug) — when slug-only the
 	// caller has already chdir'd to repoRoot.
 	const slug = maybeSlug ?? repoRootOrSlug
 	const repoRoot = maybeSlug ? repoRootOrSlug : process.cwd()
+	// The pre-execute BRIEF (2026-05-22): when the cursor returns
+	// `write_brief`, mirror what the briefer subagent does in production —
+	// write `BRIEF.md` and re-tick — so full-lifecycle harnesses advance
+	// past the new step transparently. Tests that want to OBSERVE the
+	// `write_brief` action (cursor-walk brief tests) pass
+	// `{ autoBrief: false }`.
+	const autoBrief = opts.autoBrief !== false
 	const origCwd = process.cwd()
 	process.chdir(repoRoot)
 	try {
@@ -526,7 +572,7 @@ export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 			"../src/orchestrator/workflow/cursor.js"
 		)
 		const { parseFrontmatter } = await import("../src/state-tools.js")
-		const { existsSync, readFileSync } = await import("node:fs")
+		const { existsSync, readFileSync, writeFileSync } = await import("node:fs")
 		const { join } = await import("node:path")
 		const { execFileSync } = await import("node:child_process")
 		clearStudioCache()
@@ -592,7 +638,38 @@ export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 			}
 		}
 		if (pendingMergeStage) return pendingMergeStage
-		return dispatchOrchestratorAction(slug, "")
+		const action = dispatchOrchestratorAction(slug, "")
+		if (autoBrief && action?.action === "write_brief" && action.stage) {
+			// Briefer stand-in: write BRIEF.md on the (already-aligned) stage
+			// branch, then re-tick. Writing the brief doesn't move the active
+			// stage, so alignment stays put and the next walk sees the file.
+			const briefPath = join(
+				repoRoot,
+				".haiku",
+				"intents",
+				slug,
+				"stages",
+				action.stage,
+				"BRIEF.md",
+			)
+			writeFileSync(briefPath, "# Brief (test fixture)\n")
+			// Commit on the (already-aligned) stage branch — mirrors the
+			// brief being committed with the stage in production.
+			try {
+				execFileSync("git", ["add", "-A"], { cwd: repoRoot, stdio: "ignore" })
+				execFileSync("git", ["commit", "-q", "-m", "test: stage brief"], {
+					cwd: repoRoot,
+					stdio: "ignore",
+				})
+			} catch {
+				/* filesystem-mode or nothing to commit — non-fatal */
+			}
+			// Re-dispatch in place: we're already on the aligned branch with
+			// BRIEF.md on disk, so the cursor advances past the brief without
+			// re-running the branch reconciliation dance.
+			return dispatchOrchestratorAction(slug, "")
+		}
+		return action
 	} finally {
 		process.chdir(origCwd)
 	}

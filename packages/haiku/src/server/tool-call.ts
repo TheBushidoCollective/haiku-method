@@ -11,9 +11,10 @@
 // visually consistent.
 
 import { spawn } from "node:child_process"
-import { appendFileSync, existsSync, mkdirSync } from "node:fs"
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
+import matter from "gray-matter"
 import { z } from "zod"
 import { ensureOnStageBranch } from "../git-worktree.js"
 import { closeSessionConnection, startHttpServer } from "../http.js"
@@ -23,6 +24,7 @@ import {
 	parseAllUnits,
 	parseCriteria,
 	parseIntent,
+	parseIntentRootFiles,
 	parseKnowledgeFiles,
 	parseStageArtifacts,
 	parseStageFiles,
@@ -30,6 +32,7 @@ import {
 	toMermaidDefinition,
 } from "../index.js"
 import { broadcastIntent } from "../intent-broadcaster.js"
+import { launchMicroApp } from "../micro-app.js"
 import { handleOrchestratorTool } from "../orchestrator.js"
 import { buildOutputDeclaredBy } from "../output-declared-by.js"
 import { isSentryConfigured, reportFeedback } from "../sentry.js"
@@ -39,26 +42,34 @@ import type {
 	ReviewAnnotations,
 } from "../sessions.js"
 import {
-	clearHeartbeat,
+	beginPresenceWatch,
 	createDesignDirectionSession,
 	createQuestionSession,
 	createSession,
+	createViewSession,
 	deleteSession,
+	endPresenceWatch,
 	findLiveReviewSessionForIntent,
 	getPreviousReviewSnapshot,
 	getSession,
+	hasAttachedReviewSessionForIntent,
 	hasPresenceLost,
 	isBrowserAttached,
 	updateSession,
+	updateViewSession,
 	waitForSession,
 } from "../sessions.js"
 import { buildStageArtifactUrl } from "../stage-artifact-url.js"
 import {
 	type HaikuAwaitDesignDirectionInput,
 	type HaikuAwaitVisualAnswerInput,
+	type HaikuViewCloseInput,
+	type HaikuViewInput,
 	validateHaikuAwaitDesignDirectionInputSchema,
 	validateHaikuAwaitVisualAnswerInputSchema,
 	validateHaikuReviewOpenInputSchema,
+	validateHaikuViewCloseInputSchema,
+	validateHaikuViewInputSchema,
 } from "../state/schemas/index.js"
 import { validateToolInput } from "../state/schemas/inputs/_validate.js"
 import {
@@ -68,19 +79,21 @@ import {
 	intentFromCurrentBranch,
 	listVisibleIntents,
 	parseFrontmatter,
-	readJson,
-	writeJson,
 } from "../state-tools.js"
+import { readStageArtifactDefs } from "../studio-reader.js"
 import { withAnnouncement } from "../tools/orchestrator/_announce.js"
 import { orchestratorToolHandlers } from "../tools/orchestrator/index.js"
-import {
-	buildReviewUrl,
-	clearE2EKey,
-	closeTunnel,
-	isRemoteReviewEnabled,
-	openTunnel,
-} from "../tunnel.js"
+import { buildReviewUrl, isRemoteReviewEnabled, openTunnel } from "../tunnel.js"
 import { buildUnitOutputPreviews } from "../unit-output-preview.js"
+import {
+	type BootProcessSpec,
+	bootFromAgent,
+	detectBootTarget,
+	killBootSession,
+	readBootRecipe,
+	spawnBoot,
+	spawnBootGroup,
+} from "../view-boot.js"
 
 /**
  * Build the per-unit output preview map and the inverse
@@ -159,6 +172,12 @@ const DesignArchetypeSchema = z.object({
 
 const PickDesignDirectionInput = z.object({
 	intent_slug: z.string().describe("The intent slug this direction applies to"),
+	context: z
+		.string()
+		.optional()
+		.describe(
+			"Optional markdown preamble shown above the archetype cards. Use it to give the user the context they need to choose well — what this direction governs, what's already been decided, what tradeoffs each option leans into. Mirrors `context` on ask_user_visual_question.",
+		),
 	archetypes: z
 		.array(DesignArchetypeSchema)
 		.optional()
@@ -178,23 +197,44 @@ const PickDesignDirectionInput = z.object({
 })
 
 /**
- * Launch the OS default browser at `url`. Best-effort — a failure HERE
- * never advances a review gate on its own (the caller still `await`s
+ * Open the review SPA for the user. Best-effort — a failure HERE never
+ * advances a review gate on its own (the caller still `await`s
  * `waitForSession` which either hears a real decision or times out),
  * but we log loudly so the reviewer has a visible URL they can paste
- * manually. The previous implementation swallowed all three failure
- * modes (sync throw, async 'error', non-zero exit) silently, which
- * left the workflow engine "waiting quietly" with no UI hint anywhere.
+ * manually.
  *
- * `label` lands in log lines so operators can tell which surface
- * tried to open — review gate, question, direction, or the always-on
- * review pane.
+ * Two strategies, in order:
+ *   1. Micro-app window — a Chromium-family browser launched in app-mode
+ *      against a clean, per-session profile. Chrome-less window, no
+ *      profile picker, no extensions, no cross-talk with the user's real
+ *      browser, and we own the process so we can close it when the gate
+ *      resolves. Used whenever a Chromium-family binary exists and the
+ *      caller passed the `sessionId` (so the window is trackable +
+ *      closable). See micro-app.ts.
+ *   2. OS default browser — `open` / `xdg-open` / `Start-Process`. The
+ *      universal fallback for headless hosts, missing Chromium, or when
+ *      the micro-app is disabled. Drops the URL into the user's default
+ *      browser exactly as before.
+ *
+ * `label` lands in log lines so operators can tell which surface tried
+ * to open — review gate, question, direction, or the always-on pane.
  */
-export function launchBrowserBestEffort(url: string, label: string): void {
+export function launchBrowserBestEffort(
+	url: string,
+	label: string,
+	sessionId?: string,
+): void {
 	console.error(
 		`[haiku] ${label} ready → ${url}\n` +
 			`         Share this URL with the reviewer if the browser didn't auto-open.`,
 	)
+	// Strategy 1: dedicated micro-app window. Returns false on a headless
+	// host / no Chromium / disabled, in which case we fall through to the
+	// OS-open path below.
+	if (launchMicroApp(url, sessionId ? { sessionId } : {})) {
+		return
+	}
+	// Strategy 2 (fallback): OS default browser.
 	// On Windows we use PowerShell `Start-Process` rather than `cmd /c start`.
 	// cmd.exe interprets `&`, `|`, `^`, `<`, `>`, `%`, `!` even in argv-passed
 	// args, which would mangle a URL like `?session=a&token=b` (everything
@@ -292,6 +332,31 @@ export function bindSessionCancellation(
 	)
 }
 
+/**
+ * `haiku_*` tools that have a DEDICATED inline handler in this file
+ * located BELOW the `handleStateTool` catch-all (see below). The
+ * catch-all routes every `haiku_*` name to the state-tool router; any
+ * inline handler that sits after it is unreachable unless its name is
+ * excluded here, and the state-tool router has no case for these, so
+ * the call falls through to its "Unknown tool: <name>" default.
+ *
+ * This set IS that exclusion. Adding a new inline `haiku_*` handler
+ * below the catch-all? Add its name here in the same change, or it
+ * ships dead. The `tool-call-inline-dispatch` test pins the contract:
+ * every name here is genuinely unknown to `handleStateTool` (so the
+ * exclusion is load-bearing, not stale) and routes to its inline
+ * handler instead of the "Unknown tool" fallback. (Root cause of the
+ * 2026-05-26 `haiku_view` bug: `haiku_view` + `haiku_view_close` had
+ * inline handlers but were absent from this set, so both returned
+ * "Unknown tool: <name>".)
+ */
+export const INLINE_HANDLED_HAIKU_TOOLS: ReadonlySet<string> = new Set([
+	"haiku_view",
+	"haiku_view_close",
+	"haiku_await_visual_answer",
+	"haiku_await_design_direction",
+])
+
 export async function handleToolCall(
 	request: {
 		params: { name: string; arguments?: Record<string, unknown> }
@@ -314,18 +379,9 @@ export async function handleToolCall(
 		)
 	}
 
-	// Report tool — submit user feedback/bug reports to Sentry
+	// Report tool — submit user feedback/bug reports to Sentry, or fall back
+	// to a durable local sink when no DSN is configured.
 	if (name === "haiku_report") {
-		if (!isSentryConfigured()) {
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: "Feedback is not available in this installation (Sentry DSN not configured).",
-					},
-				],
-			}
-		}
 		const typedArgs = (args ?? {}) as Record<string, unknown>
 		const message = typedArgs.message as string | undefined
 		if (!message) {
@@ -341,6 +397,51 @@ export async function handleToolCall(
 		const sessionCtx = typedArgs._session_context as
 			| Record<string, string>
 			| undefined
+		// BUG-5 (admin-portal-reimagine): without a Sentry DSN this used to
+		// return a no-op success, silently DROPPING every engine-class finding
+		// from record_reflection (all dev builds have no DSN). Write the report
+		// to a durable local sink so findings land somewhere instead of a dead
+		// sink, and return success referencing the path.
+		if (!isSentryConfigured()) {
+			try {
+				const reportsDir = join(findHaikuRoot(), "reports")
+				mkdirSync(reportsDir, { recursive: true })
+				const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+				const reportPath = join(reportsDir, `${stamp}.json`)
+				writeFileSync(
+					reportPath,
+					`${JSON.stringify(
+						{
+							recorded_at: new Date().toISOString(),
+							message,
+							contact_email: contactEmail ?? null,
+							name: userName ?? null,
+							session_context: sessionCtx ?? null,
+						},
+						null,
+						2,
+					)}\n`,
+				)
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Sentry is not configured in this installation; report written locally to ${reportPath}.`,
+						},
+					],
+				}
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Sentry is not configured and the local report sink failed: ${err instanceof Error ? err.message : String(err)}`,
+						},
+					],
+					isError: true,
+				}
+			}
+		}
 		reportFeedback(message, sessionCtx, contactEmail, userName)
 		return {
 			content: [
@@ -381,7 +482,7 @@ export async function handleToolCall(
 						content: [
 							{
 								type: "text" as const,
-								text: "No active intents found. Start one with /haiku:start, or pass `intent` explicitly.",
+								text: "No active intents found. Start one with /haiku:haiku-start, or pass `intent` explicitly.",
 							},
 						],
 						isError: true,
@@ -475,6 +576,9 @@ export async function handleToolCall(
 		const stageArtifacts = await parseStageArtifacts(intentDirAbs)
 		const { outputs: outputArtifacts, other: otherFiles } =
 			await parseStageFiles(intentDirAbs)
+		// Intent-ROOT stray files (intent-scope "Other") — excludes system
+		// journals (action-log/write-audit) by design.
+		const intentOtherFiles = await parseIntentRootFiles(intentDirAbs)
 		// Rewrite every relativePath (not just images) to a tunnel URL so
 		// click-out links work for HTML, file, and image types alike. The
 		// parser produces intent-dir-relative paths; the helper returns
@@ -482,7 +586,7 @@ export async function handleToolCall(
 		// reaches via `withAuthQuery`. Preserve the original
 		// intent-relative path on `intentRelativePath` so the SPA can
 		// look the artifact up in `output_declared_by`.
-		for (const oa of [...outputArtifacts, ...otherFiles]) {
+		for (const oa of [...outputArtifacts, ...otherFiles, ...intentOtherFiles]) {
 			if (oa.relativePath) {
 				oa.intentRelativePath = oa.relativePath
 				oa.relativePath = buildStageArtifactUrl(
@@ -497,6 +601,7 @@ export async function handleToolCall(
 			stageArtifacts,
 			outputArtifacts,
 			otherFiles,
+			intentOtherFiles,
 		})
 
 		// (Legacy server-rendered review HTML removed — the live route
@@ -531,29 +636,14 @@ export async function handleToolCall(
 		const gateKind = (a.gate_kind as string | undefined) || ""
 		if (gateKind === "spec" || gateKind === "approval") {
 			session.ad_hoc = false
-			launchBrowserBestEffort(reviewUrl, "User gate review")
-			if (activeStage) {
-				// v4: state.json is gone. Gate-session pointers live on
-				// per-stage `gate-session.json` so haiku_await_gate can
-				// find the open session without touching state.json.
-				const gateSessionFile = join(
-					intentDir(slug),
-					"stages",
-					activeStage,
-					"gate-session.json",
-				)
-				mkdirSync(dirname(gateSessionFile), { recursive: true })
-				const stageState = existsSync(gateSessionFile)
-					? readJson(gateSessionFile)
-					: {}
-				stageState.gate_review_session_id = session.session_id
-				stageState.gate_review_url = reviewUrl
-				// Map cursor's gate_kind → await_gate's gate_review_context
-				// vocabulary (see stampGateApproval in haiku_await_gate.ts).
-				stageState.gate_review_context =
-					gateKind === "spec" ? "elaborate_to_execute" : "stage_gate"
-				writeJson(gateSessionFile, stageState)
-			}
+			launchBrowserBestEffort(reviewUrl, "User gate review", session.session_id)
+			// Gate session pointers (gate_review_session_<stage>,
+			// gate_review_url_<stage>, gate_review_context) are written
+			// to intent.md frontmatter by haiku_run_next when it
+			// prepares the gate. haiku_await_gate reads them from there.
+			// Earlier code on this branch also wrote a per-stage
+			// `gate-session.json` sidecar — that file had no readers and
+			// was pure on-disk noise. Removed.
 			return {
 				content: [
 					{
@@ -564,97 +654,41 @@ export async function handleToolCall(
 			}
 		}
 
-		launchBrowserBestEffort(reviewUrl, "Ad-hoc review")
+		launchBrowserBestEffort(reviewUrl, "Ad-hoc review", session.session_id)
 
-		// Block until the reviewer hits Done or Request Changes (or the
-		// pane times out). The UI posts a `decide` frame (WS) or
-		// POSTs `/review/:id/decide` (HTTP) — both write
-		// `session.pending_decision` and broadcast a
-		// `pending_decision_changed` event, exactly like the
-		// gate-review path. We mirror `awaitGateReviewSession`'s
-		// consumption pattern: wake on every state change, look for
-		// `pending_decision`, drain it, return.
+		// Non-blocking by design. /haiku:haiku-show is a browse surface,
+		// not a gate — there is no workflow decision to wait on, so we
+		// return as soon as the pane is open and let the agent keep
+		// working. The user reads the pane at their own pace; the SPA's
+		// "Done" button closes its own tab (window.close()) and POSTs a
+		// decision the decide route uses to reap this session server-side
+		// (see /review/:id/decide). If the user just closes the tab
+		// instead, the session TTL evicts it. Any feedback the user
+		// leaves persists to disk as FB files and the next
+		// `haiku_run_next` routes it through the normal fix-loop — nothing
+		// here has to block on it.
 		//
-		// Drain on entry too: the reviewer may have decided before the
-		// agent re-entered this tool (rare but legal) — the queued
-		// decision should be picked up immediately.
-		try {
-			const drainPending = (): {
-				decision: string
-				feedback?: string
-			} | null => {
-				const cur = getSession(session.session_id)
-				if (!cur || cur.session_type !== "review") return null
-				if (!cur.pending_decision) return null
-				const queued = cur.pending_decision
-				updateSession(session.session_id, { pending_decision: null })
-				return { decision: queued.decision, feedback: queued.feedback }
-			}
-
-			while (true) {
-				const queued = drainPending()
-				if (queued) {
-					if (queued.decision === "changes_requested") {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: `Ad-hoc review closed with Request Changes on stage "${activeStage || "(unspecified)"}". Pending feedback is already persisted on disk — call \`haiku_run_next\` to route it through the normal fix-loop / revisit path.`,
-								},
-							],
-						}
-					}
-					return {
-						content: [
-							{
-								type: "text" as const,
-								text: `Ad-hoc review closed with Done — no changes requested. No workflow action needed.`,
-							},
-						],
-					}
-				}
-
-				let timedOut = false
-				try {
-					await waitForSession(session.session_id, 30 * 60 * 1000, signal)
-				} catch (err) {
-					if (signal?.aborted) throw err
-					timedOut = true
-				}
-
-				if (timedOut) break
-				if (hasPresenceLost(session.session_id)) {
-					console.error(
-						`[haiku] Ad-hoc review ${session.session_id} lost presence — continuing to wait (no reopen)`,
-					)
-				}
-			}
-
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: `Ad-hoc review pane at ${reviewUrl} timed out after 30 minutes without a Done or Request Changes click. Any feedback the reviewer typed is still persisted on disk; the next \`haiku_run_next\` will see it if present.`,
-					},
-				],
-			}
-		} finally {
-			closeSessionConnection(session.session_id, "ad-hoc review closed")
-			clearHeartbeat(session.session_id)
-			if (isRemoteReviewEnabled()) {
-				clearE2EKey(session.session_id)
-				closeTunnel()
-			}
-			deleteSession(session.session_id)
+		// (A 30-minute wait-for-decision loop used to live here, pinning
+		// the agent on what is purely a viewing pane. Only an ACTUAL gate
+		// blocks now: that path returns above via `gate_kind` and the
+		// caller's follow-up `haiku_await_gate`.)
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: `Ad-hoc review pane open at ${reviewUrl} (stage "${activeStage || "(unspecified)"}"). Non-blocking — keep working. The user browses and closes the pane with Done when finished; any feedback they leave persists to disk and the next \`haiku_run_next\` routes it through the normal fix-loop. No workflow action is required here.`,
+				},
+			],
 		}
 	}
 
-	// Catch-all for haiku_* names → handleStateTool. Tools with dedicated inline handlers BELOW (haiku_await_visual_answer, haiku_await_design_direction) MUST be excluded here — without an exclusion, every call gets silently swallowed by the state-tool router, which returns "Unknown tool" because it doesn't know about them. That was the original visual-answer bug.
-	if (
-		name.startsWith("haiku_") &&
-		name !== "haiku_await_visual_answer" &&
-		name !== "haiku_await_design_direction"
-	) {
+	// Catch-all for haiku_* names → handleStateTool. Tools with a
+	// dedicated inline handler BELOW this point MUST be listed in
+	// `INLINE_HANDLED_HAIKU_TOOLS` — otherwise the call is swallowed by
+	// the state-tool router, which has no case for them and returns
+	// "Unknown tool". (Handlers ABOVE this point already returned and
+	// never reach here, so they don't need listing.)
+	if (name.startsWith("haiku_") && !INLINE_HANDLED_HAIKU_TOOLS.has(name)) {
 		return handleStateTool(name, (args ?? {}) as Record<string, unknown>)
 	}
 
@@ -713,11 +747,411 @@ export async function handleToolCall(
 		// call, not a "URL + call await" two-step. haiku_await_visual_answer
 		// stays as a resume entry point but isn't part of the canonical
 		// flow.
-		launchBrowserBestEffort(questionUrl, "Question session")
+		launchBrowserBestEffort(questionUrl, "Question session", session.session_id)
 		return await awaitVisualAnswerSession(session.session_id, {
 			url: questionUrl,
 			signal,
 		})
+	}
+
+	// View session — open a tunnelled URL that points at the SPA's
+	// artifact-browser route (viewer mode) or a spawned project dev
+	// server (boot mode). Does NOT block on a decision; the caller
+	// (typically a runtime-verifier review-agent) hands the URL to the
+	// bundled playwright MCP, drives the page, then calls
+	// `haiku_view_close` when done. Boot-mode subprocess management
+	// lives in a follow-up commit — this first slice ships viewer mode
+	// only and rejects `mode: "boot"` with a not-yet-implemented note.
+	if (name === "haiku_view") {
+		const a = (args ?? {}) as Record<string, unknown>
+		const viewInputErr = validateToolInput(
+			a,
+			validateHaikuViewInputSchema,
+			"haiku_view",
+		)
+		if (viewInputErr) return viewInputErr
+		const validated = a as HaikuViewInput
+		const requestedMode = validated.mode ?? "auto"
+
+		// Resolve intent slug. Same auto-resolution pattern as
+		// haiku_review_open — explicit arg wins, else branch match,
+		// else single-active-intent fallback.
+		let slug = validated.intent
+		if (!slug) {
+			const branchMatch = intentFromCurrentBranch()
+			if (branchMatch) {
+				slug = branchMatch.slug
+			} else {
+				const root = findHaikuRoot()
+				const intentsDir = join(root, "intents")
+				const active = listVisibleIntents(intentsDir).filter(
+					(i) => (i.data.status as string) !== "completed",
+				)
+				if (active.length === 1) {
+					slug = active[0].slug
+				} else {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: JSON.stringify({
+									error: "haiku_view_intent_unresolved",
+									message:
+										active.length === 0
+											? "No active intents found. Pass `intent` explicitly."
+											: `Multiple active intents (${active.map((i) => i.slug).join(", ")}). Pass \`intent\` explicitly.`,
+								}),
+							},
+						],
+						isError: true,
+					}
+				}
+			}
+		}
+
+		const intentDirAbs = intentDir(slug)
+		if (!existsSync(intentDirAbs)) {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: JSON.stringify({
+							error: "haiku_view_intent_not_found",
+							message: `Intent "${slug}" not found at ${intentDirAbs}.`,
+						}),
+					},
+				],
+				isError: true,
+			}
+		}
+
+		// Boot resolution — tried for `auto` and `boot`.
+		// Precedence:
+		//   1. Agent-supplied `processes` (full stack — api + frontend +
+		//      db + worker etc.). Mutually exclusive with `command`.
+		//   2. Agent-supplied `command` argv (single-process boot).
+		//   3. Fast-path `package.json` `dev`/`start` detection for the
+		//      JS-ecosystem common case (no per-language heuristics
+		//      beyond this — the agent supplies anything else).
+		const wantsBoot = requestedMode === "boot" || requestedMode === "auto"
+		const bootCwd = validated.cwd
+			? join(intentDirAbs, validated.cwd)
+			: intentDirAbs
+
+		// Group path — agent supplied a process graph.
+		let processGroup: BootProcessSpec[] | null = null
+		let primaryName: string | null = null
+		if (wantsBoot && validated.processes && validated.processes.length > 0) {
+			if (validated.command && validated.command.length > 0) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								error: "haiku_view_input_invalid",
+								message:
+									"`command` and `processes` are mutually exclusive. Use `command` for a one-process boot and `processes` for a stack.",
+							}),
+						},
+					],
+					isError: true,
+				}
+			}
+			processGroup = validated.processes.map((p) => ({
+				name: p.name,
+				command: p.command,
+				cwd: p.cwd ? join(intentDirAbs, p.cwd) : intentDirAbs,
+				port_env: p.port_env,
+				ready_url: p.ready_url,
+				depends_on: p.depends_on,
+				no_port: p.no_port,
+			}))
+			const portBound = processGroup.filter((p) => !p.no_port)
+			if (validated.primary) {
+				primaryName = validated.primary
+			} else if (portBound.length === 1) {
+				primaryName = portBound[0].name
+			} else {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								error: "haiku_view_primary_required",
+								message: `\`processes\` has ${portBound.length} port-bound entries (${portBound.map((p) => p.name).join(", ")}). Set \`primary: "<name>"\` to tell the engine which one's URL Playwright should drive.`,
+							}),
+						},
+					],
+					isError: true,
+				}
+			}
+			const named = new Set(processGroup.map((p) => p.name))
+			if (!named.has(primaryName)) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								error: "haiku_view_primary_not_in_group",
+								message: `\`primary: "${primaryName}"\` does not match any process name in the group (${[...named].join(", ")}).`,
+							}),
+						},
+					],
+					isError: true,
+				}
+			}
+		}
+
+		// Project boot recipe (`.haiku/boot.md`) — lower precedence than an
+		// explicit agent `command`/`processes`, higher than package.json
+		// auto-detect. The harness-agnostic analog of a committed run-skill:
+		// the project declares once how to boot/drive its app and every agent
+		// on every harness uses it. Recipes always normalize to a process
+		// group (a single `command:` becomes a one-process group), so they
+		// flow through the same supervisor as an agent-supplied stack.
+		if (
+			wantsBoot &&
+			!processGroup &&
+			!(validated.command && validated.command.length > 0)
+		) {
+			let recipe: ReturnType<typeof readBootRecipe> = null
+			try {
+				// `.haiku/boot.md` lives at the project root — `findHaikuRoot()`
+				// returns the `.haiku` dir, so its parent is the repo root.
+				recipe = readBootRecipe(dirname(findHaikuRoot()))
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								error: "haiku_view_boot_recipe_invalid",
+								message: err instanceof Error ? err.message : String(err),
+							}),
+						},
+					],
+					isError: true,
+				}
+			}
+			if (recipe) {
+				processGroup = recipe.processes
+				primaryName = recipe.primary
+			}
+		}
+
+		// Single-process path (only when processes wasn't supplied).
+		let detection: ReturnType<typeof detectBootTarget> = null
+		if (wantsBoot && !processGroup) {
+			if (validated.command && validated.command.length > 0) {
+				detection = bootFromAgent(validated.command, bootCwd)
+			} else {
+				detection = detectBootTarget(bootCwd)
+			}
+		}
+
+		// `mode: "boot"` is a hard request — fail loud if no process group,
+		// no command, and the fast-path didn't match.
+		if (requestedMode === "boot" && !processGroup && !detection) {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: JSON.stringify({
+							error: "haiku_view_no_boot_target",
+							message: `No boot target supplied, no \`.haiku/boot.md\` recipe, and no package.json dev/start script found in ${bootCwd}. Either: (a) retry haiku_view with \`command: [...]\` for a one-process app (e.g. \`["uvicorn", "app:main"]\`, \`["bin/dev"]\`, \`["go", "run", "./cmd/server"]\`) or \`processes: [...]\` with \`primary: "<name>"\` for a stack; or (b) commit a \`.haiku/boot.md\` recipe so every agent on every harness boots this app the same way without rediscovering it (frontmatter: \`command:\`/\`processes:\`, \`cwd:\`, \`env:\`, \`ready_url:\`). The engine sets PORT + HOST env vars before spawning each process and exposes \`<DEP_NAME>_PORT\` + \`<DEP_NAME>_URL\` for service discovery between dependents.`,
+						}),
+					},
+				],
+				isError: true,
+			}
+		}
+
+		// Resolve studio for studio-app contribution dispatch in the
+		// SPA. Best-effort: parse intent.md FM and read `studio`. A
+		// missing or unparseable intent yields no studio, which just
+		// disables studio-app contribution for this session — the
+		// default mime dispatch still works.
+		let studio: string | undefined
+		try {
+			const parsed = await parseIntent(intentDirAbs)
+			const fm = parsed?.frontmatter as { studio?: unknown } | undefined
+			if (fm && typeof fm.studio === "string" && fm.studio) {
+				studio = fm.studio
+			}
+		} catch {
+			// Best-effort — studio routing is a UI niceity, not a hard
+			// dependency of the view session.
+		}
+
+		const effectiveMode: "viewer" | "boot" =
+			processGroup || detection ? "boot" : "viewer"
+		const session = createViewSession({
+			intent_dir: intentDirAbs,
+			intent_slug: slug,
+			studio,
+			stage: validated.stage,
+			artifact: validated.artifact,
+			mode: effectiveMode,
+		})
+
+		if (effectiveMode === "boot" && (processGroup || detection)) {
+			// Boot mode: spawn the dev process(es), return a direct
+			// localhost URL pointing at the primary. Skip the SPA tunnel
+			// entirely — Playwright drives the project's real app, not
+			// an embedded preview.
+			try {
+				let primaryPort: number
+				let primaryDescription: string
+				let primaryPid: number
+				let processesPayload:
+					| Array<{
+							name: string
+							port: number | null
+							command: string
+							pid: number
+					  }>
+					| undefined
+				if (processGroup && primaryName) {
+					const group = await spawnBootGroup(
+						session.session_id,
+						processGroup,
+						primaryName,
+					)
+					if (group.primary.port === null) {
+						throw new Error(
+							`primary process "${primaryName}" has no port — cannot return URL`,
+						)
+					}
+					primaryPort = group.primary.port
+					primaryDescription = group.primary.command
+					primaryPid = group.primary.pid
+					processesPayload = group.processes
+				} else if (detection) {
+					const spawned = await spawnBoot(session.session_id, detection)
+					if (spawned.port === null) {
+						throw new Error("single-process boot returned null port")
+					}
+					primaryPort = spawned.port
+					primaryDescription = spawned.command
+					primaryPid = spawned.pid
+				} else {
+					throw new Error("boot mode reached without group or detection")
+				}
+				updateViewSession(session.session_id, {
+					boot_port: primaryPort,
+					boot_pid: primaryPid,
+					boot_command: primaryDescription,
+				})
+				const bootUrl = `http://127.0.0.1:${primaryPort}/`
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								session_id: session.session_id,
+								url: bootUrl,
+								mode: "boot",
+								intent: slug,
+								stage: validated.stage ?? null,
+								artifact: validated.artifact ?? null,
+								boot_command: primaryDescription,
+								processes: processesPayload,
+								note: "Hand the `url` to the bundled `haiku-playwright` MCP. The dev process(es) stay up until `haiku_view_close` (or the 30min TTL). Call `haiku_view_close` with the `session_id` when done — the engine kills the whole group.",
+							}),
+						},
+					],
+				}
+			} catch (err) {
+				// Spawn or port-bind failed — close the session and
+				// surface the failure.
+				deleteSession(session.session_id)
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								error: "haiku_view_boot_failed",
+								message: err instanceof Error ? err.message : String(err),
+								boot_command: processGroup
+									? processGroup
+											.map((p) => `${p.name}: ${p.command.join(" ")}`)
+											.join("; ")
+									: detection?.description,
+							}),
+						},
+					],
+					isError: true,
+				}
+			}
+		}
+
+		// Viewer mode: tunnel a URL pointing at the SPA's
+		// artifact-browser route.
+		const port = await startHttpServer()
+		const base = isRemoteReviewEnabled()
+			? buildReviewUrl(session.session_id, await openTunnel(port), "view")
+			: `http://127.0.0.1:${port}/view/${session.session_id}`
+		const params = new URLSearchParams()
+		if (validated.stage) params.set("stage", validated.stage)
+		if (validated.artifact) params.set("artifact", validated.artifact)
+		const query = params.toString()
+		const viewUrl = query
+			? `${base}${base.includes("?") ? "&" : "?"}${query}`
+			: base
+
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: JSON.stringify({
+						session_id: session.session_id,
+						url: viewUrl,
+						mode: "viewer",
+						intent: slug,
+						stage: validated.stage ?? null,
+						artifact: validated.artifact ?? null,
+						note: "Hand the `url` to the bundled `haiku-playwright` MCP. When done, call `haiku_view_close` with the `session_id`.",
+					}),
+				},
+			],
+		}
+	}
+
+	if (name === "haiku_view_close") {
+		const a = (args ?? {}) as Record<string, unknown>
+		const closeInputErr = validateToolInput(
+			a,
+			validateHaikuViewCloseInputSchema,
+			"haiku_view_close",
+		)
+		if (closeInputErr) return closeInputErr
+		const validated = a as HaikuViewCloseInput
+		const session = getSession(validated.session_id)
+		const wasView = session?.session_type === "view"
+		const wasBootMode = wasView && session.mode === "boot"
+
+		// Boot-mode cleanup first — kill the spawned dev server
+		// before deleting the session record so the supervisor's
+		// killAllOrphanedBootSessions sweep does not have to clean
+		// up after us on the next tick.
+		const killedBoot = wasBootMode
+			? killBootSession(validated.session_id)
+			: false
+		const hadSession = deleteSession(validated.session_id)
+
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: JSON.stringify({
+						closed: hadSession,
+						session_id: validated.session_id,
+						was_view_session: wasView,
+						killed_boot_process: killedBoot,
+					}),
+				},
+			],
+		}
 	}
 
 	if (name === "haiku_await_visual_answer") {
@@ -758,6 +1192,82 @@ export async function handleToolCall(
 		const input = PickDesignDirectionInput.parse(args)
 		const _title = input.title ?? "Design Direction"
 
+		// Autopilot short-circuit (2026-05-18). When the intent is in
+		// autopilot mode the design phase has no human in the loop, so
+		// the SPA picker would block forever. Auto-write the manifest
+		// using a sensible default — pick the first archetype if
+		// archetypes were generated upstream, otherwise stamp an
+		// "auto-selected (no archetypes)" manifest that records the
+		// agent is proceeding without a chosen direction. Either way the
+		// cursor's existence check on the next tick passes the gate and
+		// the workflow keeps advancing without waiting on a user click
+		// that's never going to come.
+		try {
+			const intentMdPath = join(
+				findHaikuRoot(),
+				"intents",
+				input.intent_slug,
+				"intent.md",
+			)
+			if (existsSync(intentMdPath)) {
+				const intentRaw = await readFile(intentMdPath, "utf-8")
+				const intentMode =
+					(parseFrontmatter(intentRaw).data.mode as string) || ""
+				if (intentMode === "autopilot") {
+					const manifest = await resolveDesignDirectionManifestLocation(
+						input.intent_slug,
+					)
+					if (!manifest) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Autopilot short-circuit for pick_design_direction failed: no discovery template with tool=pick_design_direction found for intent '${input.intent_slug}'. The cursor's discovery gate will not clear automatically — file a bug or fall back to manual handling.`,
+								},
+							],
+							isError: true,
+						}
+					}
+					let archetypes: DesignArchetypeData[] = []
+					if (input.archetypes) {
+						archetypes = input.archetypes
+					} else if (input.archetypes_file) {
+						const raw = await readFile(resolve(input.archetypes_file), "utf-8")
+						archetypes = z.array(DesignArchetypeSchema).parse(JSON.parse(raw))
+					}
+					const chosen = archetypes[0]
+					writeDesignDirectionManifest({
+						absPath: manifest.absPath,
+						stage: manifest.stage,
+						mode: chosen ? "select" : "auto",
+						archetype: chosen?.name,
+						comments: chosen
+							? `Autopilot auto-selected the first archetype ("${chosen.name}") — no SPA picker shown because intent.mode === "autopilot".`
+							: "Autopilot proceeded with no archetype — intake mode with no candidates. The agent will drive the rest of the design phase from the unit specs.",
+						source: "autopilot",
+					})
+					const announcement = chosen
+						? `Autopilot auto-selected the **${chosen.name}** direction (intent.mode === "autopilot" — no SPA picker shown). Manifest written at \`${manifest.absPath}\`.`
+						: `Autopilot proceeded with no archetype selection (intent.mode === "autopilot", no candidates supplied). Manifest written at \`${manifest.absPath}\`.`
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: withAnnouncement(
+									announcement,
+									"Call `haiku_run_next` to continue — the cursor's discovery gate is now cleared.",
+								),
+							},
+						],
+					}
+				}
+			}
+		} catch (err) {
+			console.error(
+				`[pick_design_direction] autopilot check failed: ${err instanceof Error ? err.message : String(err)}. Falling through to the SPA picker.`,
+			)
+		}
+
 		// Resolve archetypes: inline, from file, or empty (intake mode).
 		// Empty is the intake-first path: the agent calls this tool with
 		// no archetypes to ask the user whether they have designs to
@@ -787,6 +1297,7 @@ export async function handleToolCall(
 		const session = createDesignDirectionSession({
 			intent_slug: input.intent_slug,
 			archetypes,
+			context: input.context ?? "",
 		})
 
 		const port = await startHttpServer()
@@ -973,6 +1484,9 @@ export async function prepareGateReviewSession(
 	const stageArtifacts = await parseStageArtifacts(intentDirAbs)
 	const { outputs: outputArtifacts, other: otherFiles } =
 		await parseStageFiles(intentDirAbs)
+	// Intent-ROOT stray files (intent-scope "Other") — excludes system
+	// journals (action-log/write-audit) by design.
+	const intentOtherFiles = await parseIntentRootFiles(intentDirAbs)
 
 	// Rewrite every relativePath (not just images) to a tunnel URL so
 	// click-out links work for HTML, file, and image types alike.
@@ -980,7 +1494,7 @@ export async function prepareGateReviewSession(
 	// `intentRelativePath` so the SPA can look the artifact up in
 	// `output_declared_by`. Same rewrite applies to the new "other"
 	// (stray-files) bucket so reviewers can open them too.
-	for (const oa of [...outputArtifacts, ...otherFiles]) {
+	for (const oa of [...outputArtifacts, ...otherFiles, ...intentOtherFiles]) {
 		if (oa.relativePath) {
 			oa.intentRelativePath = oa.relativePath
 			oa.relativePath = buildStageArtifactUrl(
@@ -996,6 +1510,7 @@ export async function prepareGateReviewSession(
 		stageArtifacts,
 		outputArtifacts,
 		otherFiles,
+		intentOtherFiles,
 	})
 
 	void mermaid
@@ -1059,10 +1574,15 @@ export function shouldLaunchReviewBrowser(
 	if (!autoOpen) return false
 	if (!reviewUrl) return false
 	if (isBrowserAttached(sessionId)) return false
-	// Intent-scoped dedupe: if a live session for this intent already
-	// exists (any session id), skip the launch. The SPA tab on that
-	// session receives the broadcast and refreshes; no new tab needed.
-	if (intentSlug && findLiveReviewSessionForIntent(intentSlug)) return false
+	// Intent-scoped dedupe: skip the launch ONLY when a browser is
+	// GENUINELY attached (fresh heartbeat) on some session for this intent
+	// — that tab receives the broadcast and refreshes, so a second window
+	// would be a duplicate. We must NOT suppress on mere session EXISTENCE:
+	// a session record can linger with no live tab (never opened, or closed
+	// within the heartbeat grace, or never-attached), and suppressing on
+	// that left the user with NO SPA at all and the gate unable to open
+	// (2026-05-26 CRITICAL). No attached tab → always (re)launch.
+	if (intentSlug && hasAttachedReviewSessionForIntent(intentSlug)) return false
 	return true
 }
 
@@ -1147,6 +1667,13 @@ export async function awaitGateReviewSession(
 		await_active: true,
 	})
 
+	// Start the never-attached watch: if the SPA never sends a heartbeat
+	// within the 60s window, the sweep marks this session presence-lost so
+	// the await below returns the review URL for the user to (re)open while
+	// it keeps holding (see the `lost presence` branch in haiku_await_gate),
+	// and the stale session stops suppressing the next browser launch.
+	beginPresenceWatch(sessionId)
+
 	try {
 		while (true) {
 			let timedOut = false
@@ -1183,15 +1710,23 @@ export async function awaitGateReviewSession(
 			// the inline gate path fails the tool when the browser
 			// disconnects mid-await; the URL+await fallback is the
 			// recovery channel.
+			// No client connected (SPA never opened, or the tab was closed).
+			// Surface this so the caller can hand the URL back to the user
+			// and KEEP HOLDING — `haiku_await_gate`'s `lost presence` branch
+			// turns this into a "open/reopen + re-await" instruction, never an
+			// abandon. Uniform for every gate, including the final intent gate.
 			if (hasPresenceLost(sessionId)) {
 				throw new Error(
-					`Review session ${sessionId} lost presence — the SPA tab disconnected (no heartbeat for ≥120s). The user likely closed the browser. Re-open the URL and call haiku_await_gate when ready.`,
+					`Review session ${sessionId} lost presence — the SPA never opened or the tab disconnected (no heartbeat). Re-open the URL and call haiku_await_gate when ready.`,
 				)
 			}
 		}
 
 		throw new Error("Review timeout after 30 minutes")
 	} finally {
+		// This handler is no longer blocking — stop the never-attached watch
+		// so the sweep doesn't keep eyeing a session nobody is awaiting.
+		endPresenceWatch(sessionId)
 		// Session, WS, and tunnel persist across awaits — the SPA tab
 		// stays open for the duration of the agent session, watching
 		// state come and go. Only the await-active flag and timing
@@ -1210,6 +1745,104 @@ export async function awaitGateReviewSession(
 }
 
 /**
+ * Find the discovery template that declares `tool: pick_design_direction`
+ * for the active stage. Returns the resolved manifest location (with
+ * `{intent-slug}` substituted) plus the discovery template's `body` for
+ * context, or `null` when no such template exists.
+ *
+ * The cursor reads file existence at this location as the discovery
+ * signal (see prompts/stage/elaborate/discovery_required/template.eta.md).
+ * The tool MUST write the manifest there or the gate never clears.
+ *
+ * Resolves the active stage via `findCurrentStage` (disk-derived) rather
+ * than reading any FM cache; the design-direction tool fires from the
+ * elaborate-loop, so the cursor's view of "which stage is active" is
+ * the authoritative one.
+ */
+async function resolveDesignDirectionManifestLocation(
+	intentSlug: string,
+): Promise<{ absPath: string; stage: string; templateBody: string } | null> {
+	const intentMdPath = join(findHaikuRoot(), "intents", intentSlug, "intent.md")
+	if (!existsSync(intentMdPath)) return null
+	const intentRaw = await readFile(intentMdPath, "utf-8")
+	const studio = (parseFrontmatter(intentRaw).data.studio as string) || ""
+	if (!studio) return null
+	const { findCurrentStage } = await import(
+		"../orchestrator/workflow/cursor.js"
+	)
+	const stage = findCurrentStage(intentSlug, studio)
+	if (!stage) return null
+	const defs = readStageArtifactDefs(studio, stage)
+	const dd = defs.find(
+		(d) => d.kind === "discovery" && d.tool === "pick_design_direction",
+	)
+	if (!dd?.location) return null
+	const resolvedRel = dd.location.replace(/\{intent-slug\}/g, intentSlug)
+	// Discovery template locations are repo-root-relative (start with
+	// `.haiku/intents/...`); join from the haiku root's parent so the
+	// `.haiku/` prefix lands at the intended on-disk spot.
+	const absPath = join(findHaikuRoot(), "..", resolvedRel)
+	return { absPath, stage, templateBody: dd.body }
+}
+
+/**
+ * Write the design-direction manifest at the discovery template's
+ * `location` so the cursor's existence check passes the gate. Called
+ * (a) when the SPA picker resolves a `select` or `upload` mode, and
+ * (b) when autopilot mode short-circuits the picker entirely.
+ *
+ * The manifest is a markdown file with the user's (or autopilot's)
+ * selection in frontmatter plus a brief human-readable body. The
+ * agent's next pass reads this file as input to the elaborate-loop's
+ * remaining signals (decompose, verify_decompose).
+ */
+function writeDesignDirectionManifest(args: {
+	absPath: string
+	stage: string
+	mode: "select" | "upload" | "auto"
+	archetype?: string
+	files?: Array<{ path: string; caption?: string }>
+	comments?: string
+	annotations?: unknown
+	source: "spa-picker" | "autopilot"
+}): void {
+	mkdirSync(dirname(args.absPath), { recursive: true })
+	const fm: Record<string, unknown> = {
+		mode: args.mode,
+		stage: args.stage,
+		source: args.source,
+		recorded_at: new Date().toISOString(),
+	}
+	if (args.archetype) fm.archetype = args.archetype
+	if (args.files && args.files.length > 0) fm.files = args.files
+	if (args.comments) fm.comments = args.comments
+	if (args.annotations) fm.annotations = args.annotations
+	const bodyLines: string[] = []
+	if (args.source === "autopilot") {
+		bodyLines.push(
+			"# Design Direction (autopilot)",
+			"",
+			'Auto-selected by the workflow engine because `intent.mode === "autopilot"`. No SPA picker was shown; the agent drives the rest of the design phase from this anchor.',
+		)
+	} else {
+		bodyLines.push("# Design Direction", "")
+	}
+	if (args.mode === "select" && args.archetype) {
+		bodyLines.push("", `**Chosen archetype:** ${args.archetype}`)
+	}
+	if (args.mode === "upload" && args.files && args.files.length > 0) {
+		bodyLines.push("", `**Uploaded ${args.files.length} reference file(s):**`)
+		for (const f of args.files) {
+			bodyLines.push(`- \`${f.path}\`${f.caption ? ` — ${f.caption}` : ""}`)
+		}
+	}
+	if (args.comments) {
+		bodyLines.push("", `**Comments:** ${args.comments}`)
+	}
+	writeFileSync(args.absPath, matter.stringify(`${bodyLines.join("\n")}\n`, fm))
+}
+
+/**
  * Block on a design-direction session until the user submits, then
  * build the MCP response based on which mode they picked
  * (select / regenerate / generate / upload). Used by both the
@@ -1220,6 +1853,16 @@ export async function awaitGateReviewSession(
  * + PNG sidecars + uploaded files) lands on the HTTP submit route in
  * session-routes.ts before this function wakes; the response here is
  * just the agent-facing description of what happened.
+ *
+ * Manifest write (2026-05-18 fix for haiku-pick-design-direction-bug):
+ * the cursor reads file existence at the discovery template's
+ * `location:` as the discovery signal. For `select` / `upload` modes
+ * — both of which represent a final answer from the user — we write
+ * that manifest here before returning, honoring the contract the
+ * elaborate-loop prompt promises ("the tool produces the artifact at
+ * `<location>` as a side effect"). `regenerate` and `generate` are NOT
+ * terminal (the agent has more work to do before the picker re-opens),
+ * so they don't write a manifest.
  */
 export async function awaitDesignDirectionSession(
 	sessionId: string,
@@ -1352,6 +1995,14 @@ export async function awaitDesignDirectionSession(
 		}
 	}
 
+	// Resolve manifest target ONCE so both branches share the same
+	// lookup. Resolved lazily and only when we have a final-answer mode
+	// — regenerate/generate already returned above without needing it.
+	const manifest =
+		intentSlug && (sel.mode === "upload" || sel.mode === "select")
+			? await resolveDesignDirectionManifestLocation(intentSlug)
+			: null
+
 	if (sel.mode === "upload") {
 		const fileLines = sel.files
 			.map(
@@ -1359,6 +2010,27 @@ export async function awaitDesignDirectionSession(
 					`  ${i + 1}. \`${f.path}\`${f.caption ? ` — ${f.caption}` : ""}`,
 			)
 			.join("\n")
+		// Write the manifest BEFORE building the announcement so the
+		// cursor's existence check on the next tick passes the gate.
+		// Failure to write is non-fatal — the agent sees the
+		// announcement and can repro / report — but log loudly so the
+		// regression doesn't sneak back.
+		if (manifest) {
+			try {
+				writeDesignDirectionManifest({
+					absPath: manifest.absPath,
+					stage: manifest.stage,
+					mode: "upload",
+					files: sel.files,
+					comments: sel.comments,
+					source: "spa-picker",
+				})
+			} catch (err) {
+				console.error(
+					`[awaitDesignDirectionSession] manifest write failed (upload): ${err instanceof Error ? err.message : String(err)}. The discovery gate will NOT clear — file a bug.`,
+				)
+			}
+		}
 		const announceParts = [
 			`The user uploaded ${sel.files.length} design file${
 				sel.files.length === 1 ? "" : "s"
@@ -1379,7 +2051,24 @@ export async function awaitDesignDirectionSession(
 		}
 	}
 
-	// select mode
+	// select mode — write manifest, then announce.
+	if (manifest) {
+		try {
+			writeDesignDirectionManifest({
+				absPath: manifest.absPath,
+				stage: manifest.stage,
+				mode: "select",
+				archetype: sel.archetype,
+				comments: sel.comments,
+				annotations: sel.annotations,
+				source: "spa-picker",
+			})
+		} catch (err) {
+			console.error(
+				`[awaitDesignDirectionSession] manifest write failed (select): ${err instanceof Error ? err.message : String(err)}. The discovery gate will NOT clear — file a bug.`,
+			)
+		}
+	}
 	const announceParts: string[] = [
 		`The user selected the **${sel.archetype}** direction.`,
 	]

@@ -106,6 +106,7 @@ function setupLinkedWorktreeRepo(slug) {
 			title: "linked worktree pinning test",
 			studio: "software",
 			mode: "continuous",
+			autotune: false,
 			stages: [
 				"inception",
 				"design",

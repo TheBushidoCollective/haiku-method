@@ -1,5 +1,5 @@
 #!/usr/bin/env npx tsx
-// Test suite for /haiku:debug HTTP endpoints.
+// Test suite for /haiku:haiku-debug HTTP endpoints.
 //
 // Covers:
 //  1. GET /api/debug/intents — lists every intent on disk.
@@ -88,7 +88,7 @@ async function test(name, fn) {
 const port = await startHttpServer()
 const baseUrl = `http://127.0.0.1:${port}`
 
-console.log("\n=== /haiku:debug HTTP endpoints ===")
+console.log("\n=== /haiku:haiku-debug HTTP endpoints ===")
 
 await test("GET /api/debug/intents lists the test intent", async () => {
 	const res = await fetch(`${baseUrl}/api/debug/intents`)
@@ -343,6 +343,33 @@ body that exists on disk but no iterations were recorded
 	const after = readFileSync(unitFile, "utf8")
 	assert.match(after, /^iterations:/m)
 	assert.match(after, /result: advance/)
+})
+
+await test("set_unit_iterations rejects an EXPLICIT empty array → points at haiku_unit_reset", async () => {
+	// Footgun guard (bug report Issue 4): iterations: [] is the intuitive
+	// "reset" call but would synthesize a COMPLETED unit. It must reject and
+	// point at the real recovery primitive. (unit-99 exists from the prior
+	// test; the guard fires before touching its iterations.)
+	const res = await fetch(
+		`${baseUrl}/api/debug/intents/${intentSlug}/ops/set_unit_iterations`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				stage: "design",
+				unit: "unit-99-legacy-no-iters",
+				iterations: [],
+			}),
+		},
+	)
+	assert.strictEqual(res.status, 200)
+	const data = await res.json()
+	assert.strictEqual(
+		data.result.ok,
+		false,
+		`explicit [] must reject; got ${JSON.stringify(data.result)}`,
+	)
+	assert.strictEqual(data.result.error, "use_haiku_unit_reset")
 })
 
 await test("set_unit_iterations rejects missing stage_or_unit", async () => {

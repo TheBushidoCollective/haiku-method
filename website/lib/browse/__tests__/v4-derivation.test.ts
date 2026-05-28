@@ -14,6 +14,7 @@ import {
 	deriveStageStateFromUnits,
 	deriveStageStatusFromUnits,
 	deriveV4ActiveStage,
+	normalizeStageProgression,
 	parseElaborationVerified,
 	parseFeedback,
 	parseIntentApprovals,
@@ -85,20 +86,20 @@ test("empty unit list => pending", () => {
 	assert.strictEqual(deriveStageStatusFromUnits([]), "pending")
 })
 
-test("every unit terminal-advance + user-approved => complete", () => {
+test("every unit terminal-advance + fully approved => complete", () => {
+	// "Complete" requires every seeded role signed — the engine stamps
+	// spec/continuity/cross-stage-consistency/quality_gates ahead of the
+	// user gate, so a realistic complete unit carries all of them.
+	const fullApprovals = {
+		spec: { at: "2026-05-06T00:00:00Z" },
+		continuity: { at: "2026-05-06T00:00:00Z" },
+		"cross-stage-consistency": { at: "2026-05-06T00:00:00Z" },
+		quality_gates: { at: "2026-05-06T00:00:00Z" },
+		user: { at: "2026-05-06T00:00:00Z" },
+	}
 	const out = deriveStageStatusFromUnits([
-		{
-			raw: {
-				iterations: [{ result: "advance" }],
-				approvals: { user: { at: "2026-05-06T00:00:00Z" } },
-			},
-		},
-		{
-			raw: {
-				iterations: [{ result: "advance" }],
-				approvals: { user: { at: "2026-05-06T00:00:00Z" } },
-			},
-		},
+		{ raw: { iterations: [{ result: "advance" }], approvals: fullApprovals } },
+		{ raw: { iterations: [{ result: "advance" }], approvals: fullApprovals } },
 	])
 	assert.strictEqual(out, "complete")
 })
@@ -391,8 +392,11 @@ body text
 console.log("\n── deriveStageStateFromUnits ──────────────────────────────")
 
 test("returns canonical 5-phase names — no 'gate' leak", () => {
-	// All hats advanced, but no approvals signed → engine pure derivation
-	// returns "gate"; the website wrapper must remap that to "approve".
+	// All reviews signed + hats advanced, but no approvals signed → engine
+	// pure derivation returns "gate"; the website wrapper must remap that to
+	// "approve". Reviews must carry every seeded role (spec/continuity/
+	// cross-stage/user) or the stage reads as still in pre-execute review.
+	const AT = "2026-05-14T00:02:00Z"
 	const u = {
 		raw: {
 			started_at: "2026-05-14T00:00:00Z",
@@ -404,7 +408,12 @@ test("returns canonical 5-phase names — no 'gate' leak", () => {
 					result: "advance",
 				},
 			],
-			reviews: { user: { at: "2026-05-14T00:02:00Z" } },
+			reviews: {
+				spec: { at: AT },
+				continuity: { at: AT },
+				"cross-stage-consistency": { at: AT },
+				user: { at: AT },
+			},
 			approvals: {},
 		},
 	}
@@ -421,6 +430,121 @@ test("autopilot mode bypasses elaborate-verifier signal", () => {
 	// — assert it doesn't crash and returns sensibly.
 	const r = deriveStageStateFromUnits([], { intentMode: "autopilot" })
 	assert.strictEqual(r.phase, "elaborate")
+})
+
+console.log("\n── deriveStageStateFromUnits milestones ───────────────────")
+
+test("milestones: reviews done, hats mid-flight → execute active", () => {
+	// All seeded autopilot review roles signed (spec + the adversarial
+	// pair), hats mid-flight → review done, execute is the first not-done.
+	const AT = "2026-05-14T00:01:00Z"
+	const r = deriveStageStateFromUnits(
+		[
+			{
+				raw: {
+					started_at: "2026-05-14T00:00:00Z",
+					reviews: {
+						spec: { at: AT },
+						continuity: { at: AT },
+						"cross-stage-consistency": { at: AT },
+					},
+					iterations: [{ hat: "implementer", result: null }],
+					approvals: {},
+				},
+			},
+		],
+		{ intentMode: "autopilot" },
+	)
+	const exec = r.milestones.find((m) => m.key === "execute")
+	const specReview = r.milestones.find((m) => m.key === "review:spec")
+	const adReview = r.milestones.find((m) => m.key === "review:adversarial:0")
+	assert.strictEqual(specReview?.status, "done")
+	assert.strictEqual(adReview?.status, "done")
+	assert.strictEqual(exec?.status, "active")
+})
+
+test("milestones: advanced + no approvals → seeded approval pip is active", () => {
+	// Reviews done, units advanced, but approvals empty. The seeded engine
+	// approval roles are unmet, so the track shows a pending approval pip
+	// and the phase reads "approve" — no synthetic placeholder needed.
+	const AT = "2026-05-14T00:01:00Z"
+	const r = deriveStageStateFromUnits(
+		[
+			{
+				raw: {
+					started_at: "2026-05-14T00:00:00Z",
+					reviews: {
+						spec: { at: AT },
+						continuity: { at: AT },
+						"cross-stage-consistency": { at: AT },
+					},
+					iterations: [{ hat: "implementer", result: "advance" }],
+					approvals: {},
+				},
+			},
+		],
+		{ intentMode: "autopilot" },
+	)
+	assert.strictEqual(r.phase, "approve")
+	const approvalPip = r.milestones.find((m) => m.key.startsWith("approve:"))
+	assert.ok(approvalPip, "expected a seeded approval milestone")
+	assert.strictEqual(approvalPip?.status, "active")
+})
+
+test("milestones: fully approved stage → every milestone done", () => {
+	const AT = "2026-05-14T00:02:00Z"
+	const r = deriveStageStateFromUnits(
+		[
+			{
+				raw: {
+					started_at: "2026-05-14T00:00:00Z",
+					reviews: {
+						spec: { at: AT },
+						continuity: { at: AT },
+						"cross-stage-consistency": { at: AT },
+					},
+					iterations: [{ hat: "implementer", result: "advance" }],
+					approvals: {
+						spec: { at: AT },
+						continuity: { at: AT },
+						"cross-stage-consistency": { at: AT },
+						quality_gates: { at: AT },
+					},
+				},
+			},
+		],
+		{ intentMode: "autopilot" },
+	)
+	assert.strictEqual(r.status, "complete")
+	assert.ok(
+		r.milestones.every((m) => m.status === "done"),
+		"every milestone should be done for a fully-approved stage",
+	)
+})
+
+console.log("\n── schemaIsV4: false (v3 intents) ─────────────────────────")
+
+test("v3 (schemaIsV4=false): no engine-role seeding, empty milestone track", () => {
+	// A v3-shape unit: status/depends_on/bolt only, no review/approval model.
+	const r = deriveStageStateFromUnits(
+		[{ raw: { status: "completed", bolt: 0 } }],
+		{ intentMode: "continuous", schemaIsV4: false },
+	)
+	// No fabricated granular track — the coarse phase strip takes over.
+	assert.deepStrictEqual(r.milestones, [])
+})
+
+test("v3 (schemaIsV4=false): a terminal-advanced unit isn't held by unseeded approvals", () => {
+	// Without seeding, an advanced unit with no approval stamps isn't kept
+	// at "gate" by phantom engine roles — it derives from the union only.
+	const r = deriveStageStateFromUnits(
+		[{ raw: { iterations: [{ result: "advance" }], approvals: {} } }],
+		{ intentMode: "continuous", schemaIsV4: false },
+	)
+	assert.deepStrictEqual(r.milestones, [])
+	// Union approvalRoles is empty → the old vacuous-complete behavior, which
+	// is correct for v3 (it had no per-unit approval gates).
+	assert.strictEqual(r.status, "complete")
 })
 
 console.log("\n── parseElaborationVerified ───────────────────────────────")
@@ -507,6 +631,43 @@ body
 `
 	const fb = parseFeedback("local", "s", "x", "FB-01.md", raw, "p")
 	assert.strictEqual(fb.resolution, null)
+})
+
+console.log("\n── normalizeStageProgression ──────────────────────────────")
+
+test("back-fills earlier stages when a later one is complete (worker-new-badge)", () => {
+	const order = [
+		"inception",
+		"design",
+		"product",
+		"development",
+		"operations",
+		"security",
+	]
+	// Operations reads active while security (after it) reads complete — the
+	// contradiction. Back-fill: everything up to the last complete is complete.
+	const got = normalizeStageProgression(order, {
+		inception: "complete",
+		design: "complete",
+		product: "complete",
+		development: "complete",
+		operations: "active",
+		security: "complete",
+	})
+	assert.strictEqual(got.operations, "complete", "operations back-fills to complete")
+	assert.strictEqual(got.security, "complete")
+	// Active stage now lands past the contradiction (all complete → last).
+	assert.strictEqual(deriveV4ActiveStage(order, got), "security")
+})
+
+test("leaves a monotonic sequence untouched", () => {
+	const order = ["a", "b", "c"]
+	const got = normalizeStageProgression(order, {
+		a: "complete",
+		b: "active",
+		c: "pending",
+	})
+	assert.deepStrictEqual(got, { a: "complete", b: "active", c: "pending" })
 })
 
 console.log(`\n── Result: ${passed} passed, ${failed} failed ──────────────`)

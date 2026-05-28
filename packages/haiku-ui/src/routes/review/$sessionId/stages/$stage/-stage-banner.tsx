@@ -8,6 +8,7 @@
  * phase + stageStatus are derived from the session's stage_state.
  */
 
+import type { ProgressMilestone } from "haiku-api"
 import {
 	PHASE_TOOLTIPS,
 	phaseBadgeCopy,
@@ -39,15 +40,139 @@ function splitPhaseTooltip(p: (typeof STAGE_PHASES)[number]): {
 export function PhaseStepper({
 	phase,
 	stageStatus,
+	milestones,
+	progressIndex,
 }: {
 	phase: string | null
 	stageStatus: string
+	/** Granular per-stage milestone track (the same ordered milestones the
+	 *  status line shows: elaborate → each review role → execute → each
+	 *  approval role → observations). When present and non-empty the
+	 *  stepper renders one bubble per milestone instead of the coarse
+	 *  four-phase strip. Bubbles are keyed by the stable milestone `key`
+	 *  so live updates reconcile in place without remounting. */
+	milestones?: ProgressMilestone[] | null
+	/** Index of the active (first not-done) milestone, or
+	 *  `milestones.length` when every milestone is done. */
+	progressIndex?: number
 }): React.ReactElement {
+	const isStageComplete =
+		stageStatus === "completed" || stageStatus === "complete"
+
+	// ── Granular track ────────────────────────────────────────────────
+	// One bubble per cursor milestone. The labels arrive pre-worded from
+	// the engine ("spec review", "quality gates", "observations"); we
+	// don't re-derive them. Many stages produce 8–12 milestones, so the
+	// bubbles are small dots (not the numbered 20px bubbles the coarse
+	// strip uses) with the active milestone's label spelled out in text
+	// after the count.
+	if (milestones && milestones.length > 0) {
+		const total = milestones.length
+		const ai =
+			typeof progressIndex === "number"
+				? progressIndex
+				: milestones.findIndex((m) => m.status === "active")
+		// `ai < 0` means no milestone is marked active. That's "all done"
+		// only when at least one milestone IS done — otherwise it's a track
+		// that hasn't started (every pip pending), which must NOT read as
+		// complete. A completed stage short-circuits to done regardless.
+		const anyDone = milestones.some((m) => m.status === "done")
+		const allDone = isStageComplete || ai >= total || (ai < 0 && anyDone)
+		const activeLabel = !allDone ? milestones[ai]?.label : undefined
+		const groupAriaLabel = allDone
+			? "All milestones complete"
+			: ai >= 0
+				? `Milestone ${ai + 1} of ${total}`
+				: "Milestone progress"
+		return (
+			// biome-ignore lint/a11y/useSemanticElements: role=group on a div is the right minimal grouping; a fieldset would force legend + form semantics
+			<div
+				className="inline-flex items-center gap-2"
+				role="group"
+				aria-label={groupAriaLabel}
+			>
+				<span className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
+					Phase
+				</span>
+				<ol className="inline-flex items-center gap-1 list-none m-0 p-0">
+					{milestones.map((m, i) => {
+						const done = isStageComplete || m.status === "done"
+						const active = !isStageComplete && m.status === "active"
+						const stateWord = active ? "active" : done ? "done" : "pending"
+						const ariaLabel = `${m.label} — ${stateWord}`
+						return (
+							<li key={m.key} className="flex items-center gap-1">
+								<span
+									className="relative inline-flex items-center justify-center p-1 -m-1 group rounded-md"
+									role="img"
+									aria-label={ariaLabel}
+									aria-current={active ? "step" : undefined}
+								>
+									<span
+										className={`inline-block w-2.5 h-2.5 rounded-full transition-transform group-hover:scale-125 ${
+											active
+												? "bg-amber-500 ring-2 ring-amber-300 dark:ring-amber-700"
+												: done
+													? "bg-green-500"
+													: "bg-stone-300 dark:bg-stone-700"
+										}`}
+										aria-hidden="true"
+									/>
+									<span
+										role="tooltip"
+										className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-50"
+									>
+										<span className="block text-xs font-bold text-white dark:text-stone-900 leading-tight capitalize">
+											{m.label}
+										</span>
+										<span
+											className={`block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 ${
+												active
+													? "text-amber-300 dark:text-amber-600"
+													: done
+														? "text-green-300 dark:text-green-600"
+														: "text-stone-300 dark:text-stone-600"
+											}`}
+										>
+											{stateWord}
+										</span>
+										<span
+											aria-hidden="true"
+											className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+										/>
+									</span>
+								</span>
+								{i < total - 1 && (
+									<span
+										className={`w-2 h-0.5 transition-colors ${
+											done
+												? "bg-green-400 dark:bg-green-700"
+												: "bg-stone-300 dark:bg-stone-700"
+										}`}
+										aria-hidden="true"
+									/>
+								)}
+							</li>
+						)
+					})}
+				</ol>
+				<span className="text-xs font-mono text-stone-500 dark:text-stone-400">
+					{allDone ? "done" : `${ai + 1}/${total}`}
+				</span>
+				{activeLabel && (
+					<span className="text-xs text-amber-600 dark:text-amber-400 truncate max-w-[12rem] capitalize">
+						{activeLabel}
+					</span>
+				)}
+			</div>
+		)
+	}
+
+	// ── Coarse fallback ───────────────────────────────────────────────
+	// Legacy four-phase strip for payloads without a milestone track.
 	const activeIndex = phase
 		? STAGE_PHASES.indexOf(phase as (typeof STAGE_PHASES)[number])
 		: -1
-	const isStageComplete =
-		stageStatus === "completed" || stageStatus === "complete"
 	// Group-level SR label. Three cases:
 	//   - stage complete: "All phases complete" (don't say "Phase 0 of 4").
 	//   - active phase known: "Phase N of M"
@@ -131,7 +256,7 @@ export function PhaseStepper({
 								</span>
 								<span
 									role="tooltip"
-									className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-50"
+									className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-50"
 								>
 									<span className="block text-xs font-bold text-white dark:text-stone-900 leading-tight">
 										{title}
@@ -153,7 +278,7 @@ export function PhaseStepper({
 									{/* caret triangle anchoring the card to the bubble */}
 									<span
 										aria-hidden="true"
-										className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+										className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
 									/>
 								</span>
 							</span>
@@ -188,6 +313,8 @@ export function StageBanner({
 	stagePhase,
 	gateBadges,
 	adHoc,
+	milestones,
+	progressIndex,
 }: {
 	stageName: string
 	stageStatus: string
@@ -197,6 +324,11 @@ export function StageBanner({
 	 *  badges and render an "Ad-hoc" pill instead so the user can see
 	 *  at a glance that this surface won't advance the workflow. */
 	adHoc?: boolean
+	/** Granular per-stage milestone track for the engine's current stage
+	 *  (null when browsing another stage). Drives the fine-grained phase
+	 *  stepper; falls back to the coarse four-phase strip when absent. */
+	milestones?: ProgressMilestone[] | null
+	progressIndex?: number
 }): React.ReactElement {
 	const statusPill =
 		stageStatus === "current" || stageStatus === "active"
@@ -238,7 +370,12 @@ export function StageBanner({
 						<p className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
 							Stage
 						</p>
-						<PhaseStepper phase={stagePhase} stageStatus={stageStatus} />
+						<PhaseStepper
+							phase={stagePhase}
+							stageStatus={stageStatus}
+							milestones={milestones}
+							progressIndex={progressIndex}
+						/>
 					</div>
 					<div className="flex items-center gap-2 mt-1 flex-wrap">
 						<h1 className="text-base font-bold text-stone-900 dark:text-stone-100 leading-tight capitalize">

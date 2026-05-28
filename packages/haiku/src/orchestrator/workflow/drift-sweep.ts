@@ -50,18 +50,97 @@
 // hash mismatch alone — and was a source of subtle path-resolution
 // bugs in worktrees. Filesystem-as-source-of-truth, applied here too.)
 
-import { existsSync, readdirSync, readFileSync } from "node:fs"
-import { join, relative } from "node:path"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { basename, join, relative } from "node:path"
 import matter from "gray-matter"
-import { primaryRepoRoot } from "../../state-tools.js"
+import { readStageArtifactDefs } from "../../studio-reader.js"
 import { isDriftDetectionDisabled } from "./drift-baseline.js"
-import { bodySha256, fileSha256, outputSha256 } from "./sign-slot.js"
+import {
+	bodyMatchesStoredHash,
+	DIR_INVENTORY_SKIP,
+	fileSha256,
+	isTextBodyExtension,
+	normalizeInputPath,
+	outputSha256,
+} from "./sign-slot.js"
+
+function listDirFiles(absDir: string): string[] {
+	if (!existsSync(absDir)) return []
+	let names: string[] = []
+	try {
+		names = readdirSync(absDir)
+	} catch {
+		return []
+	}
+	const out: string[] = []
+	for (const name of names) {
+		if (name.startsWith(".")) continue
+		if (DIR_INVENTORY_SKIP.has(name)) continue
+		try {
+			if (statSync(join(absDir, name)).isFile()) out.push(name)
+		} catch {
+			// non-fatal
+		}
+	}
+	return out
+}
+
+interface InputWitnessesRead {
+	files: Record<string, string>
+	dirs: Record<string, Record<string, string>>
+}
+
+function pickInputWitnesses(record: unknown): InputWitnessesRead | null {
+	if (record === null || typeof record !== "object") return null
+	const r = record as Record<string, unknown>
+	const block = r.input_witnesses
+	if (!block || typeof block !== "object" || Array.isArray(block)) return null
+	const b = block as Record<string, unknown>
+	const filesRaw = b.files
+	const dirsRaw = b.dirs
+	const files: Record<string, string> = {}
+	const dirs: Record<string, Record<string, string>> = {}
+	if (filesRaw && typeof filesRaw === "object" && !Array.isArray(filesRaw)) {
+		for (const [k, v] of Object.entries(filesRaw as Record<string, unknown>)) {
+			if (typeof v === "string" && v.length === 64) files[k] = v
+		}
+	}
+	if (dirsRaw && typeof dirsRaw === "object" && !Array.isArray(dirsRaw)) {
+		for (const [dirPath, inv] of Object.entries(
+			dirsRaw as Record<string, unknown>,
+		)) {
+			if (!inv || typeof inv !== "object" || Array.isArray(inv)) continue
+			const inventory: Record<string, string> = {}
+			for (const [k, v] of Object.entries(inv as Record<string, unknown>)) {
+				if (typeof v === "string" && v.length === 64) inventory[k] = v
+			}
+			dirs[dirPath] = inventory
+		}
+	}
+	// Treat an entirely empty witnesses block as "no input drift
+	// coverage" rather than "no inputs declared" — avoid emitting
+	// addition drift for every file in the unit just because the
+	// block exists but is empty.
+	if (Object.keys(files).length === 0 && Object.keys(dirs).length === 0) {
+		return null
+	}
+	return { files, dirs }
+}
 
 export type DriftKind =
 	| "spec"
-	| "output"
 	| "discovery_output"
 	| "discovery_mandate"
+	/** A witnessed input file's SHA changed. The premise the slot was
+	 *  signed against shifted; re-evaluation may be needed. */
+	| "input_mutation"
+	/** A witnessed input directory has a new file inside that wasn't
+	 *  in the inventory at sign time. The premise set grew. */
+	| "input_addition"
+	/** A witnessed input file (or a file inside a witnessed dir) is
+	 *  gone. The slot was signed against a premise that's no longer
+	 *  available. */
+	| "input_deletion"
 
 export type DriftEvent = {
 	unit: string
@@ -102,18 +181,6 @@ function pickBodySha(record: unknown): string | null {
 	return typeof r.body_sha256 === "string" && r.body_sha256.length === 64
 		? r.body_sha256
 		: null
-}
-
-function pickWitnesses(record: unknown): Record<string, string> | null {
-	if (record === null || typeof record !== "object") return null
-	const r = record as Record<string, unknown>
-	const w = r.witnesses
-	if (w === null || typeof w !== "object" || Array.isArray(w)) return null
-	const out: Record<string, string> = {}
-	for (const [k, v] of Object.entries(w as Record<string, unknown>)) {
-		if (typeof v === "string" && v.length === 64) out[k] = v
-	}
-	return out
 }
 
 /**
@@ -162,6 +229,80 @@ function discoveryOutputPath(
 	return join(intentDir, "stages", stage, "discovery", `${agent}.md`)
 }
 
+/**
+ * Intent-relative paths the CURRENT stage itself produces: every
+ * discovery/output template's declared `location:` plus every current-
+ * stage unit's `outputs:`. A witnessed INPUT that matches one of these is
+ * the stage's OWN output evolving inside the loop — e.g. a shared baton
+ * (`.haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md`, project-scope) that every
+ * `designer-prep` hat appends its per-unit section to, which is ALSO a
+ * drift-witnessed input
+ * for the pre-execute review slots. Firing `input_mutation` on it creates
+ * an input==output cycle: each hat append changes the hash, drift
+ * re-fires against every witnessing slot, the fix loop runs, the next
+ * prep appends again, and it never converges (2026-05-20
+ * drift-input-output-loop report — six findings on two baton files, one
+ * misclassified as a "material deletion" against a 393-insertion / 0-
+ * deletion append). The premise-witness model already exempts OUTPUT
+ * witnesses from drift ("outputs are downstream of the signature and
+ * allowed to evolve"); this extends the same logic to a file that is
+ * simultaneously an input-witness AND a current-stage output.
+ */
+/**
+ * Normalize a declared `location:` / `outputs:` / `inputs:` path to the
+ * intent-relative form that the input-witness keys use. Resolves the
+ * `{intent-slug}` template and strips a leading `.haiku/intents/<slug>/`
+ * (repo-relative declarations) so a produced path compares equal to a
+ * witness key regardless of which form the unit author wrote it in.
+ * Witness keys are always intent-relative (sign-slot's resolveInputWitnesses
+ * resolves intent-relative first), so this is the canonical compare form.
+ *
+ * This is load-bearing for the input==output baton exemption: unit
+ * `outputs:` in the wild come in three shapes — repo-relative
+ * (`.haiku/intents/<slug>/stages/design/artifacts/X.md`), intent-relative
+ * (`stages/design/artifacts/X.md`), and templated (`{intent-slug}/...`).
+ * Before this normalization the produced-set stored them verbatim, so a
+ * repo-relative output never matched the intent-relative witness key and
+ * the suppression silently missed — drift re-fired on every hat append to
+ * a file that is simultaneously an input and an output of the same stage.
+ */
+function toIntentRelPath(loc: string, slug: string): string {
+	const resolved = loc.replace(/\{intent-slug\}/g, slug)
+	const prefix = `.haiku/intents/${slug}/`
+	return resolved.startsWith(prefix) ? resolved.slice(prefix.length) : resolved
+}
+
+function stageProducedRelPaths(
+	intentDir: string,
+	studio: string,
+	stage: string,
+	unitPaths: ReadonlyArray<string>,
+): Set<string> {
+	const slug = basename(intentDir)
+	const out = new Set<string>()
+	try {
+		for (const def of readStageArtifactDefs(studio, stage)) {
+			if (def.location) out.add(toIntentRelPath(def.location, slug))
+		}
+	} catch {
+		/* studio/stage unreadable — produced set stays empty (no exemption) */
+	}
+	for (const unitPath of unitPaths) {
+		const ufm = readFm(unitPath)
+		const outputs = ufm && Array.isArray(ufm.outputs) ? ufm.outputs : []
+		for (const o of outputs) {
+			// Normalize to the intent-relative witness-key form (not verbatim)
+			// so a repo-relative / templated output still matches its
+			// consumer's witness key — the fix for the input==output baton
+			// suppression silently missing on non-intent-relative outputs.
+			if (typeof o === "string" && o.length > 0) {
+				out.add(toIntentRelPath(o, slug))
+			}
+		}
+	}
+	return out
+}
+
 function discoveryMandatePath(
 	repoRoot: string,
 	studio: string,
@@ -192,7 +333,19 @@ export function runDriftSweep(args: {
 	studio: string
 	repoRoot?: string
 }): DriftSweepResult {
-	const repoRoot = args.repoRoot ?? primaryRepoRoot()
+	// Default repoRoot to the WORKTREE-aware derivation (peel 3 segments
+	// off intentDir → walks past `<slug>/intents/.haiku/`). Earlier
+	// implementations defaulted to `primaryRepoRoot()`, which always
+	// returned the primary repo even when the intent lived in a linked
+	// worktree. Sign-time used the worktree (via sign-slot's
+	// `deriveRepoRootFromIntentDir`), so any input pointing OUTSIDE the
+	// intent dir got witnessed against the worktree's HEAD but checked
+	// against the primary's HEAD — silent drift on every sweep when the
+	// two branches diverged. The two sides must use the same root
+	// derivation; intentDir-derived is the right one because it works
+	// for both topologies. Callers (e.g. workflow tick) can still pass
+	// `repoRoot` explicitly when they need the primary.
+	const repoRoot = args.repoRoot ?? join(args.intentDir, "..", "..", "..")
 	const haikuRoot = join(repoRoot, ".haiku")
 	if (isDriftDetectionDisabled(haikuRoot)) {
 		return { events: [], scanned: 0, skipped: 0 }
@@ -203,6 +356,37 @@ export function runDriftSweep(args: {
 
 	const stageDir = join(args.intentDir, "stages", args.stage)
 	const unitPaths = listUnitsInStage(stageDir)
+
+	// Files the current stage produces (discovery/output `location:` +
+	// unit `outputs:`). A witnessed input matching one of these is an
+	// in-loop write (the stage's own output), not external/upstream
+	// drift — see `stageProducedRelPaths`. Excluded from `input_mutation`
+	// so an input==output baton can't re-fire drift on every hat append.
+	const stageProducedRel = stageProducedRelPaths(
+		args.intentDir,
+		args.studio,
+		args.stage,
+		unitPaths,
+	)
+
+	// A witnessed input is the stage's OWN output (an in-loop baton) when
+	// its path — in either the declared or the normalized intent-relative
+	// form — matches a current-stage produced path. Such a file is BOTH an
+	// input and an output of THIS stage; its in-loop edits, rewrites, and
+	// transient mid-loop absence are the stage producing its own
+	// deliverable, NOT premise drift. It must not fire `input_mutation`,
+	// `input_deletion`, OR `input_addition`, all of which would re-trigger
+	// the review/fix loop on every producing-hat write and never converge
+	// (the input==output cascade — 2026-05-20 report). Checking both the
+	// raw witness key and its normalized form covers witness keys that were
+	// themselves stored repo-relative. (Genuinely-missing upstream inputs
+	// are still caught at unit start by the `unit_inputs_missing` gate —
+	// drift is about premise CHANGE after sign-off, not initial presence,
+	// so suppressing same-stage-produced deletion here hides nothing.)
+	const driftSlug = basename(args.intentDir)
+	const isStageProduced = (p: string): boolean =>
+		stageProducedRel.has(p) ||
+		stageProducedRel.has(toIntentRelPath(p, driftSlug))
 
 	for (const unitPath of unitPaths) {
 		const fm = readFm(unitPath)
@@ -234,69 +418,200 @@ export function runDriftSweep(args: {
 			const at = pickAt(record)
 			if (!at) continue
 			const stored = pickBodySha(record)
-			if (!stored) continue // legacy slot, no baseline yet
-			const current = bodySha256(unitPath)
-			if (current && current !== stored) {
-				events.push({
-					unit: unitName,
-					role,
-					kind: "spec",
-					file: unitRel,
-					since: at,
-				})
-			}
-		}
-
-		// approvals.<role> witnesses declared output paths. The slot
-		// stores a `witnesses: { <relPath>: <sha256> }` map. For each
-		// entry: hash the file now, compare to stored. Mismatch =
-		// drift on that specific output. Files declared in fm.outputs
-		// but absent from witnesses (e.g. created after sign) are
-		// ignored — they'll show up next time the slot is re-signed.
-		const approvals = (fm.approvals as Record<string, unknown>) ?? {}
-		for (const [role, record] of Object.entries(approvals)) {
-			scanned++
-			const at = pickAt(record)
-			if (!at) continue
-			const witnesses = pickWitnesses(record)
-			if (!witnesses) continue // legacy slot, no baseline yet
-			for (const [outRel, storedHash] of Object.entries(witnesses)) {
-				// Output paths come in two shapes:
-				//   - intent-relative: `stages/design/foo.md` — joined
-				//     against intentDir.
-				//   - repo-relative: `src/components/Button.tsx` — joined
-				//     against repoRoot.
-				// `join(intentDir, "src/components/Button.tsx")` resolves
-				// to `<intentDir>/src/components/Button.tsx`, which doesn't
-				// exist, so the file-not-found path was silently skipping
-				// drift detection for the most important artifact (real
-				// code). Distinguish by leading segment: anything starting
-				// with `stages/` is intent-relative; everything else is
-				// repo-relative.
-				// Repo-scoped paths (no leading `stages/`) live outside the
-				// intent dir — they're rooted at the intent's repo root,
-				// which is whatever git considers the toplevel here.
-				// `repoRoot` was reasonable in the primary repo and wrong
-				// in a linked worktree; the safer move is to keep the
-				// stored path verbatim in the event payload (it's already
-				// the agent's reference shape) and only resolve it to an
-				// absolute path for the hash compare.
-				const outAbs = outRel.startsWith("stages/")
-					? join(args.intentDir, outRel)
-					: join(repoRoot, outRel)
-				const cmp = outputMatchesAnyStrategy(outAbs, storedHash)
-				if (!cmp) continue // file deleted; not a drift signal here
-				if (!cmp.matches) {
+			if (stored) {
+				// Dual-strategy compare: canonicalized (post-fix) OR
+				// legacy raw-body (pre-fix). Avoids false drift on
+				// in-flight intents whose witnesses were stamped before
+				// the canonicalization fix landed.
+				if (existsSync(unitPath) && !bodyMatchesStoredHash(unitPath, stored)) {
 					events.push({
 						unit: unitName,
 						role,
-						kind: "output",
-						file: outRel,
+						kind: "spec",
+						file: unitRel,
 						since: at,
 					})
 				}
 			}
+			// Input premise drift — files+dirs the slot witnessed at
+			// sign time. Resolves against intentDir (stages/...) or
+			// repoRoot (everything else), mirroring the sign-time
+			// resolution in resolveInputWitnesses().
+			const inputWitnesses = pickInputWitnesses(record)
+			if (inputWitnesses) {
+				for (const [path, storedSha] of Object.entries(inputWitnesses.files)) {
+					// Resolution rule mirrors sign-slot.ts's resolveInputWitnesses:
+					// try intent-relative first (covers `stages/`, `knowledge/`,
+					// `feedback/`, `intent.md`), fall back to repo-relative
+					// for paths that point outside the intent dir. Then, as a
+					// third attempt, normalize away any `.haiku/intents/<slug>/`
+					// prefix (legacy bad-shape witnesses produced before
+					// 2026-05-17) and resolve THAT intent-relative — primary
+					// repo root often misses these because the intent lives in
+					// a linked worktree whose branch isn't on primary HEAD.
+					const intentRelative = join(args.intentDir, path)
+					const repoRelative = join(repoRoot, path)
+					let abs: string | null = null
+					if (existsSync(intentRelative)) abs = intentRelative
+					else if (existsSync(repoRelative)) abs = repoRelative
+					else {
+						const normalized = normalizeInputPath(path, args.intentDir)
+						if (normalized !== path) {
+							const normalizedIntentRel = join(args.intentDir, normalized)
+							if (existsSync(normalizedIntentRel)) abs = normalizedIntentRel
+						}
+					}
+					if (abs === null) {
+						// Same baton exemption as input_mutation below: a
+						// stage-produced file that's transiently absent (its
+						// producing hat hasn't (re)written it yet this loop) is
+						// in-loop output, not premise drift — don't fire.
+						if (!isStageProduced(path)) {
+							events.push({
+								unit: unitName,
+								role,
+								kind: "input_deletion",
+								file: path,
+								since: at,
+							})
+						}
+						continue
+					}
+					// Files were stored with outputSha256 strategy
+					// (body-hash for text-with-FM, full-file for binary).
+					// Same strategy here so sign-time and check-time
+					// hashes align per-extension. Classify with the SHARED
+					// `isTextBodyExtension` (the same set `outputSha256`
+					// uses) rather than a hardcoded list that drifts from
+					// `TEXT_BODY_EXTENSIONS` — every text-body extension
+					// then gets the dual-strategy `bodyMatchesStoredHash`
+					// compare so legacy (pre-canonicalization-fix)
+					// witnesses don't false-drift.
+					const mismatched = isTextBodyExtension(abs)
+						? !bodyMatchesStoredHash(abs, storedSha)
+						: (() => {
+								const cur = outputSha256(abs)
+								return Boolean(cur) && cur !== storedSha
+							})()
+					if (mismatched && !isStageProduced(path)) {
+						events.push({
+							unit: unitName,
+							role,
+							kind: "input_mutation",
+							file: path,
+							since: at,
+						})
+					}
+				}
+				for (const [dirRel, inventory] of Object.entries(inputWitnesses.dirs)) {
+					// Same three-step resolution as for files (intent-rel,
+					// repo-rel, then strip-legacy-prefix-and-retry-intent-rel).
+					const intentRelative = join(args.intentDir, dirRel)
+					const repoRelative = join(repoRoot, dirRel)
+					let dirAbs: string | null = null
+					if (existsSync(intentRelative)) {
+						dirAbs = intentRelative
+					} else if (existsSync(repoRelative)) {
+						dirAbs = repoRelative
+					} else {
+						const normalized = normalizeInputPath(dirRel, args.intentDir)
+						const normalizedIntentRel =
+							normalized !== dirRel ? join(args.intentDir, normalized) : ""
+						if (normalizedIntentRel && existsSync(normalizedIntentRel)) {
+							dirAbs = normalizedIntentRel
+						}
+					}
+					// Dir-witness missing-directory FAN-OUT bug (2026-05-18):
+					// the prior version fell back to `dirAbs = intentRelative`
+					// when the dir didn't resolve, then iterated the stored
+					// inventory and emitted `input_deletion` for EVERY file
+					// inside (line 437 pre-fix). One missing-dir witness
+					// produced N false-positive FBs per sweep, where N was
+					// the inventory size at sign time. With the v8→v9
+					// migration leaving inventories of ~6 files per affected
+					// dir witness, every tick generated ~6 fresh drift FBs
+					// that the fix loop closed cosmetically — exactly the
+					// "infinite cascade" reported in the
+					// haiku-drift-loop-bug bundle. Fix: when the dir doesn't
+					// resolve, emit ONE deletion event for the dir itself,
+					// not N for its contents. The engine handler then
+					// restamps the slot's witness via `buildReviewRecord`
+					// which rebuilds from the unit's current `inputs:` —
+					// the missing dir gets skipped (resolveInputWitnesses
+					// line 359), the inventory is cleared, no further drift.
+					if (dirAbs === null) {
+						if (!isStageProduced(dirRel)) {
+							events.push({
+								unit: unitName,
+								role,
+								kind: "input_deletion",
+								file: dirRel,
+								since: at,
+							})
+						}
+						continue
+					}
+					const currentNames = listDirFiles(dirAbs)
+					// Check stored entries: mutation or deletion.
+					for (const [filename, storedSha] of Object.entries(inventory)) {
+						// Baton exemption (same as the direct-file path above):
+						// a file inside a witnessed dir that is ALSO a current-
+						// stage output is the stage's own deliverable evolving in
+						// the loop, not premise drift — exempt it from deletion,
+						// mutation, AND addition to avoid the input==output
+						// cascade.
+						const memberRel = join(dirRel, filename)
+						const fileAbs = join(dirAbs, filename)
+						if (!existsSync(fileAbs)) {
+							if (!isStageProduced(memberRel)) {
+								events.push({
+									unit: unitName,
+									role,
+									kind: "input_deletion",
+									file: memberRel,
+									since: at,
+								})
+							}
+							continue
+						}
+						const currentSha = fileSha256(fileAbs)
+						if (
+							currentSha &&
+							currentSha !== storedSha &&
+							!isStageProduced(memberRel)
+						) {
+							events.push({
+								unit: unitName,
+								role,
+								kind: "input_mutation",
+								file: memberRel,
+								since: at,
+							})
+						}
+					}
+					// New files inside the dir = addition drift (unless the new
+					// file is a current-stage output — same baton exemption).
+					for (const name of currentNames) {
+						const memberRel = join(dirRel, name)
+						if (inventory[name] === undefined && !isStageProduced(memberRel)) {
+							events.push({
+								unit: unitName,
+								role,
+								kind: "input_addition",
+								file: memberRel,
+								since: at,
+							})
+						}
+					}
+				}
+			}
 		}
+
+		// approvals.<role> is bookkeeping-only under the premise-witness
+		// model — output mutation is NOT drift (outputs are downstream
+		// of the signature and allowed to evolve). Legacy `witnesses`
+		// maps on existing approvals are intentionally ignored here;
+		// the v8→v9 migration drops the field entirely.
 
 		// discovery.<agent> witnesses the discovery output file plus
 		// the studio mandate. Same hash-compare model. Both witnessed
@@ -367,8 +682,9 @@ export function runDriftSweep(args: {
 			if (!at) continue
 			const stored = pickBodySha(record)
 			if (!stored) continue
-			const current = bodySha256(intentMdPath)
-			if (current && current !== stored) {
+			// Dual-strategy compare for intent.md approvals — same
+			// rationale as unit body witnesses above.
+			if (!bodyMatchesStoredHash(intentMdPath, stored)) {
 				events.push({
 					unit: "(intent)",
 					role,
@@ -380,115 +696,25 @@ export function runDriftSweep(args: {
 		}
 	}
 
-	// Dedup against open drift FBs. Once an agent files an FB for a
-	// drift event, we suppress re-emission until the FB closes —
-	// otherwise Track C (drift) would always win over Track B (the fix
-	// loop) and the loop could never complete.
+	// Return EVERY detected event — no FB dedup here.
 	//
-	// Two-layer dedup:
-	//   1. EXACT source_ref match — `drift:<kind>:<file>` against the
-	//      FB's `source_ref` frontmatter. The fast path when the agent
-	//      followed the drift_detected prompt's instructions verbatim.
-	//   2. PATH-based fallback — any open drift FB whose source_ref or
-	//      body mentions the event's file path. Catches the case where
-	//      the agent filed an FB but the source_ref shape drifted
-	//      (different kind classification, missing `drift:` prefix,
-	//      hand-typed source_ref, etc.). Without this, a single file
-	//      could re-emit drift_detected on every tick despite an open
-	//      FB, because the dedup key didn't quite match. Observed in
-	//      production 2026-05-12: drift on `SEMANTIC-TOKENS.md` fired
-	//      12 times in a row even though the agent had already filed an
-	//      FB about it.
-	const filed = collectOpenDriftFbDedup(args.intentDir)
-	const filtered = events.filter((e) => {
-		const ref = `drift:${e.kind}:${e.file}`
-		if (filed.refs.has(ref)) return false
-		if (filed.paths.has(e.file)) return false
-		// File path is sometimes recorded as basename or as a
-		// stage-relative path. Match on basename as a final fallback —
-		// any open drift FB whose source_ref or body mentions the file's
-		// basename is treated as "agent already knows about this drift."
-		const basename = e.file.split("/").pop() ?? ""
-		if (basename && filed.basenames.has(basename)) return false
-		return true
-	})
-
-	return { events: filtered, scanned, skipped }
+	// Pre-2026-05-17 this returned a filtered list to suppress
+	// re-emission while an open drift FB existed. That belonged to the
+	// "agent files the FB" era, where filtering events at sweep time
+	// prevented the agent from being re-prompted to file a duplicate.
+	//
+	// Under engine-internal drift handling, every event has TWO
+	// engine-side effects: (a) restamp the witness on the affected
+	// (unit, role) slot, and (b) maybe file an FB. The restamp must
+	// run on every event — even if an FB is already open for the same
+	// (file, kind) — because the file may have shifted again since
+	// the FB was filed, and leaving the witness stale would re-trip
+	// drift the moment the FB closes. The FB-emit dedup belongs to the
+	// engine handler (`engineHandleDriftEvents`), which keys on
+	// (file, kind) and skips emission when an open FB matches.
+	return { events, scanned, skipped }
 }
 
-/** Open-drift-FB dedup index. Built by walking every feedback dir in
- *  the intent and collecting three views of every open FB with
- *  `origin: "drift"`:
- *
- *  - `refs` — the literal `source_ref` value (e.g. `drift:spec:foo.md`).
- *    Fast exact match for FBs the agent filed via the drift_detected
- *    prompt's instructions verbatim.
- *  - `paths` — the file path extracted from `source_ref` (third segment
- *    after `drift:<kind>:`). Catches FBs where the kind drifted but the
- *    file matches.
- *  - `basenames` — basename of every collected path AND every path-like
- *    token in the FB body. Final fallback for FBs whose source_ref shape
- *    is unrecognised but the file is mentioned in the body.
- *
- *  Closed FBs (`closed_at` set) are ignored — once closure ships, the
- *  drift loop is allowed to re-arm on the same file. */
-function collectOpenDriftFbDedup(intentDir: string): {
-	refs: Set<string>
-	paths: Set<string>
-	basenames: Set<string>
-} {
-	const refs = new Set<string>()
-	const paths = new Set<string>()
-	const basenames = new Set<string>()
-	const fbDirs: string[] = []
-	const stagesDir = join(intentDir, "stages")
-	if (existsSync(stagesDir)) {
-		for (const entry of readdirSync(stagesDir, { withFileTypes: true })) {
-			if (!entry.isDirectory()) continue
-			fbDirs.push(join(stagesDir, entry.name, "feedback"))
-		}
-	}
-	fbDirs.push(join(intentDir, "feedback"))
-	for (const dir of fbDirs) {
-		if (!existsSync(dir)) continue
-		for (const f of readdirSync(dir)) {
-			if (!f.endsWith(".md")) continue
-			const fbPath = join(dir, f)
-			const fm = readFm(fbPath)
-			if (!fm) continue
-			if (fm.origin !== "drift") continue
-			if (typeof fm.closed_at === "string" && fm.closed_at.length > 0) continue
-			const ref = fm.source_ref
-			if (typeof ref === "string" && ref.length > 0) {
-				refs.add(ref)
-				// Extract file path from `drift:<kind>:<file>`. We allow
-				// kind to be anything (or empty); the path is whatever
-				// follows the second colon.
-				const m = ref.match(/^drift:[^:]*:(.+)$/)
-				if (m?.[1]) {
-					const filePath = m[1]
-					paths.add(filePath)
-					const base = filePath.split("/").pop() ?? ""
-					if (base) basenames.add(base)
-				}
-			}
-			// Body scan: any token that looks like a basename mentioned
-			// in the FB body counts as "agent acknowledged this file."
-			// Cheap regex over file extensions we care about — markdown
-			// outputs and common source files. This is a fallback only;
-			// the source_ref path above is the primary signal.
-			try {
-				const raw = readFileSync(fbPath, "utf8")
-				const body = matter(raw).content
-				for (const match of body.matchAll(
-					/[\w.-]+\.(?:md|mdx|markdown|tsx?|jsx?|css|scss|json|ya?ml)/g,
-				)) {
-					basenames.add(match[0])
-				}
-			} catch {
-				// FB body parse failure — skip body scan, keep refs/paths.
-			}
-		}
-	}
-	return { refs, paths, basenames }
-}
+// Open-drift-FB dedup helper retired 2026-05-17 — moved into
+// `drift-handle-events.ts` alongside the FB-emit path, where dedup
+// belongs under the engine-internal handling model.

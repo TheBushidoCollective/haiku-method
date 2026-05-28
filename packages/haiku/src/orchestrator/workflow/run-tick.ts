@@ -19,7 +19,7 @@ import { join } from "node:path"
 import matter from "gray-matter"
 import { broadcastIntent } from "../../intent-broadcaster.js"
 import type { OrchestratorAction } from "../../orchestrator.js"
-import { intentDir } from "../../state-tools.js"
+import { gitCommitStateIfDirty, intentDir } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
 import { getPluginVersion } from "../../version.js"
 import { migrateIntent } from "../migrate-registry.js"
@@ -33,18 +33,35 @@ import "../migrations/v4-to-v5.js"
 import "../migrations/v5-to-v6.js"
 import "../migrations/v6-to-v7.js"
 import "../migrations/v7-to-v8.js"
+import "../migrations/v8-to-v9.js"
+import "../migrations/v9-to-v10.js"
+import { killAllOrphanedMicroApps } from "../../micro-app.js"
+import { writeStatuslineSnapshot } from "../../statusline/snapshot.js"
+import { killAllOrphanedBootSessions } from "../../view-boot.js"
 import { hasV3CruftInIntent } from "../migrations/v0-to-v4.js"
+import { resolveIntentStages } from "../studio.js"
 import {
 	type CursorAction,
 	type CursorPosition,
 	derivePosition,
+	findCurrentStage,
 } from "./cursor.js"
 import {
 	buildLoopHaltAction,
 	recordTickResult,
 	wouldDeadlock,
 } from "./deadlock-detector.js"
+import { completePendingFixChainMerges } from "./fix-chain-merge-gate.js"
+import { reconcileOrphanedHatSequences } from "./hat-sequence-migration.js"
+import { healDuplicateFeedbackIds } from "./heal-duplicate-feedback-ids.js"
+import { purgeDeadSidecars } from "./purge-dead-sidecars.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
+import {
+	recoverStaleLeasedUnits,
+	resetLostUnits,
+} from "./unit-branch-recovery.js"
+import { autoRepairOrFileMissingOutputs } from "./validate-output-existence-gate.js"
+import { autoFileMalformedUnitInputs } from "./validate-unit-inputs-gate.js"
 import { ensureNonce } from "./verifier-nonce.js"
 
 /** Result of a single workflow tick. */
@@ -124,7 +141,21 @@ export function runWorkflowTick(
 		// some units v4 but left others v3 still triggers re-migration.
 		const v3CruftPresent =
 			sourceMajor === targetMajor && hasV3CruftInIntent(iDir)
-		if (sourceMajor !== targetMajor || v3CruftPresent) {
+		// No-regress invariant: NEVER migrate an intent DOWN. If the intent's
+		// on-disk major is ABOVE the computed target major — a transient low
+		// `getPluginVersion()` read during a concurrent version bump, or an
+		// older engine opening a newer intent — skip migration entirely.
+		// Downgrading the schema stamp is data-lossy and was the 9.0.0→8.0.0
+		// regression in the migration-livelock report ("stamp the running
+		// engine's version, never a lower one"). The intent keeps its higher
+		// version; the cursor walks it as-is.
+		if (sourceMajor > targetMajor) {
+			emitTelemetry("haiku.migrate.skipped_no_regress", {
+				intent: slug,
+				source: sourceVersion,
+				target,
+			})
+		} else if (sourceMajor < targetMajor || v3CruftPresent) {
 			// Use the major's canonical schema anchor (e.g. "4.0.0"),
 			// not the running build version (e.g. "4.0.2"). The
 			// migration registry edges are keyed by schema generation
@@ -160,6 +191,23 @@ export function runWorkflowTick(
 				// preserved in unit/feedback frontmatter, and the deleted
 				// files are v3-only artifacts v4 doesn't read or write.
 				if (migrateResult.steps > 0) {
+					// Commit the migrator's own .haiku/ output immediately, so the
+					// migration is a self-contained committed step. Without this,
+					// the rewritten intent/unit/feedback files sit uncommitted in
+					// the working tree; a later downstream-sync
+					// `restoreEngineStateFromBase(HEAD)` would check them back out
+					// to the pre-migration commit — reverting the migration and
+					// re-firing it next tick (the migration-livelock residual).
+					// Commit ONLY when the migration actually changed files:
+					// gitCommitStateIfDirty no-ops on a clean .haiku tree. The
+					// migrators are idempotent, so `steps > 0` can mean "re-ran the
+					// chain over already-migrated files with zero diff" — an
+					// unconditional (--allow-empty) commit there would move HEAD and
+					// manufacture phantom merge debt. Stages only .haiku, never
+					// unrelated agent code.
+					gitCommitStateIfDirty(
+						`haiku: migrate ${slug} to ${schemaTarget}${v3CruftPresent ? " (v3-cruft cleanup)" : ""}`,
+					)
 					const d = migrateResult.details
 					const lines: string[] = []
 					if (v3CruftPresent) {
@@ -274,6 +322,24 @@ export function runWorkflowTick(
 		}
 	}
 
+	// Every-tick dead-sidecar sweep. Idempotent + cheap (file-existence
+	// checks against a fixed known list). Catches v9-era stragglers
+	// the version-gated migration won't re-fire on (e.g. a stale
+	// gate-session.json or baseline.json that appeared via a downgrade-
+	// upgrade cycle or a stage merge from a pre-v9 branch).
+	purgeDeadSidecars(iDir)
+
+	// Reap orphaned `haiku_view` boot-mode subprocesses. Any spawned
+	// dev server whose owning view-session no longer exists in the
+	// in-memory registry (because the SPA evicted it, the agent crashed
+	// before calling haiku_view_close, etc.) gets SIGTERMed here so
+	// stale dev servers don't accumulate across ticks.
+	killAllOrphanedBootSessions()
+
+	// Reap micro-app review windows whose owning session is gone (gate
+	// resolved, session evicted). Mirrors the boot-session sweep above.
+	killAllOrphanedMicroApps()
+
 	// Pre-cursor selection gates. Each emits a structured `select_*`
 	// action when the corresponding field is missing on intent.md.
 	// haiku_run_next intercepts these, runs the SPA picker inline,
@@ -356,6 +422,167 @@ export function runWorkflowTick(
 		// studio config gone), let the cursor walk surface the real
 		// error.
 		emitTelemetry("haiku.self_repair.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Pre-tick pickup recovery: a worktree-isolated unit whose worktree AND
+	// branch (local + remote) are all gone has lost its hat-loop code (the
+	// work never reached the stage branch). Reset it so the cursor
+	// re-dispatches the first hat into a fresh worktree. No-op on the common
+	// paths — worktree present (in-flight) or branch recreatable (resume).
+	try {
+		const recovered = resetLostUnits(slug, studio)
+		if (recovered.reset.length > 0) {
+			emitTelemetry("haiku.unit_recovery.reset", {
+				intent: slug,
+				units: recovered.reset.join(","),
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.unit_recovery.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Pre-tick stale-lease recovery: a unit whose dispatch lease outlived its
+	// subagent (worktree gone, or the lease aged past TTL) would be skipped
+	// forever by the cursor's `needNextHat` lease filter, wedging the wave.
+	// Clear the lease so the open hat re-dispatches. Runs AFTER resetLostUnits
+	// (which handles the worktree+branch-both-gone case by full reset); this
+	// handles the worktree-gone-branch-survives and worktree-intact-but-dead
+	// cases by clearing just the lease.
+	try {
+		const released = recoverStaleLeasedUnits(slug, studio)
+		if (released.cleared.length > 0) {
+			emitTelemetry("haiku.unit_recovery.lease_cleared", {
+				intent: slug,
+				units: released.cleared.join(","),
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.unit_recovery.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Reconcile units whose recorded iterations name a hat the stage's
+	// sequence no longer has (a studio/override `hats:` change — e.g. the
+	// security reshape dropped red/blue from the per-unit loop). Trim each
+	// unit's iterations to its current hat set; the cursor then reads
+	// loop-complete or pending correctly. Findings survive as FBs. Idempotent.
+	try {
+		const orphan = reconcileOrphanedHatSequences(slug)
+		if (orphan.reconciled.length > 0) {
+			emitTelemetry("haiku.hat_sequence.reconciled", {
+				intent: slug,
+				units: orphan.reconciled.join(","),
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.hat_sequence.reconcile_failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Pre-tick FB-id heal: renumber feedback files that collide on their
+	// numeric prefix so every FB has a UNIQUE id. Parallel reviewers can
+	// both allocate the same number (local-max+1) when intent-main is
+	// behind origin; the non-fast-forward rebase recovery then keeps BOTH
+	// files, and `findFeedbackFile` would resolve only one — silently
+	// shadowing the other finding (a delivery-branch net-delete BLOCKER was
+	// nearly lost this way, worker-new-badge 2026-05-28). Runs before the
+	// cursor collects feedback so dispatch sees distinct ids. Idempotent;
+	// best-effort — never blocks the tick.
+	try {
+		const healed = healDuplicateFeedbackIds(
+			slug,
+			resolveIntentStages(intentFm, studio),
+		)
+		if (healed.renamed.length > 0) {
+			emitTelemetry("haiku.feedback.id_heal", {
+				intent: slug,
+				renamed: String(healed.renamed.length),
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.feedback.id_heal.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Pre-tick read-time input validation: catch units already on disk
+	// whose `inputs:` lists a unit name instead of a file path and
+	// auto-file a deduplicated feedback. The write-time validator in
+	// `haiku_unit_write` stops NEW malformed units; this covers ones
+	// authored before that validator existed (admin-portal-reimagine
+	// unit-014, 2026-05-19). Best-effort — failures here never block the
+	// cursor walk.
+	try {
+		const malformed = autoFileMalformedUnitInputs(slug, iDir, studio)
+		if (malformed.filed.length > 0) {
+			emitTelemetry("haiku.input_validation.feedback_filed", {
+				intent: slug,
+				units: malformed.filed.join(","),
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.input_validation.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Intent-closeout output sweep: when ALL stages are complete the intent
+	// is wrapping up, so every unit's declared outputs SHOULD exist on disk.
+	// Re-validate them — the per-unit terminal-hat gate only checked at the
+	// moment each unit completed, and a later unit / fix-loop / merge can move
+	// or delete a file afterward, leaving a stale declaration the SPA surfaces
+	// as a phantom ("not on disk") but no gate caught. Near-miss extension
+	// typos self-repair in place; the rest become open feedback the fix loop
+	// resolves. Gated on closeout (findCurrentStage === null) so it never
+	// flags an in-flight unit whose output legitimately isn't written yet.
+	// Best-effort — never wedges the tick, never rewinds a stage.
+	try {
+		if (findCurrentStage(slug, studio, iDir) === null) {
+			const closeoutStages = resolveIntentStages(intentFm, studio)
+			const sweep = autoRepairOrFileMissingOutputs(slug, closeoutStages)
+			if (sweep.repaired.length > 0 || sweep.filed.length > 0) {
+				emitTelemetry("haiku.output_validation.closeout_sweep", {
+					intent: slug,
+					repaired: String(sweep.repaired.length),
+					filed: String(sweep.filed.length),
+				})
+			}
+		}
+	} catch (err) {
+		emitTelemetry("haiku.output_validation.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Pre-tick fix-chain merge completion: a fix-chain whose terminal close
+	// conflicted on landing its code is left mid-merge in its worktree. Once
+	// the agent resolves + commits + re-ticks, complete the forward-merge
+	// here (before the cursor can advance the stage with stranded fix code).
+	// Returns an integrate_fix_chains action while conflicts remain unresolved;
+	// no-op otherwise. Best-effort never wedges the tick.
+	try {
+		const fixMergeGate = completePendingFixChainMerges(slug, studio)
+		if (fixMergeGate.action) {
+			return broadcastTick(slug, {
+				position: { track: "feedback", action: null },
+				action: fixMergeGate.action,
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.fix_chain_merge.failed", {
 			intent: slug,
 			error: String((err as Error)?.message ?? err),
 		})
@@ -547,6 +774,12 @@ function broadcastTick(
 		slug,
 		finalResult.action as unknown as Record<string, unknown> | null,
 	)
+	// Persist the dispatched POSITION for the status line. This is the
+	// single tick commit point, so the snapshot always reflects the action
+	// the agent was actually handed — the status line reads it instead of
+	// re-deriving the cursor (which would jump ahead of the agent the
+	// moment a tool changes disk state). Best-effort; never blocks a tick.
+	writeStatuslineSnapshot(slug, finalResult.position.action)
 	return finalResult
 }
 

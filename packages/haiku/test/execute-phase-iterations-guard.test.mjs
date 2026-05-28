@@ -92,16 +92,13 @@ test("cursor: stranded started-without-iterations + outputs declared → does NO
 			})
 
 			const action = await runTick(repoRoot, slug)
-			// MUST NOT advance into the review/approval track. Acceptable
-			// answers: re-dispatch the hat sequence (start_unit_hat), or
-			// surface the structural problem
-			// (unit_outputs_empty_iterations). The forbidden answer is
-			// `dispatch_review` / `dispatch_approval` / `complete_stage`.
-			assert.notStrictEqual(
-				action.action,
-				"dispatch_review",
-				`must not dispatch review with empty iterations; got: ${action.action}`,
-			)
+			// MUST NOT advance into the POST-execute track. The
+			// 2026-05-17 pre/post split made `dispatch_review` a
+			// PRE-execute spec audit — firing it on an unbuilt unit is
+			// fine (it audits the spec, not the work). The forbidden
+			// answers are post-execute (`dispatch_approval` /
+			// `complete_stage`), which would require iterations to be
+			// terminal-advanced.
 			assert.notStrictEqual(
 				action.action,
 				"dispatch_approval",
@@ -112,13 +109,15 @@ test("cursor: stranded started-without-iterations + outputs declared → does NO
 				"complete_stage",
 				`must not complete stage with empty iterations; got: ${action.action}`,
 			)
-			// We expect either a re-dispatch (preferred — picks up first
-			// hat for the started-with-empty-iterations unit) or the
-			// structural surface.
+			// Acceptable outcomes: PRE-execute review on the spec
+			// (`dispatch_review`), structural surface
+			// (`unit_outputs_empty_iterations`), or re-dispatch
+			// (`start_unit_hat` once reviews are signed).
 			assert.ok(
 				action.action === "start_unit_hat" ||
+					action.action === "dispatch_review" ||
 					action.action === "unit_outputs_empty_iterations",
-				`expected dispatch or structural surface, got: ${action.action} — ${action.message ?? ""}`,
+				`expected dispatch / pre-execute review / structural surface, got: ${action.action} — ${action.message ?? ""}`,
 			)
 		},
 	)
@@ -191,8 +190,12 @@ test("cursor: multiple units with declared outputs + empty iterations → all li
 			}
 
 			const action = await runTick(repoRoot, slug)
-			// One of two acceptable outcomes — both indicate the stage
-			// is NOT advancing to review with unbuilt units.
+			// Acceptable outcomes (2026-05-17 pre/post split): the
+			// guard surface, dispatch_review (pre-execute spec audit —
+			// fine on unbuilt units), or re-dispatch
+			// (start_unit_hat once reviews land). The forbidden
+			// outcomes remain dispatch_approval / complete_stage, which
+			// require iterations to be terminal-advanced.
 			if (action.action === "unit_outputs_empty_iterations") {
 				assert.strictEqual(action.stage, "design")
 				assert.deepStrictEqual([...(action.units ?? [])].sort(), [
@@ -201,12 +204,10 @@ test("cursor: multiple units with declared outputs + empty iterations → all li
 					"unit-05-stranded",
 				])
 			} else {
-				// Re-dispatch — also acceptable. The first hat picks up
-				// the empty-iterations units.
-				assert.strictEqual(
-					action.action,
-					"start_unit_hat",
-					`expected guard or dispatch; got: ${action.action} — ${action.message ?? ""}`,
+				assert.ok(
+					action.action === "start_unit_hat" ||
+						action.action === "dispatch_review",
+					`expected guard / re-dispatch / pre-execute review; got: ${action.action} — ${action.message ?? ""}`,
 				)
 			}
 		},

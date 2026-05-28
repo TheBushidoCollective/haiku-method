@@ -16,20 +16,22 @@ inputs:
 
 # Release
 
-Publishing to the target registry, generating changelogs, updating the documentation site, and managing the deprecation lifecycle. Libraries don't deploy — they publish. There is no on-call, no rollback in the traditional sense; a broken release means a new patch version, not a redeployment. The act of publishing is one-shot — once a version is in the registry it cannot be unpublished without breaking every consumer who already resolved it.
+Publish the built library to its registry, generate the changelog, update the documentation, and manage the deprecation lifecycle. Libraries don't deploy — they publish, and publishing is one-shot: once a version resolves in the registry it can't be unpublished without breaking every consumer who already pulled it. A broken release is a new patch version, not a rollback.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the three hats in `plan → do → verify` order:
+Turning built code into a published version — semver decision, changelog, registry publish, git tag, docs update, deprecation policy, and post-publish smoke install. Release decides *how the work reaches consumers and how the version is communicated* — not what was built (development) or whether it's safe (security), though it surfaces the security guidance and the semver impact those stages produced.
 
-- **`release-engineer`** (plan / do) decides the semver impact, writes the changelog entry, prepares the registry-publish action, tags the commit, and lines up the post-publish smoke install
-- **`doc-writer`** (do) updates the public documentation site to reflect the release — API reference, migration guides for breaking changes, surfaced security guidance integrated into the relevant API sections
-- **`verifier`** (verify) validates the operational artifacts: preconditions stated, action unambiguous, post-condition mechanically decidable, deprecation policy honored
+## What to do
 
-## Inputs and outputs
+- Decide the semver impact by diffing the new public surface against the prior one, and write the changelog entry that explains it.
+- Update the documentation to match the release — API reference, migration guides for breaking changes, and the security guidance integrated into the relevant sections.
+- Prepare an unambiguous publish action with a mechanically decidable post-condition (the smoke install confirming the version resolves and imports).
+- Honor the deprecation policy when retiring surface, so consumers get warning before removal.
 
-Inputs are inception's `discovery` and `api-surface` (for context and semver diffing) plus development's `code` (the actual artifact to publish). Output is the `release-artifacts` family — version bump, changelog entry, signed registry publish, git tag, docs deploy, smoke-install record.
+## What NOT to do
 
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, release-engineer, feedback-assessor]` dispatches per finding. The gate is `auto` — release artifacts are mechanically verifiable (semver math, changelog completeness, smoke install) so the engine signs off when the verifier and review agents pass. Project overlays at `.haiku/studios/libdev/stages/release/` may add house-style conventions (changelog headings, release-note templates, doc-site path scheme) without modifying the plugin defaults.
+- Don't publish a breaking change under a patch or minor bump — the semver math is a hard constraint, not a preference.
+- Don't redefine or reimplement the library here; release publishes what development built.
+- Don't ship a release whose smoke install hasn't been confirmed.
+- Don't remove public surface without the deprecation path the policy requires.

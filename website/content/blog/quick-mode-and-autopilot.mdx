@@ -1,0 +1,82 @@
+---
+title: "Quick Mode and Autopilot"
+description: "Two new operating modes for H·AI·K·U — quick mode for trivial tasks with full hat discipline, and autopilot for autonomous feature delivery with strategic human checkpoints."
+date: 2026-03-31
+---
+
+In [Dark Factories and the Loop](/blog/dark-factories-and-the-loop), we argued that autonomy is a knob, not an architecture. The same harness, the same hats, the same backpressure — you just choose how much you are watching. That was the principle. This week, we shipped the two ends of that knob.
+
+**Quick mode** handles trivial tasks with full hat discipline. **Autopilot** handles autonomous feature delivery with strategic human checkpoints. Together with the existing `/elaborate` and `/execute` manual flow, H·AI·K·U now covers the full spectrum from 30-second fixes to unattended multi-unit builds.
+
+## The Problem with the Old `/quick`
+
+The original `/quick` skill was a bypass. It skipped hats, skipped the planner/builder/reviewer cycle, skipped workflows entirely. The pitch was speed: for trivial changes, why run the full machinery?
+
+The answer turned out to be: because the machinery is what makes the output good.
+
+<Callout tone="warn" title="What the old /quick actually cost">
+Even a one-file typo fix benefits from a reviewer hat catching an adjacent issue. Even a config change benefits from a builder hat that commits atomically. The original `/quick` traded quality for speed, and the tradeoff wasn't worth it. Users who cared about quality used `/elaborate` for everything — including tasks that took longer to specify than to build.
+</Callout>
+
+## Quick Mode, Rebuilt
+
+The new `/quick` accepts an optional workflow name and a task description: `/quick tdd fix the validator`. It reads the hat sequence for that workflow and runs a full in-memory hat loop. The redesign turned on five decisions.
+
+<KeyPoints title="FIVE DECISIONS">
+1. **Intelligent routing.** When you describe a task without picking a command, the system sizes it up — files touched, kind of change, whether tests or design decisions are involved — and suggests `/quick` or `/elaborate`. You always confirm. The system recommends; it doesn't decide.
+2. **Temporary artifacts.** Quick mode writes a small scratch directory so the existing hooks can inject hat context normally. It's cleaned up after the run and never committed. The hooks don't know or care the task is "quick."
+3. **Builder/reviewer cycle.** The builder produces one commit per cycle. If the reviewer rejects, work loops back. After three failed cycles, quick mode stops and recommends `/elaborate` — the task wasn't trivial after all. Scope detection through execution, not upfront estimation.
+4. **Pre-delivery review.** Every quick mode PR goes through `/haiku:haiku-gate-review` before the PR opens. Local catch before external CI or review bots see the work. No shortcuts on the way out.
+5. **Six named workflows.** Default, TDD, adversarial, design, hypothesis, BDD — each a different hat sequence for a different kind of task. The workflow shapes the discipline; the discipline runs at full strength regardless of task size.
+</KeyPoints>
+
+The result: a task that used to bypass all quality infrastructure now runs through the same hat-based workflow as a multi-unit feature build. It just does it in memory, in one pass, and cleans up after itself.
+
+## Autopilot
+
+At the other end of the spectrum, `/haiku:haiku-autopilot <description>` runs the entire H·AI·K·U lifecycle in a single command. Elaborate, plan, execute all units, deliver via PR.
+
+Autopilot operates in AHOTL mode — Autonomous, Human on the Loop. The agent elaborates requirements from the description and the codebase, elaborates into units, executes each unit through the full builder/reviewer cycle, and delivers the result. No clarification questions. No manual approvals per unit. Backpressure quality gates are the primary enforcement mechanism.
+
+But autopilot is not unattended. It pauses at three strategic boundaries — the moments where guessing has the highest cost.
+
+<KeyPoints title="THREE PAUSES">
+1. **Scope guardrail.** If elaboration produces more than five units, autopilot stops. You can continue, drop to manual execution, or re-elaborate with a narrower scope. Five units is where autonomous execution shifts from efficient to risky — the blast radius of a bad elaboration grows nonlinearly.
+2. **Blocker escalation.** When a unit hits something that needs human input — an ambiguous requirement, a missing dependency, a design decision the codebase doesn't answer — autopilot surfaces it instead of guessing.
+3. **Pre-delivery checkpoint.** Autopilot always pauses before opening the PR. You see the full scope of changes and confirm the handoff. The agent did the work; the human authorizes the delivery.
+</KeyPoints>
+
+The design principle: pauses should correspond to moments where human judgment adds the most value. Not every hat transition. Not every unit boundary. Just the three where getting it wrong costs the most — scope, blockers, and delivery.
+
+## The Autonomy Spectrum
+
+The interesting insight isn't that these modes exist. It's what they prove about the relationship between discipline and autonomy.
+
+<Compare verdict="diverge" title="The two ends of the same knob">
+  <Side label="Quick mode">
+    Trivial scope. One or two files. Single hat loop in memory. No elaboration. Human confirms which command to run; the discipline runs at full strength inside it.
+  </Side>
+  <Side label="Autopilot">
+    Full feature scope. Multi-unit. Full elaborate-execute-deliver lifecycle, auto-approved. Human reviews strategic boundaries: scope, blockers, delivery. The discipline runs at full strength on every unit.
+  </Side>
+</Compare>
+
+Quick mode proves that you can have full hat discipline on a 30-second fix. The planner/builder/reviewer cycle is not overhead that should be skipped for small tasks — it is lightweight enough to run on anything. The cost of discipline approaches zero when the harness handles it.
+
+Autopilot proves that you can have strategic human judgment on a fully autonomous build. You do not need to choose between "human approves everything" and "human approves nothing." The system identifies the three moments where human input matters most and concentrates oversight there.
+
+These are not opposites. They are the same principle applied at different scales — quick mode maximizes discipline at minimal scale, autopilot maximizes autonomy at full scale. Both keep the quality properties that matter: hat-based role separation, backpressure enforcement, and structured review.
+
+<Callout tone="info" title="The reframe">
+Discipline and autonomy are orthogonal axes, not opposing forces. You don't have to spend one to buy the other.
+</Callout>
+
+## The Knob in Practice
+
+The dark factory post was a philosophical argument. Quick mode and autopilot make it concrete.
+
+A developer's Monday might look like this: `/quick tdd fix the flaky test` in the morning. `/elaborate` a new API endpoint after standup, then `/execute` each unit with close review because the domain is unfamiliar. `/autopilot add pagination to the list endpoints` after lunch, because the pattern is well-established and the test coverage is strong.
+
+Same tool. Same hats. Same backpressure. Same quality gates. Three different positions on the autonomy knob, chosen based on the work, not the architecture.
+
+The spectrum isn't theoretical anymore. It ships.

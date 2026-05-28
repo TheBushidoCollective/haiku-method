@@ -1,0 +1,86 @@
+---
+title: Introducing H·AI·K·U
+description: A methodology for iterative AI-driven development with hat-based workflows
+date: 2026-02-02
+---
+
+This is **H·AI·K·U** (formerly AI-DLC) — a methodology for structured, iterative software development with AI assistants.
+
+## The challenge
+
+Working with Claude changed how we write software. It also broke things we used to take for granted.
+
+<KeyPoints title="WHAT BROKE">
+1. **Context shifts mid-task.** The agent loses track of which problem it's solving while it's solving it.
+2. **Output volume outruns review.** The model writes faster than any human can read carefully.
+3. **The old metrics stop saying much.** "How's it going" turns into a guess.
+</KeyPoints>
+
+We built H·AI·K·U because the answer to all three couldn't be "trust the model."
+
+## The solution
+
+H·AI·K·U introduces two core concepts: **hats** and **units**.
+
+### Hats
+
+Hats represent distinct mindsets and responsibilities. By explicitly switching between them, you prevent context drift and make sure each phase gets the attention it needs.
+
+<Grid>
+  <Card title="Researcher" accent="info">
+    Understand the problem before acting. Read the code, ask the questions, surface the constraints.
+  </Card>
+  <Card title="Planner" accent="info">
+    Design the approach with clear steps. Decide what done looks like before anything gets built.
+  </Card>
+  <Card title="Builder" accent="good">
+    Execute the plan with focus. No drift into adjacent problems, no scope creep.
+  </Card>
+  <Card title="Reviewer" accent="warn">
+    Validate quality and completeness. Catch what the builder missed before it ships.
+  </Card>
+</Grid>
+
+### Units
+
+Units are focused pieces of work with clear success criteria. Breaking work into units does four things at once.
+
+<Grid>
+  <Card title="Measurable progress" accent="info">
+    Each unit has a clear definition of done. You know what shipped and what didn't.
+  </Card>
+  <Card title="Controlled scope" accent="info">
+    The unit's criteria define the edges. Drift into adjacent work is visible immediately.
+  </Card>
+  <Card title="Verifiable quality" accent="good">
+    Gates run per unit, not per intent. Bad work gets caught close to where it was made.
+  </Card>
+  <Card title="Sustained momentum" accent="good">
+    Small wins land while big work is still in flight. The flywheel never stalls.
+  </Card>
+</Grid>
+
+## Getting started
+
+H·AI·K·U is distributed as a Claude plugin. Install it with:
+
+```
+/plugin marketplace add gigsmart/haiku-method
+/plugin install haiku@gigsmart-haiku-method --scope project
+```
+
+Then start using the hat commands to structure your workflow.
+
+## A Claude plugin
+
+H·AI·K·U is a Claude plugin that works in both Claude Code and Cowork.
+
+<Callout tone="info" title="The bet">
+AI-assisted development deserves the same rigor and discipline as traditional software engineering — just with new tools and methods.
+</Callout>
+
+## What's next
+
+What's on the bench: more docs and guides, CI/CD integration, team collaboration features, and the metrics surface that finally tells you whether a run is going well.
+
+Follow along on [GitHub](https://github.com/gigsmart/haiku-method).

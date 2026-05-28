@@ -49,6 +49,7 @@ const EXPECTED = [
 	["GET", "/stage-artifacts/{sessionId}/{path}"],
 	["GET", "/direction/{sessionId}"],
 	["POST", "/direction/{sessionId}/select"],
+	["GET", "/view/{sessionId}"],
 	["GET", "/question-image/{sessionId}/{index}"],
 	["GET", "/question/{sessionId}"],
 	["POST", "/question/{sessionId}/answer"],

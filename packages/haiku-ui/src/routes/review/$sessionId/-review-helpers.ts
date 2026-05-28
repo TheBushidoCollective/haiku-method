@@ -36,8 +36,8 @@ export function resolveActiveStage(
 	session: ReviewPageSessionData,
 ): string | null {
 	// Server is authoritative — it computed `current_state` fresh from
-	// per-stage state.json on this very request via getCurrentState(slug)
-	// in http/session-api.ts. Trust it and bail out.
+	// per-unit frontmatter and branch-merge state on this very request via
+	// getCurrentState(slug) in http/session-api.ts. Trust it and bail out.
 	const current = session.current_state?.stage
 	if (typeof current === "string" && current) return current
 	// Backwards-compat fallback (only fires if the server is older than
@@ -160,6 +160,22 @@ export function phaseBadgeCopy(
 			label: "In Review",
 			classes:
 				"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+		}
+	}
+	if (phase === "approve") {
+		// Post-execute adversarial approval — the work is built and being
+		// signed off. Amber like the other review phases.
+		return {
+			label: "In Approval",
+			classes:
+				"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+		}
+	}
+	if (phase === "complete") {
+		return {
+			label: "All Gates Closed",
+			classes:
+				"bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
 		}
 	}
 	if (phase === "execute") {

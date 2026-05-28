@@ -65,10 +65,39 @@ function StageLayout(): React.ReactElement {
 			: stageState?.mergedIntoMain === true
 				? "completed"
 				: (stageState?.status ?? "pending")
-	const stagePhase = stageState?.phase ?? null
+	// Phase pill source. `stage_states[stage].phase` is a DEPRECATED v3 shim
+	// (StageStateInfoSchema marks it "derived") that lags the cursor — it
+	// stayed "execute" while the engine had already advanced to the review /
+	// approval gate, so the pill read "Executing" at the gate (reported
+	// 2026-05-27). For the stage the engine is actually sitting on, prefer the
+	// LIVE `current_state.phase` (elaborate|execute|review|approve|gate|…);
+	// fall back to the legacy field for other stages / older payloads.
+	const liveCurrentPhase =
+		stage === activeStage ? (session.current_state?.phase ?? null) : null
+	const stagePhase = liveCurrentPhase || stageState?.phase || null
 	const gateModes = resolveGateModes(session.gate_type)
 	const gateBadges = gateModes.map(gateBadgeCopy)
 	const isAdHoc = session.ad_hoc === true
+
+	// Granular phase track. The cursor derives the LIVE milestone list
+	// (with active marker + progress index) for the engine's CURRENT
+	// stage; the session payload additionally ships a per-stage track
+	// (`stage_milestones`) so a COMPLETED stage renders the same
+	// fine-grained dot stepper instead of falling back to the coarse
+	// four-checkmark strip. On a completed stage every pip is forced done
+	// by the stage status, so its stale per-step flags don't matter. A
+	// still-pending stage keeps the coarse strip (its milestone flags
+	// would read as "not started," not "done").
+	const isCurrentStage = stage === activeStage
+	const isCompletedStage = stageStatus === "completed"
+	const milestones = isCurrentStage
+		? (session.current_state?.milestones ?? null)
+		: isCompletedStage
+			? (session.stage_milestones?.[stage] ?? null)
+			: null
+	const progressIndex = isCurrentStage
+		? session.current_state?.progress_index
+		: undefined
 
 	const scopeStyle = bannerHeight
 		? ({ "--header-height": `${bannerHeight}px` } as React.CSSProperties)
@@ -83,6 +112,8 @@ function StageLayout(): React.ReactElement {
 					stagePhase={stagePhase}
 					gateBadges={gateBadges}
 					adHoc={isAdHoc}
+					milestones={milestones}
+					progressIndex={progressIndex}
 				/>
 			</div>
 			{/* Drift banner — between StageBanner and RereviewBanner per

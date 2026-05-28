@@ -90,11 +90,9 @@ function migrateOneFeedbackFile(fbPath: string): {
 				synthesized = true
 			}
 			break
-		case "pending":
-		case "fixing":
 		default:
 			// drop the field; no synthesis needed (absence of closure signals
-			// IS the open state)
+			// IS the open state — covers "pending", "fixing", and any unknown values)
 			break
 	}
 

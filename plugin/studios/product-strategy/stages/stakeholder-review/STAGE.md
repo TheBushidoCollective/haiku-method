@@ -1,6 +1,7 @@
 ---
 name: stakeholder-review
 description: Present to stakeholders, gather feedback, gain alignment
+optional: true
 hats: [presenter, feedback-synthesizer, verifier]
 fix_hats: [classifier, presenter, feedback-assessor]
 review: external
@@ -12,20 +13,22 @@ inputs:
 
 # Stakeholder Review
 
-Take the roadmap to the people who have to commit against it — executives, engineering leadership, sales, support — and come out with a decision, not just a meeting. This stage owns the framing, the synthesis of what came back, and the record of who agreed to what.
+Take the roadmap to the people who have to commit against it — executives, engineering leadership, sales, support — and come out with a decision, not just a meeting. This terminal stage owns the framing, the synthesis of what came back, and the record of who agreed to what.
 
-## Per-unit baton
+## Scope
 
-Each stakeholder-review unit walks `plan → do → verify`:
+Presenting the roadmap, capturing stakeholder reactions, and recording the alignment reached. Stakeholder-review decides *whether the plan is committed to and by whom* — not what the plan is (roadmap) or why it's ordered that way (prioritization). The output is an alignment record: named decisions, named decision-makers, and owned action items.
 
-- **`presenter`** (plan / package) shapes the roadmap into an audience-appropriate narrative for this stakeholder group — executive summary, strategic rationale, risk surface, the specific ask. Produces the presentation artifact.
-- **`feedback-synthesizer`** (do / capture) records the actual stakeholder reactions during and after the session, classifies each item by whether it changes the strategy, refines it, or is noted-but-not-acted-on, and updates the alignment record with named decisions and owners.
-- **`verifier`** (verify) validates the alignment record body-only — every decision has a named decision-maker, every contested item has an escalation path, every action item has an owner — and advances or rejects.
+## What to do
 
-## Inputs and outputs
+- Shape the roadmap into an audience-appropriate narrative per stakeholder group — executive summary, strategic rationale, risk surface, and the specific ask.
+- Record the actual stakeholder reactions and classify each as strategy-changing, refining, or noted-but-not-acted-on.
+- Capture named decisions with named decision-makers, and an escalation path for every contested item.
+- Give every action item an owner.
 
-Consumes `roadmap/roadmap-doc`. Produces `discovery/ALIGNMENT-DOC.md` per topic capturing the decisions reached. This is the terminal stage of the studio.
+## What NOT to do
 
-## Fix loop and gate
-
-`fix_hats: [classifier, presenter, feedback-assessor]` reopens the framing when feedback lands — usually because the presentation didn't surface a risk or trade-off the stakeholder needed to see. The gate is `external` — alignment is something an external decision-making body confirms (a leadership review forum, a steering committee, a customer-advisory signoff); the engine blocks until that signal arrives. Project overlays at `.haiku/studios/product-strategy/stages/stakeholder-review/` may pin presentation-platform conventions, distribution templates, or the team's alignment-recording style.
+- Don't redesign the roadmap mid-review — surface that a change is needed and route it back to the roadmap stage.
+- Don't re-rank opportunities or re-research; this stage aligns on the plan as presented.
+- Don't record a decision with no named decision-maker, or an action item with no owner.
+- Don't self-advance the alignment gate — it confirms when the external decision-making body actually signals.

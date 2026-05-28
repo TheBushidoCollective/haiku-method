@@ -22,6 +22,7 @@ import {
 	FeedbackOriginSchema,
 	FeedbackReplySchema,
 	FeedbackResolutionSchema,
+	FeedbackSeveritySchema,
 	FeedbackStatusSchema,
 } from "./common.js"
 
@@ -79,6 +80,11 @@ export const FeedbackItemSchema = z
 		body: z.string().max(10_000),
 		status: FeedbackStatusSchema,
 		origin: FeedbackOriginSchema,
+		severity: FeedbackSeveritySchema.nullable()
+			.optional()
+			.describe(
+				"Finding urgency. null/absent for user-authored FBs not yet classified by the classifier fix-hat, and for pre-severity legacy FBs.",
+			),
 		author: z
 			.string()
 			.max(200)
@@ -144,9 +150,13 @@ export const FeedbackItemSchema = z
 					 *  made. Empty / absent for spec-reconciliation hats that
 					 *  only edit knowledge artifacts without committing. */
 					commit: z.string().max(64).optional(),
-					/** Free-form reason — required when `result` is "reopened"
-					 *  or "rejected" so the audit trail explains why a bolt
-					 *  didn't close the finding. */
+					/** The handoff baton recorded on this transition (advance or
+					 *  reject) — what the hat did + what the next hat needs.
+					 *  Required on every transition via the tool gate; this is
+					 *  the field reviewers read to follow the fix narrative. */
+					message: z.string().max(4000).optional(),
+					/** Deprecated legacy reject reason — pre-v9 entries only.
+					 *  Reads fall back to this when `message` is absent. */
 					reason: z.string().max(1000).optional(),
 				}),
 			)

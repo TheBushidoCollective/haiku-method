@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import {
+	ENGINE_APPROVAL_ROLES,
+	ENGINE_REVIEW_ROLES,
+	seedRoleList,
+} from "@/lib/browse/intent-parsing"
 import { resolveLinks } from "@/lib/browse/resolve-links"
 import type {
 	BrowseProvider,
@@ -13,12 +18,23 @@ import type {
 import { formatDate, formatDuration } from "@/lib/browse/types"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
+import { RESOLUTION_BADGES } from "./feedback-badges"
+import { FixHistory, HatHistory } from "./IterationHistory"
+import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
 
 function titleCase(s: string): string {
 	return s
 		.split("-")
 		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
 		.join(" ")
+}
+
+/** Split a `unit-NNN-slug` name into a "Unit NNN" badge label + a
+ *  title-cased name. Falls back to the whole name when it doesn't match. */
+function splitUnitName(name: string): { badge: string | null; title: string } {
+	const m = name.match(/^unit-(\d+)-(.+)$/)
+	if (m) return { badge: `Unit ${m[1]}`, title: titleCase(m[2]) }
+	return { badge: null, title: titleCase(name) }
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -33,22 +49,38 @@ interface Props {
 	unit: HaikuUnit
 	stageName: string
 	intentSlug: string
+	/** Intent title for the breadcrumb. */
+	intentTitle: string
+	/** Intent mode (autopilot drops the user gate) — drives the expected
+	 *  review/approval role set in the sign-offs section. */
+	intentMode: string
+	/** Whether the intent is v4+ (has the review/approval model). v3 units
+	 *  predate it — the sign-offs section then shows only what's stamped
+	 *  rather than fabricating a matrix of never-signed gates. */
+	schemaIsV4: boolean
 	provider: BrowseProvider
 	assets?: HaikuAsset[]
 	host?: string
 	feedback?: HaikuFeedback[]
+	/** Back to the stage view (deselect the unit). */
 	onBack: () => void
+	/** Back to the intent overview (deselect unit + collapse the stage). */
+	onBackToIntent: () => void
 }
 
 export function UnitDetailView({
 	unit,
 	stageName,
 	intentSlug,
+	intentMode,
 	provider,
 	assets = [],
 	host,
 	feedback = [],
 	onBack,
+	onBackToIntent,
+	intentTitle,
+	schemaIsV4,
 }: Props) {
 	const checkedCount = unit.criteria.filter((c) => c.checked).length
 	const totalCriteria = unit.criteria.length
@@ -63,21 +95,49 @@ export function UnitDetailView({
 
 	return (
 		<div className="mx-auto max-w-4xl px-4 py-8 lg:py-12">
-			{/* Breadcrumb */}
-			<button
-				type="button"
-				onClick={onBack}
-				className="mb-4 text-sm text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white"
-			>
-				&larr; Back to {titleCase(stageName)}
-			</button>
+			{/* Breadcrumb — Intent › Stage › Unit, the first two clickable so
+			    you can jump straight back to the intent overview or the stage
+			    without bouncing through the portfolio. */}
+			<nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-stone-500 dark:text-stone-400">
+				<button
+					type="button"
+					onClick={onBackToIntent}
+					className="hover:text-stone-900 dark:hover:text-white"
+				>
+					{intentTitle}
+				</button>
+				<span className="text-stone-300 dark:text-stone-600">›</span>
+				<button
+					type="button"
+					onClick={onBack}
+					className="hover:text-stone-900 dark:hover:text-white"
+				>
+					{titleCase(stageName)}
+				</button>
+				<span className="text-stone-300 dark:text-stone-600">›</span>
+				<span className="text-stone-700 dark:text-stone-300">
+					{splitUnitName(unit.name).badge ?? titleCase(unit.name)}
+				</span>
+			</nav>
 
 			{/* Header */}
 			<header className="mb-8">
 				<div className="flex items-center gap-3">
-					<h1 className="text-2xl font-bold tracking-tight">
-						{titleCase(unit.name)}
-					</h1>
+					{(() => {
+						const { badge, title } = splitUnitName(unit.name)
+						return (
+							<div className="flex items-center gap-2 min-w-0">
+								{badge && (
+									<span className="flex-shrink-0 rounded-md bg-stone-100 px-2 py-1 font-mono text-xs font-medium text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+										{badge}
+									</span>
+								)}
+								<h1 className="truncate text-2xl font-bold tracking-tight">
+									{title}
+								</h1>
+							</div>
+						)
+					})()}
 					<StatusBadge status={unit.status} />
 				</div>
 				<p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
@@ -199,6 +259,13 @@ export function UnitDetailView({
 				</section>
 			)}
 
+			{/* Review + approval sign-offs — every expected role, signed or not */}
+			<SignOffsSection
+				unit={unit}
+				intentMode={intentMode}
+				schemaIsV4={schemaIsV4}
+			/>
+
 			{/* Feedback targeting this unit */}
 			{feedback.length > 0 && (
 				<section className="mb-8">
@@ -232,52 +299,24 @@ export function UnitDetailView({
 				</section>
 			)}
 
+			{/* Inputs (artifacts this unit consumes) */}
+			{unit.inputs.length > 0 && (
+				<ArtifactsSection
+					noun="Input"
+					paths={unit.inputs}
+					intentSlug={intentSlug}
+					provider={provider}
+				/>
+			)}
+
 			{/* Outputs (artifacts produced by this unit) */}
 			{unit.outputs.length > 0 && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Outputs
-					</h2>
-					<div className="space-y-1">
-						{unit.outputs.map((output) => {
-							const fileName = output.split("/").pop() || output
-							const dirPath = output.includes("/")
-								? output.substring(0, output.lastIndexOf("/"))
-								: ""
-							return (
-								<div
-									key={output}
-									className="flex items-center gap-3 rounded-lg border border-stone-200 px-4 py-2.5 dark:border-stone-700"
-								>
-									<svg
-										className="h-4 w-4 flex-shrink-0 text-teal-500"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke="currentColor"
-										aria-hidden="true"
-									>
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={2}
-											d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-										/>
-									</svg>
-									<div className="min-w-0">
-										<p className="truncate text-sm font-mono text-stone-700 dark:text-stone-300">
-											{fileName}
-										</p>
-										{dirPath && (
-											<p className="truncate text-xs text-stone-400">
-												{dirPath}
-											</p>
-										)}
-									</div>
-								</div>
-							)
-						})}
-					</div>
-				</section>
+				<ArtifactsSection
+					noun="Output"
+					paths={unit.outputs}
+					intentSlug={intentSlug}
+					provider={provider}
+				/>
 			)}
 
 			{/* Referenced Artifacts (from unit refs) */}
@@ -362,6 +401,9 @@ export function UnitDetailView({
 				</section>
 			)}
 
+			{/* Hat history — per-hat handoffs as the unit walked its sequence */}
+			<HatHistory iterations={unit.raw.iterations} />
+
 			{/* Frontmatter Debug (collapsed) */}
 			{Object.keys(unit.raw).length > 0 && (
 				<details className="mt-8">
@@ -388,6 +430,9 @@ function UnitFeedbackCard({ fb }: { fb: HaikuFeedback }) {
 	const statusClass = isClosed
 		? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
 		: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+	const resolutionBadge = fb.resolution
+		? RESOLUTION_BADGES[fb.resolution]
+		: null
 	return (
 		<div
 			className={`rounded-lg border ${
@@ -412,6 +457,14 @@ function UnitFeedbackCard({ fb }: { fb: HaikuFeedback }) {
 					>
 						{statusLabel}
 					</span>
+					{resolutionBadge && (
+						<span
+							className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${resolutionBadge.classes}`}
+							title={resolutionBadge.tooltip}
+						>
+							{resolutionBadge.label}
+						</span>
+					)}
 					{fb.origin && (
 						<span className="rounded bg-stone-50 dark:bg-stone-900 px-1.5 py-0.5 text-[10px] font-mono text-stone-500 dark:text-stone-400">
 							{fb.origin}
@@ -448,6 +501,7 @@ function UnitFeedbackCard({ fb }: { fb: HaikuFeedback }) {
 							</div>
 						</div>
 					)}
+					<FixHistory iterations={fb.raw.iterations} />
 				</div>
 			)}
 		</div>
@@ -464,6 +518,7 @@ const TEXT_EXTENSIONS = new Set([
 	"csv",
 	"xml",
 	"html",
+	"feature",
 ])
 
 function isTextFile(path: string): boolean {
@@ -716,6 +771,8 @@ function DocModal({
 								{displayContent}
 							</ReactMarkdown>
 						</div>
+					) : filePath.endsWith(".feature") ? (
+						<GherkinView content={content} />
 					) : (
 						<pre className="overflow-x-auto text-xs text-stone-600 dark:text-stone-400">
 							{content}
@@ -724,6 +781,111 @@ function DocModal({
 				</div>
 			</div>
 		</div>
+	)
+}
+
+/** Block keywords that head a line (`Feature:`, `Scenario:`, …). */
+const GHERKIN_BLOCK_KEYWORDS = [
+	"Feature",
+	"Background",
+	"Rule",
+	"Scenario Outline",
+	"Scenario Template",
+	"Scenario",
+	"Example",
+	"Examples",
+	"Scenarios",
+]
+/** Step keywords (`Given`, `When`, …) — highlighted, rest of line is plain. */
+const GHERKIN_STEP_KEYWORDS = ["Given", "When", "Then", "And", "But", "*"]
+
+/** Lightweight, dependency-free Gherkin highlighter. Gherkin is line-oriented
+ *  (keywords head the line), so we colorize per line: tags, comments, block
+ *  keywords (`Feature:`/`Scenario:`), step keywords (`Given`/`When`/`Then`),
+ *  docstring fences, and data-table rows. Renders inside a <pre> so spacing
+ *  and indentation are preserved. */
+function GherkinView({ content }: { content: string }): React.ReactElement {
+	let inDocString = false
+	const lines = content.replace(/\r\n/g, "\n").split("\n")
+	return (
+		<pre className="overflow-x-auto text-xs leading-relaxed text-stone-700 dark:text-stone-300">
+			{lines.map((line, i) => {
+				// biome-ignore lint/suspicious/noArrayIndexKey: lines are static, render-once, no reordering
+				const key = `${i}`
+				const trimmed = line.trimStart()
+				const indent = line.slice(0, line.length - trimmed.length)
+
+				if (trimmed.startsWith('"""') || trimmed.startsWith("```")) {
+					inDocString = !inDocString
+					return (
+						<div key={key} className="text-stone-400">
+							{line}
+						</div>
+					)
+				}
+				if (inDocString) {
+					return (
+						<div key={key} className="text-emerald-700 dark:text-emerald-400">
+							{line}
+						</div>
+					)
+				}
+				if (trimmed.startsWith("#")) {
+					return (
+						<div key={key} className="text-stone-400 italic">
+							{line}
+						</div>
+					)
+				}
+				if (trimmed.startsWith("@")) {
+					return (
+						<div key={key} className="text-amber-600 dark:text-amber-400">
+							{line}
+						</div>
+					)
+				}
+				if (trimmed.startsWith("|")) {
+					return (
+						<div key={key} className="text-sky-700 dark:text-sky-400">
+							{line}
+						</div>
+					)
+				}
+				const block = GHERKIN_BLOCK_KEYWORDS.find((kw) =>
+					trimmed.startsWith(`${kw}:`),
+				)
+				if (block) {
+					const rest = trimmed.slice(block.length + 1)
+					return (
+						<div key={key}>
+							{indent}
+							<span className="font-semibold text-violet-700 dark:text-violet-400">
+								{block}:
+							</span>
+							<span className="font-medium text-stone-800 dark:text-stone-200">
+								{rest}
+							</span>
+						</div>
+					)
+				}
+				const step = GHERKIN_STEP_KEYWORDS.find(
+					(kw) => trimmed === kw || trimmed.startsWith(`${kw} `),
+				)
+				if (step) {
+					const rest = trimmed.slice(step.length)
+					return (
+						<div key={key}>
+							{indent}
+							<span className="font-semibold text-teal-700 dark:text-teal-400">
+								{step}
+							</span>
+							{rest}
+						</div>
+					)
+				}
+				return <div key={key}>{line === "" ? " " : line}</div>
+			})}
+		</pre>
 	)
 }
 
@@ -757,6 +919,626 @@ function GenericRefItem({ ref_ }: { ref_: string }) {
 					<p className="truncate text-xs text-stone-400">{dirPath}</p>
 				)}
 			</div>
+		</div>
+	)
+}
+
+/** Coerce a unit FM `reviews` / `approvals` value to a record of slots. */
+function recordOf(raw: unknown): Record<string, unknown> {
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
+	return raw as Record<string, unknown>
+}
+
+/** Read a single review/approval slot: present + truthy = signed (the cursor
+ *  only writes a role's slot when it signs); `at` carries the timestamp.
+ *  Witness fields (body_sha256, witnesses[]) are ignored — engine bookkeeping. */
+function slotSignOff(
+	role: string,
+	v: unknown,
+): { role: string; signed: boolean; signedAt: string | null } {
+	const signed = v != null
+	let signedAt: string | null = null
+	if (v && typeof v === "object" && !Array.isArray(v)) {
+		const at = (v as Record<string, unknown>).at
+		if (typeof at === "string") signedAt = at
+	}
+	return { role, signed, signedAt }
+}
+
+/** Map a unit FM record + the full expected role list into ordered sign-off
+ *  entries — signed roles carry a timestamp, expected-but-unsigned roles read
+ *  as pending so a viewer sees who hasn't approved yet. */
+function readSignOffs(
+	raw: unknown,
+	expectedRoles: ReadonlyArray<string>,
+): Array<{ role: string; signed: boolean; signedAt: string | null }> {
+	const record = recordOf(raw)
+	return expectedRoles.map((role) => slotSignOff(role, record[role]))
+}
+
+/** Human label for a review/approval role. Raw role names read fine; we just
+ *  tidy the multi-word engine roles and the special gates. */
+function roleLabel(role: string): string {
+	if (role === "user") return "User"
+	if (role === "quality_gates") return "Quality Gates"
+	if (role === "cross-stage-consistency") return "Cross-stage Consistency"
+	return role
+		.split(/[-_]/)
+		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+		.join(" ")
+}
+
+/**
+ * Per-unit review + approval sign-offs. The cursor stamps `reviews.<role>` as
+ * each pre-execute reviewer signs the spec and `approvals.<role>` as each
+ * post-execute approver signs the work — but only signed roles land in the FM,
+ * so we seed the full expected set (engine roles + the user gate unless
+ * autopilot + any studio agents already seen) and render every one, signed or
+ * pending. That way a viewer sees who hasn't approved yet, not just who has.
+ * Always shown — the engine roles guarantee a non-empty set.
+ */
+function SignOffsSection({
+	unit,
+	intentMode,
+	schemaIsV4,
+}: {
+	unit: HaikuUnit
+	intentMode: string
+	schemaIsV4: boolean
+}) {
+	const isAutopilot = intentMode === "autopilot"
+	const reviewsRaw = recordOf(unit.raw.reviews)
+	const approvalsRaw = recordOf(unit.raw.approvals)
+	// v4 seeds the full expected gate set (so pending roles show); v3 has no
+	// review/approval model, so we only surface what's actually stamped and
+	// hide the section when there's nothing — never fabricate a matrix of
+	// gates a v3 unit never had.
+	const reviewRoles = schemaIsV4
+		? seedRoleList(ENGINE_REVIEW_ROLES, Object.keys(reviewsRaw), isAutopilot)
+		: Object.keys(reviewsRaw)
+	const approvalRoles = schemaIsV4
+		? seedRoleList(
+				ENGINE_APPROVAL_ROLES,
+				Object.keys(approvalsRaw),
+				isAutopilot,
+			)
+		: Object.keys(approvalsRaw)
+	const reviews = readSignOffs(reviewsRaw, reviewRoles)
+	const approvals = readSignOffs(approvalsRaw, approvalRoles)
+	if (reviews.length === 0 && approvals.length === 0) return null
+	return (
+		<section className="mb-8">
+			<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+				Reviews &amp; Approvals
+			</h2>
+			<div className="grid gap-4 sm:grid-cols-2">
+				{reviews.length > 0 && (
+					<SignOffGroup title="Reviews" entries={reviews} />
+				)}
+				{approvals.length > 0 && (
+					<SignOffGroup title="Approvals" entries={approvals} />
+				)}
+			</div>
+		</section>
+	)
+}
+
+function SignOffGroup({
+	title,
+	entries,
+}: {
+	title: string
+	entries: Array<{ role: string; signed: boolean; signedAt: string | null }>
+}) {
+	return (
+		<div className="rounded-xl border border-stone-200 dark:border-stone-700">
+			<div className="border-b border-stone-100 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-stone-400 dark:border-stone-800">
+				{title}
+			</div>
+			<ul className="divide-y divide-stone-100 dark:divide-stone-800">
+				{entries.map(({ role, signed, signedAt }) => (
+					<li
+						key={role}
+						className="flex items-center justify-between gap-3 px-4 py-2.5"
+					>
+						<div className="flex items-center gap-2 min-w-0">
+							<span
+								className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
+									signed
+										? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+										: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+								}`}
+							>
+								{signed ? (
+									<svg
+										className="h-3 w-3"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										aria-hidden="true"
+									>
+										<title>signed</title>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={3}
+											d="M5 13l4 4L19 7"
+										/>
+									</svg>
+								) : (
+									<span
+										className="h-1.5 w-1.5 rounded-full bg-current"
+										aria-hidden="true"
+									/>
+								)}
+							</span>
+							<span className="truncate text-sm text-stone-700 dark:text-stone-300">
+								{roleLabel(role)}
+							</span>
+						</div>
+						<span className="flex-shrink-0 text-xs text-stone-400">
+							{signedAt ? formatDate(signedAt) : signed ? "signed" : "pending"}
+						</span>
+					</li>
+				))}
+			</ul>
+		</div>
+	)
+}
+
+const OUTPUT_IMAGE_EXTS = new Set([
+	"png",
+	"jpg",
+	"jpeg",
+	"gif",
+	"svg",
+	"webp",
+	"avif",
+	"bmp",
+	"ico",
+])
+
+type OutputKind = "image" | "html" | "text" | "other"
+
+/** Classify a unit output by extension. ASCII/binary split: `text` (the
+ *  isTextFile allowlist) and `html` are renderable as text; `image` and
+ *  `other` are binary — `image` previews, `other` downloads. */
+function classifyOutput(path: string): OutputKind {
+	const ext = path.split(".").pop()?.toLowerCase() || ""
+	if (OUTPUT_IMAGE_EXTS.has(ext)) return "image"
+	if (ext === "html" || ext === "htm") return "html"
+	if (isTextFile(path)) return "text"
+	return "other"
+}
+
+function fileNameOf(path: string): string {
+	return path.split("/").pop() || path
+}
+function dirOf(path: string): string {
+	return path.includes("/") ? path.substring(0, path.lastIndexOf("/")) : ""
+}
+
+/**
+ * A unit's intent-relative artifact paths (`.haiku/intents/<slug>/<path>`),
+ * made viewable — used for both `inputs` (consumed) and `outputs` (produced).
+ * Mockups + images get their own "Visual {noun}s" grid (thumbnails open
+ * fullscreen); everything else lists below, clickable to view (text in a doc
+ * modal, binary as a download). HTML renders with relative CSS/images resolved
+ * against the provider, so a wireframe authored as `index.html` +
+ * `./styles.css` renders correctly.
+ */
+function ArtifactsSection({
+	noun,
+	paths,
+	intentSlug,
+	provider,
+}: {
+	/** Singular section noun, e.g. "Output" / "Input". */
+	noun: string
+	paths: string[]
+	intentSlug: string
+	provider: BrowseProvider
+}) {
+	const intentPrefix = `.haiku/intents/${intentSlug}/`
+	const classified = paths.map((path) => ({
+		path,
+		kind: classifyOutput(path),
+	}))
+	const visual = classified.filter(
+		(o) => o.kind === "image" || o.kind === "html",
+	)
+	const files = classified.filter(
+		(o) => o.kind === "text" || o.kind === "other",
+	)
+
+	return (
+		<>
+			{visual.length > 0 && (
+				<section className="mb-8">
+					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+						Visual {noun}s
+					</h2>
+					<div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+						{visual.map((o) =>
+							o.kind === "image" ? (
+								<OutputImageCard
+									key={o.path}
+									path={o.path}
+									repoPath={`${intentPrefix}${o.path}`}
+									provider={provider}
+								/>
+							) : (
+								<OutputHtmlCard
+									key={o.path}
+									path={o.path}
+									repoPath={`${intentPrefix}${o.path}`}
+									baseDir={`${intentPrefix}${dirOf(o.path)}${dirOf(o.path) ? "/" : ""}`}
+									provider={provider}
+								/>
+							),
+						)}
+					</div>
+				</section>
+			)}
+			{files.length > 0 && (
+				<section className="mb-8">
+					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+						{noun}s
+					</h2>
+					<div className="space-y-1">
+						{files.map((o) =>
+							o.kind === "text" ? (
+								<OutputTextItem
+									key={o.path}
+									path={o.path}
+									repoPath={`${intentPrefix}${o.path}`}
+									provider={provider}
+								/>
+							) : (
+								<OutputDownloadItem
+									key={o.path}
+									path={o.path}
+									repoPath={`${intentPrefix}${o.path}`}
+									provider={provider}
+								/>
+							),
+						)}
+					</div>
+				</section>
+			)}
+		</>
+	)
+}
+
+/** Image output — resolves to a data URL (works for a dragged folder and a
+ *  private git repo) and previews it; click to view fullscreen. */
+function OutputImageCard({
+	path,
+	repoPath,
+	provider,
+}: {
+	path: string
+	repoPath: string
+	provider: BrowseProvider
+}) {
+	const [url, setUrl] = useState<string | null>(null)
+	const [full, setFull] = useState(false)
+	useEffect(() => {
+		let cancelled = false
+		provider.resolveAssetUrl?.(repoPath).then((u) => {
+			if (!cancelled) setUrl(u)
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [repoPath, provider])
+	return (
+		<>
+			<button
+				type="button"
+				onClick={() => url && setFull(true)}
+				className="group flex flex-col overflow-hidden rounded-lg border border-stone-200 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
+			>
+				<div className="flex h-[150px] w-full items-center justify-center overflow-hidden bg-stone-50 dark:bg-stone-800/50">
+					{url ? (
+						// biome-ignore lint/performance/noImgElement: data URL from provider-resolved bytes; next/image can't consume a data URL via its loader pipeline
+						<img
+							src={url}
+							alt={fileNameOf(path)}
+							className="h-full w-full object-cover"
+						/>
+					) : (
+						<div className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-teal-500" />
+					)}
+				</div>
+				<div className="border-t border-stone-100 px-3 py-2 dark:border-stone-800">
+					<p className="truncate text-xs font-medium text-stone-700 group-hover:text-teal-600 dark:text-stone-300 dark:group-hover:text-teal-400">
+						{fileNameOf(path)}
+					</p>
+				</div>
+			</button>
+			{full && url && (
+				<OutputOverlay name={fileNameOf(path)} onClose={() => setFull(false)}>
+					{/* biome-ignore lint/performance/noImgElement: data URL */}
+					<img
+						src={url}
+						alt={fileNameOf(path)}
+						className="max-h-[85vh] max-w-[90vw] rounded-lg"
+					/>
+				</OutputOverlay>
+			)}
+		</>
+	)
+}
+
+/** HTML output — reads the source, previews it in a scaled iframe with
+ *  relative assets resolved; click to view fullscreen. */
+function OutputHtmlCard({
+	path,
+	repoPath,
+	baseDir,
+	provider,
+}: {
+	path: string
+	repoPath: string
+	baseDir: string
+	provider: BrowseProvider
+}) {
+	const [html, setHtml] = useState<string | null>(null)
+	const [full, setFull] = useState(false)
+	useEffect(() => {
+		let cancelled = false
+		// Load the source the same way images do — resolveAssetUrl fetches
+		// the raw bytes (a data: URL), which always works. readFile goes
+		// through the git provider's GraphQL `text`, which returns null when
+		// the host flags an HTML file as binary/large, leaving the frame
+		// blank. Fall back to readFile only if the raw path is unavailable.
+		const load = async (): Promise<string | null> => {
+			const url = await provider.resolveAssetUrl?.(repoPath)
+			if (url) {
+				try {
+					return await (await fetch(url)).text()
+				} catch {
+					/* fall through to readFile */
+				}
+			}
+			return provider.readFile(repoPath)
+		}
+		load().then((c) => {
+			if (!cancelled) setHtml(c)
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [repoPath, provider])
+	return (
+		<>
+			<button
+				type="button"
+				onClick={() => html && setFull(true)}
+				className="group flex flex-col overflow-hidden rounded-lg border border-stone-200 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
+			>
+				<div className="relative aspect-[4/3] w-full overflow-hidden bg-white dark:bg-stone-900">
+					{/* The scaled frame mounts once (not swapped in from a
+					    spinner) — an iframe whose parent is reconciled into a
+					    scale() transform via attribute update on a reused node
+					    fails to paint its srcDoc. Mirrors the stage thumbnail,
+					    which renders the frame synchronously. The spinner
+					    overlays while the source loads; html="" keeps the iframe
+					    blank until then, and RenderedHtmlFrame swaps in the
+					    resolved doc on the existing element. */}
+					<div
+						className="absolute inset-0 h-[300%] w-[300%] origin-top-left"
+						style={{ transform: "scale(0.3333)", pointerEvents: "none" }}
+					>
+						<RenderedHtmlFrame
+							html={html ?? ""}
+							baseDir={baseDir}
+							provider={provider}
+							title={fileNameOf(path)}
+							className="h-full w-full border-0"
+						/>
+					</div>
+					{html === null && (
+						<div className="absolute inset-0 flex items-center justify-center">
+							<div className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-teal-500" />
+						</div>
+					)}
+				</div>
+				<div className="border-t border-stone-100 px-3 py-2 dark:border-stone-800">
+					<p className="truncate text-xs font-medium text-stone-700 group-hover:text-teal-600 dark:text-stone-300 dark:group-hover:text-teal-400">
+						{fileNameOf(path)}
+					</p>
+				</div>
+			</button>
+			{full && html && (
+				<OutputOverlay
+					name={fileNameOf(path)}
+					onClose={() => setFull(false)}
+					fill
+				>
+					<RenderedHtmlFrame
+						html={html}
+						baseDir={baseDir}
+						provider={provider}
+						title={fileNameOf(path)}
+						className="h-full w-full flex-1 border-0 bg-white"
+					/>
+				</OutputOverlay>
+			)}
+		</>
+	)
+}
+
+/** Text output — reads the source and opens it in the shared doc modal. */
+function OutputTextItem({
+	path,
+	repoPath,
+	provider,
+}: {
+	path: string
+	repoPath: string
+	provider: BrowseProvider
+}) {
+	const [content, setContent] = useState<string | null>(null)
+	const [open, setOpen] = useState(false)
+	const isMarkdown = path.endsWith(".md")
+	const handleOpen = async () => {
+		if (content === null) {
+			setContent((await provider.readFile(repoPath)) || "(empty)")
+		}
+		setOpen(true)
+	}
+	return (
+		<>
+			<button
+				type="button"
+				onClick={handleOpen}
+				className="flex w-full items-center gap-3 rounded-lg border border-stone-200 px-4 py-2.5 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
+			>
+				<svg
+					className="h-4 w-4 flex-shrink-0 text-teal-500"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					aria-hidden="true"
+				>
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+						d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+					/>
+				</svg>
+				<div className="min-w-0">
+					<p className="truncate text-sm font-mono text-stone-700 dark:text-stone-300">
+						{fileNameOf(path)}
+					</p>
+					{dirOf(path) && (
+						<p className="truncate text-xs text-stone-400">{dirOf(path)}</p>
+					)}
+				</div>
+			</button>
+			{open && content !== null && (
+				<DocModal
+					fileName={fileNameOf(path)}
+					filePath={path}
+					content={content}
+					isMarkdown={isMarkdown}
+					onClose={() => setOpen(false)}
+				/>
+			)}
+		</>
+	)
+}
+
+/** Binary / unrecognized output — resolve to a data URL for download. */
+function OutputDownloadItem({
+	path,
+	repoPath,
+	provider,
+}: {
+	path: string
+	repoPath: string
+	provider: BrowseProvider
+}) {
+	const [url, setUrl] = useState<string | null>(null)
+	useEffect(() => {
+		let cancelled = false
+		provider.resolveAssetUrl?.(repoPath).then((u) => {
+			if (!cancelled) setUrl(u)
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [repoPath, provider])
+	const inner = (
+		<>
+			<svg
+				className="h-4 w-4 flex-shrink-0 text-stone-400"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				aria-hidden="true"
+			>
+				<path
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth={1.5}
+					d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+				/>
+			</svg>
+			<div className="min-w-0">
+				<p className="truncate text-sm font-mono text-stone-700 dark:text-stone-300">
+					{fileNameOf(path)}
+				</p>
+				{dirOf(path) && (
+					<p className="truncate text-xs text-stone-400">{dirOf(path)}</p>
+				)}
+			</div>
+		</>
+	)
+	const cls =
+		"flex items-center gap-3 rounded-lg border border-stone-200 px-4 py-2.5 dark:border-stone-700"
+	return url ? (
+		<a
+			href={url}
+			download={fileNameOf(path)}
+			className={`${cls} hover:border-teal-300`}
+		>
+			{inner}
+		</a>
+	) : (
+		<div className={cls}>{inner}</div>
+	)
+}
+
+/** Fullscreen overlay shell for an output preview (image or HTML). Escape /
+ *  backdrop close. `fill` lays the body out as a full-height column (HTML
+ *  iframe); otherwise it centers (image). */
+function OutputOverlay({
+	name,
+	onClose,
+	children,
+	fill,
+}: {
+	name: string
+	onClose: () => void
+	children: React.ReactNode
+	fill?: boolean
+}) {
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") onClose()
+		}
+		document.addEventListener("keydown", onKey)
+		document.body.style.overflow = "hidden"
+		return () => {
+			document.removeEventListener("keydown", onKey)
+			document.body.style.overflow = ""
+		}
+	}, [onClose])
+	return (
+		<div className="fixed inset-0 z-[100] flex flex-col bg-white dark:bg-stone-950">
+			<div className="flex items-center justify-between border-b border-stone-200 px-4 py-2 dark:border-stone-800">
+				<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
+					{name}
+				</span>
+				<button
+					type="button"
+					onClick={onClose}
+					className="rounded-lg px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+				>
+					Close
+				</button>
+			</div>
+			{fill ? (
+				<div className="flex flex-1 flex-col">{children}</div>
+			) : (
+				<div className="flex flex-1 items-center justify-center overflow-auto p-4">
+					{children}
+				</div>
+			)}
 		</div>
 	)
 }

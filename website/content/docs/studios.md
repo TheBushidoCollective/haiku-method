@@ -8,7 +8,7 @@ A **studio** is a named lifecycle template that defines which stages run and in 
 
 ## How Studios Work
 
-When you create an intent with `/haiku:start`, H·AI·K·U selects or prompts for a studio. The studio determines:
+When you create an intent with `/haiku:haiku-start`, H·AI·K·U selects or prompts for a studio. The studio determines:
 
 - **Which stages** the intent progresses through
 - **Execution mode** — single-stage (all disciplines merged) or multi-stage (sequential progression)
@@ -210,7 +210,7 @@ The loader matches against four identifier fields: directory name, canonical `na
 
 ## Studio Selection During Intent Creation
 
-When you run `/haiku:start`:
+When you run `/haiku:haiku-start`:
 
 1. If `.haiku/settings.yml` has a `studio` field, that studio is used as the default
 2. If auto-detected (git repo → `appdev`, no git → `ideation`), that studio is suggested

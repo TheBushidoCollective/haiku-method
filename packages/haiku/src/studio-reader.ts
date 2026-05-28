@@ -72,7 +72,51 @@ export interface HatDef {
 	agent_type?: string // e.g., "general-purpose", "plan", custom
 	model?: string // e.g., "opus", "sonnet", "haiku"
 	run_quality_gates?: boolean // when true, advance_hat from this hat runs the unit's quality_gates and auto-rejects (bolt+1) on failure
+	// Loop role within the plan→do→verify sequence. Drives reject routing:
+	// a reject bounces to the nearest preceding `build` hat (the doer),
+	// skipping `verify` hats which can only judge, not fix. Optional —
+	// stages without role markers keep the legacy step-back-one routing.
+	role?: "plan" | "build" | "verify"
 	raw: string // full file content
+}
+
+/** Coerce a frontmatter `role:` value to the HatDef union, or undefined if
+ *  absent/unrecognized (so an unmarked or typo'd role degrades to the
+ *  legacy routing rather than mis-classifying the hat). */
+function parseHatRole(value: unknown): "plan" | "build" | "verify" | undefined {
+	return value === "plan" || value === "build" || value === "verify"
+		? value
+		: undefined
+}
+
+/**
+ * Three-tier hat resolution cascade. Load order (least-specific first; later
+ * entries overwrite earlier ones, so more-specific wins):
+ *
+ *   1. `{plugin}/hats/`                                    ── global tier (engine defaults)
+ *   2. `{project}/.haiku/hats/`                            ── global project overrides
+ *   3. `{plugin}/studios/{studio}/hats/`                   ── studio tier
+ *   4. `{project}/.haiku/studios/{studio}/hats/`           ── studio project overrides
+ *   5. `{plugin}/studios/{studio}/stages/{stage}/hats/`    ── stage tier
+ *   6. `{project}/.haiku/studios/{studio}/stages/{stage}/hats/` ── stage project overrides
+ *
+ * Hats that don't vary per-studio (classifier, feedback-assessor) live at
+ * the global tier — one file, every stage in every studio inherits. A
+ * studio that genuinely needs a custom classifier drops one at the studio
+ * tier; a stage that needs an even-more-specific variant drops one at
+ * stage tier. Project `.haiku/` overrides the plugin underlay at every tier.
+ */
+function hatDirCascade(studio: string, stage: string): string[] {
+	const project = join(process.cwd(), ".haiku")
+	const plugin = resolvePluginRoot()
+	return [
+		join(plugin, "hats"),
+		join(project, "hats"),
+		join(plugin, "studios", studio, "hats"),
+		join(project, "studios", studio, "hats"),
+		join(plugin, "studios", studio, "stages", stage, "hats"),
+		join(project, "studios", studio, "stages", stage, "hats"),
+	]
 }
 
 export function readHatDefs(
@@ -82,10 +126,7 @@ export function readHatDefs(
 	validateIdentifier(studio, "studio")
 	validateIdentifier(stage, "stage")
 	const hats: Record<string, HatDef> = {}
-	const paths = studioSearchPaths()
-	// Reverse so plugin loads first, then project overwrites
-	for (const base of [...paths].reverse()) {
-		const hatsDir = join(base, studio, "stages", stage, "hats")
+	for (const hatsDir of hatDirCascade(studio, stage)) {
 		if (!existsSync(hatsDir)) continue
 		for (const f of readdirSync(hatsDir).filter((f) => f.endsWith(".md"))) {
 			const raw = readFileSync(join(hatsDir, f), "utf8")
@@ -95,6 +136,7 @@ export function readHatDefs(
 				agent_type: (data.agent_type as string) || undefined,
 				model: (data.model as string) || undefined,
 				run_quality_gates: data.run_quality_gates === true ? true : undefined,
+				role: parseHatRole(data.role),
 				raw,
 			}
 		}
@@ -102,7 +144,95 @@ export function readHatDefs(
 	return hats
 }
 
-/** Read review agent definitions for a stage (project overrides plugin for same-named agents) */
+/**
+ * Resolve the absolute on-disk path for a single hat mandate file, walking
+ * the same cascade as `readHatDefs` and returning the most-specific match.
+ * Used by FB / unit dispatch sites that need to tell a subagent the exact
+ * file to Read. Returns null if no tier defines the hat.
+ */
+export function resolveHatPath(
+	studio: string,
+	stage: string,
+	hat: string,
+): string | null {
+	validateIdentifier(studio, "studio")
+	validateIdentifier(stage, "stage")
+	validateIdentifier(hat, "hat")
+	let found: string | null = null
+	for (const hatsDir of hatDirCascade(studio, stage)) {
+		const candidate = join(hatsDir, `${hat}.md`)
+		if (existsSync(candidate)) found = candidate
+	}
+	return found
+}
+
+/**
+ * Resolve a fix-loop-scoped hat mandate. A fix-loop hat corrects ONE
+ * finding through its lens — a different job than the production hat's
+ * author-from-scratch mandate (the `product` / `specification` hats'
+ * production mandates walk the agent through user-collaboration and
+ * blank-page authoring, which misdirects when the job is a one-line
+ * correction). A hat in a stage's `fix_hats:` chain MAY ship a
+ * fix-scoped variant at `stages/<stage>/fix-hats/<hat>.md` (project
+ * `.haiku/` override beats the plugin underlay); when present it wins
+ * over the production `hats/<hat>.md`. Falls back to `resolveHatPath`
+ * so a hat without a fix variant safely reuses its production mandate.
+ */
+export function resolveFixHatPath(
+	studio: string,
+	stage: string,
+	hat: string,
+): string | null {
+	validateIdentifier(studio, "studio")
+	validateIdentifier(stage, "stage")
+	validateIdentifier(hat, "hat")
+	const project = join(process.cwd(), ".haiku")
+	const plugin = resolvePluginRoot()
+	let found: string | null = null
+	for (const dir of [
+		join(plugin, "studios", studio, "stages", stage, "fix-hats"),
+		join(project, "studios", studio, "stages", stage, "fix-hats"),
+	]) {
+		const candidate = join(dir, `${hat}.md`)
+		if (existsSync(candidate)) found = candidate
+	}
+	return found ?? resolveHatPath(studio, stage, hat)
+}
+
+/**
+ * Three-tier stage-review-agent resolution cascade (mirrors the hat
+ * cascade). Load order (least-specific first, more-specific overrides):
+ *
+ *   1. `{plugin}/review-agents/`                                ── global
+ *   2. `{project}/.haiku/review-agents/`                        ── global project override
+ *   3. `{plugin}/studios/{studio}/review-agents/`               ── studio
+ *   4. `{project}/.haiku/studios/{studio}/review-agents/`       ── studio project override
+ *   5. `{plugin}/studios/{studio}/stages/{stage}/review-agents/`── stage
+ *   6. `{project}/.haiku/studios/{studio}/stages/{stage}/review-agents/`── stage project override
+ *
+ * Intent-completion review agents (studio-scope, runs once at intent
+ * close) live in a separate directory — `intent-review-agents/` — so
+ * the studio tier above is safe to use for cross-stage defaults
+ * without double-dispatching.
+ *
+ * Same principle as the hat cascade: project `.haiku/` always beats the
+ * plugin underlay at each tier, more-specific beats less-specific.
+ */
+function reviewAgentDirCascade(studio: string, stage: string): string[] {
+	const project = join(process.cwd(), ".haiku")
+	const plugin = resolvePluginRoot()
+	return [
+		join(plugin, "review-agents"),
+		join(project, "review-agents"),
+		join(plugin, "studios", studio, "review-agents"),
+		join(project, "studios", studio, "review-agents"),
+		join(plugin, "studios", studio, "stages", stage, "review-agents"),
+		join(project, "studios", studio, "stages", stage, "review-agents"),
+	]
+}
+
+/** Read review agent definitions for a stage (cascade: global → studio → stage,
+ *  with project/.haiku override at each tier). */
 export function readReviewAgentDefs(
 	studio: string,
 	stage: string,
@@ -110,10 +240,7 @@ export function readReviewAgentDefs(
 	validateIdentifier(studio, "studio")
 	validateIdentifier(stage, "stage")
 	const agents: Record<string, string> = {}
-	const paths = studioSearchPaths()
-	// Reverse so plugin loads first, then project overwrites
-	for (const base of [...paths].reverse()) {
-		const agentsDir = join(base, studio, "stages", stage, "review-agents")
+	for (const agentsDir of reviewAgentDirCascade(studio, stage)) {
 		if (!existsSync(agentsDir)) continue
 		for (const f of readdirSync(agentsDir).filter((f) => f.endsWith(".md"))) {
 			agents[f.replace(/\.md$/, "")] = readFileSync(join(agentsDir, f), "utf8")
@@ -122,7 +249,8 @@ export function readReviewAgentDefs(
 	return agents
 }
 
-/** Return review agent NAME → FILE PATH mapping (project overrides plugin). Subagent reads the file itself. */
+/** Return review agent NAME → FILE PATH mapping (same cascade as
+ *  `readReviewAgentDefs`). Subagent reads the file itself. */
 export function readReviewAgentPaths(
 	studio: string,
 	stage: string,
@@ -130,8 +258,7 @@ export function readReviewAgentPaths(
 	validateIdentifier(studio, "studio")
 	validateIdentifier(stage, "stage")
 	const agents: Record<string, string> = {}
-	for (const base of [...studioSearchPaths()].reverse()) {
-		const agentsDir = join(base, studio, "stages", stage, "review-agents")
+	for (const agentsDir of reviewAgentDirCascade(studio, stage)) {
 		if (!existsSync(agentsDir)) continue
 		for (const f of readdirSync(agentsDir).filter((f) => f.endsWith(".md"))) {
 			agents[f.replace(/\.md$/, "")] = join(agentsDir, f)
@@ -141,40 +268,251 @@ export function readReviewAgentPaths(
 }
 
 /**
- * Studio-level review agents live at `plugin/studios/{studio}/review-agents/*.md`
- * (NOT per-stage). They run once at intent completion, after the final
- * stage gate passes but before `intent_complete`. Their scope is the whole
- * intent, not a single stage. Project overrides plugin. Subagent reads
- * each file. Returns name → absolute path.
+ * Resolve the absolute on-disk path for a single stage-review-agent
+ * mandate file, walking the same cascade as `readReviewAgentDefs` /
+ * `readReviewAgentPaths`. Returns the most-specific match (more-specific
+ * tier wins), or null if no tier defines the agent. Mirrors
+ * `resolveHatPath` for the review-agent cascade.
+ */
+export function resolveReviewAgentPath(
+	studio: string,
+	stage: string,
+	agent: string,
+): string | null {
+	validateIdentifier(studio, "studio")
+	validateIdentifier(stage, "stage")
+	validateIdentifier(agent, "agent")
+	let found: string | null = null
+	for (const agentsDir of reviewAgentDirCascade(studio, stage)) {
+		const candidate = join(agentsDir, `${agent}.md`)
+		if (existsSync(candidate)) found = candidate
+	}
+	return found
+}
+
+/**
+ * Resolve a discovery template through the project→plugin cascade
+ * (`studios/{studio}/stages/{stage}/discovery/{name}.md`). Project
+ * `.haiku/` overrides the plugin underlay. Returns the absolute path or
+ * null. Mirrors `resolveReviewAgentPath`; used by `haiku_read_discovery`.
+ */
+export function resolveDiscoveryTemplatePath(
+	studio: string,
+	stage: string,
+	name: string,
+): string | null {
+	validateIdentifier(studio, "studio")
+	validateIdentifier(stage, "stage")
+	validateIdentifier(name, "discovery template")
+	// studioSearchPaths() is [project/.haiku/studios, plugin/studios] —
+	// project FIRST. Take the first hit so a project override wins.
+	for (const base of studioSearchPaths()) {
+		const candidate = join(
+			base,
+			studio,
+			"stages",
+			stage,
+			"discovery",
+			`${name}.md`,
+		)
+		if (existsSync(candidate)) return candidate
+	}
+	return null
+}
+
+/**
+ * Resolve an output template through the project→plugin cascade
+ * (`studios/{studio}/stages/{stage}/outputs/{name}.md`). Project
+ * `.haiku/` overrides the plugin underlay. Returns the absolute path or
+ * null. Used by `haiku_read_output`.
+ */
+export function resolveOutputTemplatePath(
+	studio: string,
+	stage: string,
+	name: string,
+): string | null {
+	validateIdentifier(studio, "studio")
+	validateIdentifier(stage, "stage")
+	validateIdentifier(name, "output template")
+	for (const base of studioSearchPaths()) {
+		const candidate = join(
+			base,
+			studio,
+			"stages",
+			stage,
+			"outputs",
+			`${name}.md`,
+		)
+		if (existsSync(candidate)) return candidate
+	}
+	return null
+}
+
+/**
+ * Studio-level intent-completion review agents live at
+ * `plugin/studios/{studio}/intent-review-agents/*.md` (NOT per-stage).
+ * They run once at intent completion, after the final stage gate passes
+ * but before `intent_complete`. Their scope is the whole intent, not a
+ * single stage. Subagent reads each file. Returns name → absolute path.
+ *
+ * Two-tier cascade (more-specific wins): a GLOBAL tier at
+ * `{plugin}/intent-review-agents/*.md` (sibling of `studios/`, the same
+ * shape as the global `hats/` and `review-agents/` tiers) is read first,
+ * then the per-studio tier overrides it by agent name. Global agents
+ * apply to every studio unless a studio ships its own file of the same
+ * name. Project `.haiku/` overrides plugin at each tier. This is how
+ * `delivery-verifier` (a CI/PR-green gate that SKIPs gracefully when
+ * there's no remote) reaches every studio from one source.
+ *
+ * The directory was renamed from `review-agents/` to `intent-review-agents/`
+ * (2026-05-18) to free the studio-level `review-agents/` slot for the
+ * stage-review cascade — without the rename, every stage's review would
+ * inherit the studio-level intent-completion agents as defaults, which
+ * is exactly the double-dispatch we needed to avoid.
  */
 export function readStudioReviewAgentPaths(
 	studio: string,
 ): Record<string, string> {
 	validateIdentifier(studio, "studio")
 	const agents: Record<string, string> = {}
-	for (const base of [...studioSearchPaths()].reverse()) {
-		const agentsDir = join(base, studio, "review-agents")
-		if (!existsSync(agentsDir)) continue
-		for (const f of readdirSync(agentsDir).filter((f) => f.endsWith(".md"))) {
-			agents[f.replace(/\.md$/, "")] = join(agentsDir, f)
+	// plugin-first so project overrides (last write wins).
+	const bases = [...studioSearchPaths()].reverse()
+	const collect = (dir: string) => {
+		if (!existsSync(dir)) return
+		for (const f of readdirSync(dir).filter((f) => f.endsWith(".md"))) {
+			agents[f.replace(/\.md$/, "")] = join(dir, f)
 		}
 	}
+	// Global tier (sibling of studios/) — lowest precedence.
+	for (const base of bases) collect(join(base, "..", "intent-review-agents"))
+	// Studio tier — overrides global by agent name.
+	for (const base of bases) collect(join(base, studio, "intent-review-agents"))
 	return agents
 }
 
+// ── Studio-asset body readers (resolve + FM-strip → body | null) ─────
+//
+// Single resolution path for studio definitions: the `haiku_read_*`
+// tool handlers AND the build-time snapshot (`studioReadRef`) both call
+// these, so the tool and the snapshotted prompt can never drift. Each
+// resolves through the project→plugin cascade and returns the
+// FM-stripped body (engine frontmatter is not for the agent), or null
+// when the asset doesn't exist.
+
+/** Strip FM from a resolved path; null when absent or empty. */
+function readBodyAt(path: string | null): string | null {
+	if (!path || !existsSync(path)) return null
+	const { body } = parseFrontmatter(readFileSync(path, "utf8"))
+	const trimmed = (body || "").trim()
+	return trimmed || null
+}
+
+export function readHatBody(
+	studio: string,
+	stage: string,
+	hat: string,
+	fix = false,
+): string | null {
+	return readBodyAt(
+		fix
+			? resolveFixHatPath(studio, stage, hat)
+			: resolveHatPath(studio, stage, hat),
+	)
+}
+
+export function readReviewAgentBody(
+	studio: string,
+	stage: string | undefined,
+	role: string,
+): string | null {
+	const path = stage
+		? resolveReviewAgentPath(studio, stage, role)
+		: (readStudioReviewAgentPaths(studio)[role] ?? null)
+	return readBodyAt(path)
+}
+
+export function readDiscoveryBody(
+	studio: string,
+	stage: string,
+	name: string,
+): string | null {
+	return readBodyAt(resolveDiscoveryTemplatePath(studio, stage, name))
+}
+
+export function readOutputBody(
+	studio: string,
+	stage: string,
+	name: string,
+): string | null {
+	return readBodyAt(resolveOutputTemplatePath(studio, stage, name))
+}
+
+export function readPhaseBody(
+	studio: string,
+	stage: string,
+	phase: string,
+): string | null {
+	const override = readPhaseOverride(studio, stage, phase)
+	const trimmed = (override?.body || "").trim()
+	return trimmed || null
+}
+
+export function readStageBody(studio: string, stage: string): string | null {
+	const def = readStageDef(studio, stage)
+	const trimmed = (def?.body || "").trim()
+	return trimmed || null
+}
+
+/** Intent-scope studio fix-hat mandate (studios/{studio}/fix-hats/{hat}.md),
+ *  FM-stripped. The intent-completion fix loop uses these; haiku_read_hat
+ *  is stage-scoped and doesn't cover them. */
+export function readStudioFixHatBody(
+	studio: string,
+	hat: string,
+): string | null {
+	return readBodyAt(readStudioFixHatPaths(studio)[hat] ?? null)
+}
+
 /**
- * Studio-level fix hats live at `plugin/studios/{studio}/fix-hats/*.md`
- * (NOT per-stage). They are dispatched against intent-scope feedback
+ * Two-tier studio fix-hat cascade (mirrors the global→studio shape of
+ * the hat / review-agent cascades). Load order, least-specific first
+ * (later entries override earlier by hat name):
+ *
+ *   1. `{plugin}/fix-hats/`                          ── global
+ *   2. `{project}/.haiku/fix-hats/`                  ── global project override
+ *   3. `{plugin}/studios/{studio}/fix-hats/`         ── studio
+ *   4. `{project}/.haiku/studios/{studio}/fix-hats/` ── studio project override
+ *
+ * The global tier lets a fix-hat that's identical across every studio
+ * (e.g. `validator`, the intent-completion fix verifier) live in ONE
+ * file instead of N copies; a studio that needs a tailored mandate drops
+ * `studios/{studio}/fix-hats/{hat}.md` and it wins by name.
+ */
+function fixHatDirCascade(studio: string): string[] {
+	const project = join(process.cwd(), ".haiku")
+	const plugin = resolvePluginRoot()
+	return [
+		join(plugin, "fix-hats"),
+		join(project, "fix-hats"),
+		join(plugin, "studios", studio, "fix-hats"),
+		join(project, "studios", studio, "fix-hats"),
+	]
+}
+
+/**
+ * Studio-level fix hats live at `plugin/fix-hats/*.md` (global) or
+ * `plugin/studios/{studio}/fix-hats/*.md` (studio override), NOT
+ * per-stage. They are dispatched against intent-scope feedback
  * produced by the studio-level review agents. They run at intent
  * completion time to reconcile cross-stage artifacts against studio-wide
- * standards — different mandate than stage-owned hats. Project overrides
- * plugin. Returns name → HatDef (content + agent_type + model).
+ * standards — different mandate than stage-owned hats. Resolved via the
+ * `fixHatDirCascade` (global → studio, project overrides plugin at each
+ * tier). Returns name → HatDef (content + agent_type + model).
  */
 export function readStudioFixHatDefs(studio: string): Record<string, HatDef> {
 	validateIdentifier(studio, "studio")
 	const hats: Record<string, HatDef> = {}
-	for (const base of [...studioSearchPaths()].reverse()) {
-		const hatsDir = join(base, studio, "fix-hats")
+	for (const hatsDir of fixHatDirCascade(studio)) {
 		if (!existsSync(hatsDir)) continue
 		for (const f of readdirSync(hatsDir).filter((f) => f.endsWith(".md"))) {
 			const raw = readFileSync(join(hatsDir, f), "utf8")
@@ -183,6 +521,7 @@ export function readStudioFixHatDefs(studio: string): Record<string, HatDef> {
 				content: body,
 				agent_type: (data.agent_type as string) || undefined,
 				model: (data.model as string) || undefined,
+				role: parseHatRole(data.role),
 				raw,
 			}
 		}
@@ -196,8 +535,7 @@ export function readStudioFixHatDefs(studio: string): Record<string, HatDef> {
 export function readStudioFixHatPaths(studio: string): Record<string, string> {
 	validateIdentifier(studio, "studio")
 	const hats: Record<string, string> = {}
-	for (const base of [...studioSearchPaths()].reverse()) {
-		const hatsDir = join(base, studio, "fix-hats")
+	for (const hatsDir of fixHatDirCascade(studio)) {
 		if (!existsSync(hatsDir)) continue
 		for (const f of readdirSync(hatsDir).filter((f) => f.endsWith(".md"))) {
 			hats[f.replace(/\.md$/, "")] = join(hatsDir, f)
@@ -555,13 +893,21 @@ function resolveArtifactPath(
 	intentDir: string,
 	intentSlug: string,
 ): string {
-	// Location templates look like: .haiku/intents/{intent-slug}/stages/design/DESIGN-BRIEF.md
-	// or: .haiku/intents/{intent-slug}/knowledge/DESIGN-TOKENS.md
-	// We need to resolve relative to the intent dir
-	const relativePath = locationTemplate
-		.replace(/^\.haiku\/intents\/\{intent-slug\}\//, "")
-		.replace(/\{intent-slug\}/g, intentSlug)
-	return join(intentDir, relativePath)
+	// Location templates take two shapes:
+	//   • Intent-scoped (scope: intent|stage): `.haiku/intents/{intent-slug}/…`
+	//     — resolve relative to the intent dir.
+	//   • Project-scoped (scope: project): `.haiku/knowledge/…` — long-lived
+	//     repo knowledge that persists across intents, anchored at the repo
+	//     root, NOT under the intent dir. Resolve relative to `process.cwd()`
+	//     (the same base the cursor's discovery existence check uses).
+	const withSlug = locationTemplate.replace(/\{intent-slug\}/g, intentSlug)
+	const intentPrefix = `.haiku/intents/${intentSlug}/`
+	if (withSlug.startsWith(intentPrefix)) {
+		return join(intentDir, withSlug.slice(intentPrefix.length))
+	}
+	if (withSlug.startsWith("/")) return withSlug
+	// Repo-root-relative (project-scope, or any non-intent `.haiku/` path).
+	return join(process.cwd(), withSlug)
 }
 
 /** Studio metadata. `dir` is the stable on-disk identifier; `name` is the canonical
@@ -675,8 +1021,9 @@ export function resolveStudio(identifier: string): StudioInfo | null {
 	return null
 }
 
-/** Read a phase override file for a stage (e.g. ELABORATION.md, EXECUTION.md).
- *  Returns frontmatter + body, or null if no override exists. */
+/** Read a stage's phase-guidance file (today only ELABORATION.md — additive
+ *  prompt content, not an engine override). Returns frontmatter + body, or
+ *  null if the stage ships none. */
 export function readPhaseOverride(
 	studio: string,
 	stage: string,
@@ -698,22 +1045,6 @@ export function readPhaseOverride(
 		}
 	}
 	return null
-}
-
-/** Read operation definitions for a studio (project overrides plugin for same-named ops) */
-export function readOperationDefs(studio: string): Record<string, string> {
-	validateIdentifier(studio, "studio")
-	const ops: Record<string, string> = {}
-	const paths = studioSearchPaths()
-	// Reverse so plugin loads first, then project overwrites
-	for (const base of [...paths].reverse()) {
-		const opsDir = join(base, studio, "operations")
-		if (!existsSync(opsDir)) continue
-		for (const f of readdirSync(opsDir).filter((f) => f.endsWith(".md"))) {
-			ops[f.replace(/\.md$/, "")] = readFileSync(join(opsDir, f), "utf8")
-		}
-	}
-	return ops
 }
 
 /** Read reflection dimension definitions for a studio (project overrides plugin for same-named dims) */

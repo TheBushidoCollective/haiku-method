@@ -42,7 +42,33 @@ export const HAIKU_AWAIT_GATE_INPUT_SCHEMA = Type.Object(
 		session_id: Type.Optional(
 			Type.String({
 				description:
-					"Override the session ID to await. Defaults to the gate_review_session_id persisted on the stage's state.json by haiku_run_next.",
+					"Override the session ID to await. When omitted, the live review session for this intent is resolved from the in-memory registry (haiku_run_next passes it explicitly on the inline path). No session id is persisted to the repo.",
+			}),
+		),
+		gate_context: Type.Optional(
+			Type.String({
+				description:
+					"What this gate advances on approval — intent_completion | intent_review | elaborate_to_execute | stage_gate. Passed by haiku_run_next on the inline path so post-decision routing needs no repo-persisted pointer. Defaults to stage_gate when omitted.",
+			}),
+		),
+		// string-or-null: use the JSONSchema `type: [...]` array form (via
+		// Type.Unsafe) rather than `Type.Union([String, Null])`. A union emits
+		// `anyOf: [...]` with NO top-level `type`, which trips the server-tools
+		// assertion that every inputSchema property carries a `type` (and is the
+		// multi-type pattern the schema rule mandates). Static<> still resolves
+		// to `string | null`.
+		next_stage: Type.Optional(
+			Type.Unsafe<string | null>({
+				type: ["string", "null"],
+				description:
+					"Stage to advance to on approval (non-final stage gate), or null. Passed by haiku_run_next on the inline path.",
+			}),
+		),
+		next_phase: Type.Optional(
+			Type.Unsafe<string | null>({
+				type: ["string", "null"],
+				description:
+					"Phase to advance to on approval (spec / intent_review gates), or null. Passed by haiku_run_next on the inline path.",
 			}),
 		),
 		auto_open: Type.Optional(

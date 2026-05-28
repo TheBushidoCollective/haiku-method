@@ -8,12 +8,18 @@
 // false-positive on legitimate edits to non-status fields.
 
 import assert from "node:assert"
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { guardWorkflowFields } from "../src/hooks/guard-workflow-fields.ts"
 
 const tmp = mkdtempSync(join(tmpdir(), "haiku-guard-test-"))
+// The hook's project-scope gate (`isHaikuProject()`) early-returns when no
+// `.haiku/` exists at the repo root. The boundary-enforcement tests below
+// all assume the hook is firing, so seed an empty `.haiku/` in the tmp cwd
+// to satisfy the gate. The standalone "no .haiku/ → no-op" coverage lives
+// in `hooks-project-scope-gate.test.mjs`.
+mkdirSync(join(tmp, ".haiku"), { recursive: true })
 const origCwd = process.cwd()
 process.chdir(tmp)
 

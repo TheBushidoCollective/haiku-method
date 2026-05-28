@@ -26,7 +26,13 @@ async function withEnv(overrides, fn) {
 	const originalEnv = { ...process.env }
 	// Scrub any OTEL_ or CLAUDE_CODE_ENABLE_TELEMETRY first
 	for (const k of Object.keys(process.env)) {
-		if (k.startsWith("OTEL_") || k === "CLAUDE_CODE_ENABLE_TELEMETRY") {
+		if (
+			k.startsWith("OTEL_") ||
+			k.startsWith("HAIKU_OTEL_") ||
+			k.startsWith("HAIKU_CLAUDE_CODE_") ||
+			k.startsWith("CLAUDE_CODE_OTEL_") ||
+			k === "CLAUDE_CODE_ENABLE_TELEMETRY"
+		) {
 			delete process.env[k]
 		}
 	}
@@ -38,7 +44,13 @@ async function withEnv(overrides, fn) {
 		return fn(mod.__test)
 	} finally {
 		for (const k of Object.keys(process.env)) {
-			if (k.startsWith("OTEL_") || k === "CLAUDE_CODE_ENABLE_TELEMETRY") {
+			if (
+				k.startsWith("OTEL_") ||
+				k.startsWith("HAIKU_OTEL_") ||
+				k.startsWith("HAIKU_CLAUDE_CODE_") ||
+				k.startsWith("CLAUDE_CODE_OTEL_") ||
+				k === "CLAUDE_CODE_ENABLE_TELEMETRY"
+			) {
 				delete process.env[k]
 			}
 		}
@@ -859,6 +871,112 @@ test("schema: every drift/reconciliation event has a documented allow-list", () 
 		}
 	}
 })
+
+// ── HAIKU_-prefixed fallback (Claude no longer forwards OTEL_* to MCPs) ─────
+
+await withEnv(
+	{ HAIKU_OTEL_EXPORTER_OTLP_ENDPOINT: "https://otel.haiku.test" },
+	(t) => {
+		test("HAIKU_-prefixed endpoint resolves when bare OTEL_ is absent", () => {
+			assert.strictEqual(
+				t.resolveEndpoint(),
+				"https://otel.haiku.test/v1/logs",
+			)
+		})
+	},
+)
+
+await withEnv(
+	{
+		HAIKU_OTEL_EXPORTER_OTLP_ENDPOINT: "https://haiku-wins.test",
+		OTEL_EXPORTER_OTLP_ENDPOINT: "https://bare-loses.test",
+	},
+	(t) => {
+		test("HAIKU_-prefixed var WINS over the bare OTEL_ var", () => {
+			assert.strictEqual(t.resolveEndpoint(), "https://haiku-wins.test/v1/logs")
+		})
+	},
+)
+
+await withEnv(
+	{
+		HAIKU_OTEL_EXPORTER_OTLP_ENDPOINT: "   ",
+		OTEL_EXPORTER_OTLP_ENDPOINT: "https://bare-fallback.test",
+	},
+	(t) => {
+		test("empty HAIKU_-prefixed var falls back to the bare OTEL_ var", () => {
+			assert.strictEqual(
+				t.resolveEndpoint(),
+				"https://bare-fallback.test/v1/logs",
+			)
+		})
+	},
+)
+
+await withEnv({ HAIKU_OTEL_EXPORTER_OTLP_HEADERS: "x-api-key=abc123" }, (t) => {
+	test("HAIKU_-prefixed headers resolve like the bare OTEL_ headers", () => {
+		assert.deepStrictEqual(t.resolveHeaders(), { "x-api-key": "abc123" })
+	})
+})
+
+await withEnv({ HAIKU_OTEL_SERVICE_NAME: "haiku-mcp" }, (t) => {
+	test("HAIKU_OTEL_SERVICE_NAME sets service.name", () => {
+		const attrs = t.resolveResourceAttrs()
+		const svc = attrs.find((a) => a.key === "service.name")
+		assert.strictEqual(svc.value.stringValue, "haiku-mcp")
+	})
+})
+
+// config.ts: the enable flag must also honor the HAIKU_ prefix, since
+// CLAUDE_CODE_ENABLE_TELEMETRY is a Claude-owned var the harness no longer
+// forwards into the MCP subprocess. config.ts reads env at module load, so
+// load it fresh under a controlled env (withEnv doesn't await its callback,
+// so these can't route through it).
+async function loadConfigWithEnv(overrides) {
+	const originalEnv = { ...process.env }
+	for (const k of Object.keys(process.env)) {
+		if (k === "CLAUDE_CODE_ENABLE_TELEMETRY" || k.startsWith("HAIKU_CLAUDE_CODE_")) {
+			delete process.env[k]
+		}
+	}
+	Object.assign(process.env, overrides)
+	try {
+		const cacheBust = `?t=${Date.now()}-${Math.random()}`
+		return await import(`../src/config.ts${cacheBust}`)
+	} finally {
+		for (const k of Object.keys(process.env)) {
+			if (k === "CLAUDE_CODE_ENABLE_TELEMETRY" || k.startsWith("HAIKU_CLAUDE_CODE_")) {
+				delete process.env[k]
+			}
+		}
+		Object.assign(process.env, originalEnv)
+	}
+}
+
+{
+	const { features } = await loadConfigWithEnv({
+		HAIKU_CLAUDE_CODE_ENABLE_TELEMETRY: "1",
+	})
+	test("HAIKU_CLAUDE_CODE_ENABLE_TELEMETRY=1 enables features.telemetry", () => {
+		assert.strictEqual(features.telemetry, true)
+	})
+}
+
+{
+	const { features } = await loadConfigWithEnv({
+		CLAUDE_CODE_ENABLE_TELEMETRY: "1",
+	})
+	test("bare CLAUDE_CODE_ENABLE_TELEMETRY=1 still enables telemetry", () => {
+		assert.strictEqual(features.telemetry, true)
+	})
+}
+
+{
+	const { features } = await loadConfigWithEnv({})
+	test("features.telemetry defaults to false with neither flag set", () => {
+		assert.strictEqual(features.telemetry, false)
+	})
+}
 
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed > 0 ? 1 : 0)

@@ -281,31 +281,44 @@ function applyResponse(intentDir, action, root, slug) {
 			}
 			break
 		}
+		case "write_brief": {
+			// Briefer stand-in: write the user-facing BRIEF.md so the cursor
+			// advances past the pre-execute brief step (to the user gate, or
+			// straight to execute in auto/autopilot).
+			writeFileSync(join(stageDir, "BRIEF.md"), "# Brief (test fixture)\n")
+			break
+		}
 		case "dispatch_review": {
-			const unitFiles = existsSync(unitsDir)
-				? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-				: []
-			for (const f of unitFiles) {
-				const path = join(unitsDir, f)
-				const fm = readFm(path)
-				const reviews =
-					fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
-				reviews[action.role] = { at }
-				writeFm(path, { ...fm, reviews })
+			const reviewDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+			for (const d of reviewDispatches) {
+				const unitFiles = existsSync(unitsDir)
+					? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+					: []
+				for (const f of unitFiles) {
+					const path = join(unitsDir, f)
+					const fm = readFm(path)
+					const reviews =
+						fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
+					reviews[d.role] = { at }
+					writeFm(path, { ...fm, reviews })
+				}
 			}
 			break
 		}
 		case "dispatch_approval": {
-			const unitFiles = existsSync(unitsDir)
-				? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-				: []
-			for (const f of unitFiles) {
-				const path = join(unitsDir, f)
-				const fm = readFm(path)
-				const approvals =
-					fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
-				approvals[action.role] = { at }
-				writeFm(path, { ...fm, approvals })
+			const approvalDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+			for (const d of approvalDispatches) {
+				const unitFiles = existsSync(unitsDir)
+					? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+					: []
+				for (const f of unitFiles) {
+					const path = join(unitsDir, f)
+					const fm = readFm(path)
+					const approvals =
+						fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
+					approvals[d.role] = { at }
+					writeFm(path, { ...fm, approvals })
+				}
 			}
 			break
 		}
@@ -436,6 +449,8 @@ test("e2e: continuous mode drives intent to sealed (full role list, user gates f
 					started_at: now,
 					approvals: {},
 					sealed_at: null,
+					// e2e fixture predates the autotune cursor walk.
+					autotune: false,
 					design_directions: {
 						design: { archetype: "modular-cards", at: now },
 					},
@@ -459,6 +474,21 @@ test("e2e: continuous mode drives intent to sealed (full role list, user gates f
 			assert.ok(
 				seenActions.includes("user_gate"),
 				"continuous: expected at least one user_gate action",
+			)
+			// Bug 4 (worker-new-badge 2026-05-28): intent-scope quality gates
+			// must run BEFORE the terminal user gate — "the user is the final
+			// check before reflection," not a signature solicited ahead of the
+			// automated bar. The intent-completion suffix is the LAST
+			// `dispatch_quality_gates` (intent-scope; stage QGs fire earlier)
+			// followed by the LAST `intent_review` (the role:"user" gate — the
+			// per-STAGE gate is `user_gate`, which fires early, NOT this one).
+			// Pre-fix the intent QG fired AFTER the user gate, so this
+			// lastIndexOf(QG) < lastIndexOf(intent_review) assertion was false.
+			const lastQg = seenActions.lastIndexOf("dispatch_quality_gates")
+			const lastIntentReview = seenActions.lastIndexOf("intent_review")
+			assert.ok(
+				lastQg !== -1 && lastIntentReview !== -1 && lastQg < lastIntentReview,
+				`intent quality gates must fire before the terminal user gate. order: ${seenActions.join(" → ")}`,
 			)
 			// Note: `complete_stage` is auto-executed inline by
 			// haiku_run_next's complete_stage loop and re-ticks before
@@ -487,6 +517,8 @@ test("e2e: autopilot mode drives intent to sealed (no user_gate)", {
 					started_at: now,
 					approvals: {},
 					sealed_at: null,
+					// e2e fixture predates the autotune cursor walk.
+					autotune: false,
 					design_directions: {
 						design: { archetype: "modular-cards", at: now },
 					},
@@ -535,6 +567,8 @@ test("e2e: discrete mode drives intent to sealed (same role list; differs on gat
 					started_at: now,
 					approvals: {},
 					sealed_at: null,
+					// e2e fixture predates the autotune cursor walk.
+					autotune: false,
 					design_directions: {
 						design: { archetype: "modular-cards", at: now },
 					},
@@ -579,6 +613,8 @@ test("e2e: discrete-hybrid mode drives intent to sealed", {
 				started_at: now,
 				approvals: {},
 				sealed_at: null,
+				// e2e fixture predates the autotune cursor walk.
+				autotune: false,
 				design_directions: { design: { archetype: "modular-cards", at: now } },
 			},
 			"# e2e-hybrid\n",
@@ -620,6 +656,8 @@ test("e2e: quick mode drives single-stage intent to sealed", {
 				started_at: now,
 				approvals: {},
 				sealed_at: null,
+				// e2e fixture predates the autotune cursor walk.
+				autotune: false,
 			},
 			"# e2e-quick\n",
 		)

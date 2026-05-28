@@ -43,6 +43,10 @@ export interface UseSessionWebSocketOptions {
 	/** Session-status polling interval (ms). Defaults to 5s. Pass 0 to
 	 *  disable the polling fallback (not recommended outside tests). */
 	pollIntervalMs?: number
+	/** Liveness-heartbeat interval (ms) sent over the live WS. Defaults
+	 *  to 30s — the cadence the engine's presence watch is tuned for
+	 *  (120s grace = 4 missed beats). Pass 0 to disable (tests only). */
+	heartbeatIntervalMs?: number
 }
 
 export function useSessionWebSocket(
@@ -55,6 +59,11 @@ export function useSessionWebSocket(
 	const onUpdateRef = useRef(options.onUpdate)
 	const onIntentEventRef = useRef(options.onIntentEvent)
 	const onServerCloseRef = useRef(options.onServerClose)
+	// Timestamp (ms) of the most recent heartbeat_ack the server sent
+	// back. Lets the UI prove the engine still sees this tab as
+	// connected — receipt of the ack, not merely the send, is the
+	// liveness signal the gate await keys off.
+	const lastHeartbeatAckRef = useRef<number | null>(null)
 	const client = useApiClient()
 
 	// Keep the latest callbacks in refs so the effect doesn't re-open
@@ -126,12 +135,38 @@ export function useSessionWebSocket(
 			}
 		}
 
+		// Liveness heartbeat over the live socket. The engine's presence
+		// watch (120s grace) treats a connected, heartbeating tab as
+		// "human present at the gate"; missing beats are what lets it
+		// re-launch the browser or declare the await abandoned. We send
+		// one immediately on open (so a fresh connect — including the
+		// reconnect after a page refresh — registers presence at once)
+		// and then every `heartbeatIntervalMs`.
+		const heartbeatInterval = options.heartbeatIntervalMs ?? 30_000
+		let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+		const sendHeartbeat = () => {
+			if (ws.readyState !== ws.OPEN) return
+			try {
+				ws.send(JSON.stringify({ type: "heartbeat", t: Date.now() }))
+			} catch {
+				// Socket mid-close — the next reconnect resumes heartbeating.
+			}
+		}
+
 		ws.onopen = () => {
 			hadOpen = true
+			if (heartbeatInterval > 0) {
+				sendHeartbeat()
+				heartbeatTimer = setInterval(sendHeartbeat, heartbeatInterval)
+			}
 		}
 
 		ws.onclose = () => {
 			if (wsRef.current === ws) wsRef.current = null
+			if (heartbeatTimer !== null) {
+				clearInterval(heartbeatTimer)
+				heartbeatTimer = null
+			}
 			// A former-open that closed = server drop. Connection failure
 			// (never opened) won't trigger here; poll catches that case.
 			if (!closedByCleanup && hadOpen) fireServerClose()
@@ -151,6 +186,14 @@ export function useSessionWebSocket(
 			const result = WsServerMessageSchema.safeParse(parsed)
 			if (!result.success) return
 			const msg: WsServerMessage = result.data
+
+			// Heartbeat ack — the engine confirms it recorded our beat and
+			// still sees this tab as connected. Stamp the receipt time; no
+			// UI commit needed.
+			if (msg.type === "heartbeat_ack") {
+				lastHeartbeatAckRef.current = Date.now()
+				return
+			}
 
 			// Per-intent live-state events forward synchronously — they
 			// drive small UI state changes (Approve button gating,
@@ -183,6 +226,10 @@ export function useSessionWebSocket(
 		return () => {
 			closedByCleanup = true
 			if (pollTimer !== null) clearTimeout(pollTimer)
+			if (heartbeatTimer !== null) {
+				clearInterval(heartbeatTimer)
+				heartbeatTimer = null
+			}
 			if (rafRef.current !== null) {
 				cancelAnimationFrame(rafRef.current)
 				rafRef.current = null
@@ -191,7 +238,7 @@ export function useSessionWebSocket(
 			ws.close()
 			if (wsRef.current === ws) wsRef.current = null
 		}
-	}, [sessionId, client, options.pollIntervalMs])
+	}, [sessionId, client, options.pollIntervalMs, options.heartbeatIntervalMs])
 
 	return wsRef
 }

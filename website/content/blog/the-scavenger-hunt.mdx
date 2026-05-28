@@ -20,15 +20,7 @@ For a while, it worked. Then it didn't. Context compacted. The agent drifted. Si
 
 This post is about what falls out of that flip — the architecture, the state machine, the hooks, and the two places where the user is still in the loop.
 
-<KeyPoints title="Three things to remember">
-  1. **The agent is dumb on purpose.** It never decides what's next — it asks `haiku_run_next`.
-  2. **State lives on disk, not in context.** Every turn starts fresh from `.haiku/intents/{slug}/...`. Context compaction, `/clear`, crashes — none of it matters.
-  3. **Hooks are seatbelts.** They can't decide anything, but they can stop the agent from editing the wrong files or skipping quality gates.
-</KeyPoints>
-
-<Callout tone="info" title="Prefer to click around than read?">
-Every diagram below has a live, fully-interactive version. The [runtime architecture map](/studios/software/architecture) renders the whole thing — actors, hooks, workflow phases, every `haiku_run_next` tick, every state write — and lets you click any node for its real source file. Each studio has its own view: [software](/studios/software/architecture/), [ideation](/studios/ideation/architecture/), [legal](/studios/legal/architecture/), [hwdev](/studios/hwdev/architecture/), and [20 others](/studios/). The rest of this post is the story; the map is the ground truth.
-</Callout>
+If you'd rather click than read, every diagram below has a live counterpart. The [runtime architecture map](/studios/software/architecture) renders the whole system — actors, hooks, workflow phases, every state write — and every node opens its real definition. Each studio gets its own view, from [software](/studios/software/architecture/) to [legal](/studios/legal/architecture/) to [hwdev](/studios/hwdev/architecture/). The post is the story; the map is the ground truth.
 
 ## The download vs. the scavenger hunt
 
@@ -63,16 +55,26 @@ In H·AI·K·U, **it doesn't matter if the agent loses context.** The next `haik
 
 That's why a H·AI·K·U run survives context compaction, `/clear`, crashes, and even a different agent picking it up mid-flight. The state isn't in the conversation. It's in the filesystem.
 
-| | AI-DLC skills | H·AI·K·U |
-|---|---|---|
-| **Instructions** | Front-loaded — entire skill dumped into context at start | Drip-fed — one action per `haiku_run_next` call |
-| **State** | Lives in the agent's head (conversation context) | Lives on disk; agent is stateless between ticks |
-| **Control flow** | Agent decides what's next | Orchestrator decides what's next |
-| **Recovery** | Context lost = start over | Context lost = next turn reads state.json and resumes |
-| **Enforcement** | Trust the agent to follow the prompt | Hooks physically block violations; orchestrator refuses invalid transitions |
-| **Parallelism** | One agent, one thread | Waves of units in isolated worktrees |
-| **User checkpoints** | Wherever the skill happens to ask | Forced at elaboration + review gates, can't be skipped |
-| **Failure mode** | Agent hallucinates a plan and runs off the rails | Agent gets told "no, do X" on the next tick |
+The two approaches diverge on the axis that does most of the work.
+
+<Compare verdict="diverge" title="Where the plan lives">
+  <Side label="AI-DLC skills">
+    Front-loaded. The entire skill ships into context at the start of the run, and the agent's head is the state. Lose the context, lose the plan.
+  </Side>
+  <Side label="H·AI·K·U">
+    Drip-fed. One action per tick, served by the orchestrator. State lives on disk; the agent is stateless between ticks. Lose the context, the next turn rehydrates from the filesystem.
+  </Side>
+</Compare>
+
+That single shift drags a handful of other shifts with it. If the orchestrator owns the plan, it can also own control flow, enforcement, and parallelism — three things skills had to ask the agent nicely about.
+
+<KeyPoints title="What flips when the plan moves to disk">
+1. **Control flow.** The orchestrator picks the next move; the agent does it. No "agent decides what's next."
+2. **Enforcement.** Guardrails physically block violations instead of trusting the agent to follow the prompt.
+3. **Parallelism.** Units run as waves in isolated worktrees, not as a single agent on a single thread.
+4. **Checkpoints.** The user is forced into the loop at elaboration and review gates, and the workflow refuses to skip them.
+5. **Failure mode.** A misstep produces "no, do X next tick" rather than an agent that quietly drifts off the rails.
+</KeyPoints>
 
 ## The full architecture
 
@@ -80,34 +82,34 @@ Five layers: the user, the Claude Code harness (agent + hooks), the H·AI·K·U 
 
 <ExpandableDiagram chart={`flowchart TB
     User([User])
-    subgraph CC["Claude Code harness"]
-        Agent["Agent (Claude)"]
-        Hooks["Hooks<br/>prompt-guard · workflow-guard<br/>guard-workflow-fields · enforce-iteration<br/>inject-context · track-outputs<br/>quality-gate · subagent-context"]
+    subgraph CC["Agent harness"]
+        Agent["Agent"]
+        Hooks["Guardrails +<br/>context injection<br/>at the boundary"]
     end
 
-    subgraph MCP["haiku MCP server"]
-        Orchestrator["Orchestrator<br/>haiku_run_next"]
-        StateTools["State tools<br/>haiku_stage_get · haiku_unit_*<br/>haiku_intent_* · haiku_studio_*"]
-        Prompts["Prompt handlers<br/>prompts/core.ts · complex.ts"]
+    subgraph MCP["H·AI·K·U engine"]
+        Orchestrator["Orchestrator<br/>(picks the next action)"]
+        StateTools["State tools<br/>(read + write artifacts)"]
+        Prompts["Prompt handlers"]
     end
 
-    subgraph Workflow["Workflow state on disk (.haiku/)"]
-        Intent["intents/{slug}/intent.md<br/>status · active_stage · studio"]
-        Stage["stages/{stage}/state.json<br/>phase · elaboration_turns · gate_outcome"]
-        Units["stages/{stage}/units/*.md<br/>depends_on · hat · bolt · status"]
+    subgraph Workflow["Workflow state on disk"]
+        Intent["Intent record"]
+        Stage["Stage state"]
+        Units["Unit specs"]
     end
 
     subgraph Defs["Studio definitions (read-only)"]
-        Studio["studios/{name}/STUDIO.md"]
-        StageMD["stages/{stage}/STAGE.md<br/>review · elaboration · quality_gates"]
-        Hats["hats/*.md · review-agents/*.md"]
+        Studio["Studio shape"]
+        StageMD["Stage shape +<br/>gate type"]
+        Hats["Hats + review agents"]
     end
 
     subgraph Ext["External systems"]
         Worktrees["Git worktrees<br/>(one per unit)"]
         ReviewUI["Review web UI<br/>approve / reject / open PR"]
         Gates["Quality gates<br/>tests · lint · typecheck"]
-        Telemetry["Telemetry / Sentry"]
+        Telemetry["Telemetry"]
     end
 
     User -- "conversation +<br/>review clicks" --> Agent
@@ -117,68 +119,50 @@ Five layers: the user, the Claude Code harness (agent + hooks), the H·AI·K·U 
     Hooks -- "block / inject context" --> Agent
     Hooks -- "read" --> Workflow
 
-    Orchestrator -- "read + write<br/>(workflow side effects)" --> Workflow
+    Orchestrator -- "read + write" --> Workflow
     Orchestrator -- "read" --> Defs
     Orchestrator -- "spawn" --> Worktrees
-    Orchestrator -- "openReviewAndWait()<br/>(blocks)" --> ReviewUI
-    Orchestrator -- "runQualityGates()" --> Gates
+    Orchestrator -- "open + wait" --> ReviewUI
+    Orchestrator -- "run" --> Gates
     Orchestrator -- "emit" --> Telemetry
     ReviewUI -- "approval" --> User
 
     StateTools -- "read + write" --> Workflow
     Prompts -- "read" --> Defs`} />
 
-The orchestrator is the brain. Hooks are spinal reflexes. The orchestrator decides what should happen next. Hooks make sure the agent physically can't do anything else between orchestrator calls. The agent is the body that executes the current action. And everything the orchestrator knows, it knows from reading files on disk.
-
-<Callout tone="good" title="See it live">
-This diagram is static; the [interactive runtime map](/studios/software/architecture) isn't. Every actor, hook, MCP tool, hat, review-agent, and artifact chip on the live page is clickable and opens the real source file (`STAGE.md`, `hats/*.md`, `review-agents/*.md`, `discovery/*.md`, `outputs/*.md`). Swap studios from the picker in the top bar, or jump straight to any studio's architecture: `/studios/<slug>/architecture`.
-</Callout>
+The orchestrator is the brain. Hooks are spinal reflexes. The orchestrator decides what should happen next. Hooks make sure the agent physically can't do anything else between orchestrator calls. The agent is the body that executes the current action. And everything the orchestrator knows, it knows from reading files on disk. The static version is above; the [interactive runtime map](/studios/software/architecture) is the live ground truth — every actor, hook, and artifact is clickable and opens its real definition.
 
 ## Stages and phases
 
-Every studio is a named lifecycle template — a DAG of stages, each running its own phase workflow engine. H·AI·K·U ships with 24 studios (software, ideation, legal, hwdev, incident-response, marketing, hr, finance, and 16 more). The shape is the same across all of them; only the stage names and gate types differ. The default software studio has six stages in strict order: **inception → design → product → development → operations → security**. Every stage walks the same phase sequence: `pending → elaborate → execute → review → gate`. The orchestrator enforces the transitions; the agent can only move forward when the preconditions are actually met, not when it thinks they are.
+Every studio is a named lifecycle template — a DAG of stages, each running its own phase workflow. H·AI·K·U ships with two dozen studios, covering everything from software to legal to incident response. The shape is the same across all of them; only the stage names and gate types differ. The default software studio runs six stages in strict order: **inception → design → product → development → operations → security**. Every stage walks the same phase sequence: `pending → elaborate → execute → review → gate`. The orchestrator enforces the transitions; the agent can only move forward when the preconditions are actually met, not when it thinks they are.
 
 Two seams demand a human:
 
 <Grid>
   <Card eyebrow="Seam 1" title="Elaboration conversation" accent="info">
-    Collaborative stages require at least three back-and-forth turns with the user before units can be finalized. `elaboration_turns` is tracked in `state.json`. Until it hits the threshold, the orchestrator returns `elaboration_insufficient` no matter what the agent does.
+    Collaborative stages require at least three back-and-forth turns with the user before units can be finalized. Until the conversation hits the threshold, the orchestrator refuses to advance no matter what the agent does.
   </Card>
   <Card eyebrow="Seam 2" title="Review gates" accent="good">
-    The orchestrator returns `gate_review` and `handleOrchestratorTool` calls `_openReviewAndWait`, which literally blocks the MCP tool call until the user clicks Approve, Request Changes, or Open PR in the web UI.
+    When a stage is ready for review, the orchestrator blocks until the user clicks Approve, Request Changes, or Open PR in the web UI. The agent can't skip past it. There's no clever way around a tool call that just refuses to return.
   </Card>
 </Grid>
 
 Everything else is the agent in a tight loop: call `haiku_run_next`, do the work the action described, call `haiku_run_next` again. No meetings. No status updates. No "what should I do next?" Just clues.
 
-The full state machine — six stages × five phases, every gate type, mode resolution, `/haiku:revisit` back-edges — lives in `packages/haiku/src/orchestrator.ts`. You don't have to take my word for it: the [runtime architecture map](/studios/software/architecture) lays out every phase, every `haiku_run_next` action, every validation check, and every state write per stage. Toggle between continuous / discrete / hybrid / autopilot modes in the top bar to see how the gates change shape.
+The full state machine — six stages × five phases, every gate type, mode resolution, `/haiku:revisit` back-edges — is the engine. You don't have to take my word for it: the [runtime architecture map](/studios/software/architecture) lays out every phase, every action the agent sees, every validation check, and every state write per stage. Toggle between continuous / discrete / hybrid / autopilot modes in the top bar to see how the gates change shape.
 
 ## Where hooks come in
 
-Hooks live in `packages/haiku/src/hooks/*.ts` and run inside Claude Code's hook system — not inside the agent's reasoning. They exist because the agent can't be trusted to enforce its own rules. That's not an insult. It's a design decision. If you have to trust the agent to follow the rules, you'll find out it didn't the moment something goes wrong.
+Hooks run inside the agent harness — not inside the agent's reasoning. They exist because the agent can't be trusted to enforce its own rules. That's not an insult. It's a design decision. If you have to trust the agent to follow the rules, you'll find out it didn't the moment something goes wrong.
 
 <Grid>
   <Card eyebrow="Guardrails" title="Block bad moves" accent="bad">
-    - `prompt-guard` — rejects bad prompts
-    - `workflow-guard` — prevents edits outside the active unit/stage
-    - `redirect-plan-mode` — routes plan mode through haiku
-    - `enforce-iteration` — forces bolt counter increment
-    - `guard-workflow-fields` — blocks direct edits to workflow-managed frontmatter
-    - `validate-unit-type` — rejects wrong-typed unit files
-    - `ensure-deps` — verifies deps before running gates
+    Guardrails fire before any tool runs. They catch direct edits to workflow-managed files, reject malformed prompts, refuse to skip the bolt counter, and stop the agent from straying outside the active unit. The agent is told to use the right tool instead.
   </Card>
   <Card eyebrow="Context injection" title="Keep the agent honest" accent="good">
-    - `inject-context` + `inject-state-file` — automatically injects workflow state so the agent never has to ask
-    - `subagent-context` / `subagent-hook` — scopes context for spawned subagents
-    - `track-outputs` — records which files the agent produced for a unit
-    - `context-monitor` — watches token budget
-    - `quality-gate` — hook wrapper around `runQualityGates`
+    Context injection fires at the boundary too. The workflow state, the active unit, the right hat, the budget — all of it lands in the agent's view automatically, so the agent never has to remember and never has to ask. Outputs the agent produces get tracked the moment they're written.
   </Card>
 </Grid>
-
-<Callout tone="info" title="Mental model">
-The orchestrator is the brain. Hooks are spinal reflexes. The orchestrator decides what should happen next. Hooks make sure the agent physically can't do anything else between orchestrator calls. The agent is the body that executes the current action.
-</Callout>
 
 ## Why this works
 

@@ -31,18 +31,23 @@ import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
+	branchAheadOfOrigin,
+	branchExists,
 	ensureOnStageBranch,
 	fetchOrigin,
 	getCurrentBranch,
 	hasNoMergeDebt,
+	pushBranchToOrigin,
 	pushStageBranch,
 	reconcileIntentBranches,
 	syncBranchDownstream,
+	uncommittedAgentWork,
 } from "../../git-worktree.js"
 import { adaptInstructions } from "../../harness-instructions.js"
 import {
 	findCurrentStage,
 	isStageComplete,
+	stageOwesObservations,
 } from "../../orchestrator/workflow/cursor.js"
 import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
 import type { OrchestratorAction as OrchestratorActionType } from "../../orchestrator.js"
@@ -130,7 +135,7 @@ function extractActionFromAwaitResponse(response: {
  * Run the SPA picker for studio / mode / stage selection in response
  * to a tick that emitted `select_*`. Dispatches by name to the matching
  * orchestrator tool handler — same code path the user-explicit
- * `/haiku:change-mode` skill takes, but invoked engine-side so the
+ * `/haiku:haiku-change-mode` skill takes, but invoked engine-side so the
  * agent never sees the prompt-to-call. The handler does the picker +
  * frontmatter write + telemetry; we discard its rendered response and
  * just signal "ok / not ok" back to the dispatch loop.
@@ -206,14 +211,15 @@ import { reportError } from "../../sentry.js"
 import { launchBrowserBestEffort } from "../../server/tool-call.js"
 import { logSessionEvent } from "../../session-metadata.js"
 import {
-	findLiveReviewSessionForIntent,
 	getSession,
+	hasAttachedReviewSessionForIntent,
 	isBrowserAttached,
 	updateSession,
 } from "../../sessions.js"
 import {
 	findFeedbackFile,
 	findHaikuRoot,
+	gitCommitState,
 	intentDir,
 	intentFromCurrentBranch,
 	isGitRepo,
@@ -248,7 +254,7 @@ export default defineTool({
 			pickup: {
 				type: "boolean" as const,
 				description:
-					"Set true when invoked from /haiku:pickup. The engine fetches origin and materializes the active stage branch locally so the user can `git switch` into in-flight work, then appends a pickup hint to the response.",
+					"Set true when invoked from /haiku:haiku-pickup. The engine fetches origin and materializes the active stage branch locally so the user can `git switch` into in-flight work, then appends a pickup hint to the response.",
 			},
 		},
 	},
@@ -315,7 +321,7 @@ export default defineTool({
 						content: [
 							{
 								type: "text" as const,
-								text: "No active intents found. Start one with /haiku:start.",
+								text: "No active intents found. Start one with /haiku:haiku-start.",
 							},
 						],
 						isError: true,
@@ -423,6 +429,48 @@ export default defineTool({
 			}
 		}
 
+		// Pre-tick clean-tree gate. The engine does NOT author the agent's
+		// commits. When the agent has uncommitted work in the tree, we
+		// block the tick and hand it back to the agent to commit — it can
+		// write commit messages that tell the story of the work, which a
+		// generic engine "wip" commit never could. Only the agent's own
+		// work counts: changes OUTSIDE the engine's `.haiku/` bookkeeping
+		// (state, units, feedback, artifacts), which the engine still
+		// commits at lifecycle points (the `autoCommitDirtyTree` fallbacks
+		// cover mid-merge edges). Runs after the mid-merge detector so a
+		// merge-in-progress (conflict markers look "dirty") routes to its
+		// own recovery message above, not here. Git repos only.
+		const dirtyAgentWork = uncommittedAgentWork()
+		if (dirtyAgentWork.length > 0) {
+			const fileList = dirtyAgentWork.slice(0, 50).join("\n  ")
+			const more =
+				dirtyAgentWork.length > 50
+					? `\n  …and ${dirtyAgentWork.length - 50} more`
+					: ""
+			return text(
+				JSON.stringify(
+					{
+						action: "error",
+						intent: slug,
+						error: "dirty_tree_blocking_tick",
+						dirty_files: dirtyAgentWork,
+						message:
+							"I can't advance the workflow with uncommitted work in the tree. " +
+							"Commit everything first — you author these commits, not the engine, " +
+							"because you know what you just did and can tell the story of the work. " +
+							"Keep the commit messages logical: group related changes into separate, " +
+							"coherent commits (one logical step each), and write messages that explain " +
+							"the WHY of the change — not a single catch-all 'wip' dump. " +
+							"Then re-run `haiku_run_next` to continue.\n\nUncommitted:\n  " +
+							fileList +
+							more,
+					},
+					null,
+					2,
+				),
+			)
+		}
+
 		// Pre-cursor reconciliation: when external review is pending OR
 		// the user might have merged a stage PR externally, fetch from
 		// origin and check for the "merged into wrong branch" footgun.
@@ -489,7 +537,7 @@ export default defineTool({
 			)
 		}
 
-		// Pickup auto-fetch: when /haiku:pickup hands off to a fresh user,
+		// Pickup auto-fetch: when /haiku:haiku-pickup hands off to a fresh user,
 		// they only have intent main locally. The cursor's state.json and
 		// any pending feedback live there, but the active stage branch's
 		// in-flight unit work doesn't. Fetch origin, materialize the
@@ -852,7 +900,7 @@ export default defineTool({
 		// and re-ticks. The agent NEVER sees these actions — it just
 		// experiences a blocking tick until the user picks. The select_*
 		// MCP tools still exist for explicit user-driven invocation
-		// (`/haiku:change-mode`, etc.) but the tick path drives them
+		// (`/haiku:haiku-change-mode`, etc.) but the tick path drives them
 		// engine-side here so the agent stays out of the loop.
 		//
 		// The cursor walks on a tree that pre-cursor sync has already
@@ -888,11 +936,19 @@ export default defineTool({
 				here.startsWith(stagePrefix) && here !== `${stagePrefix}main`
 					? here.slice(stagePrefix.length)
 					: null
+			// Fire when the cursor's answer doesn't target the stage we're
+			// physically on — either it advanced to a LATER stage
+			// (`result.stage` = the next stage, cases b/c) OR it moved to
+			// intent scope (`result.stage` empty/undefined, e.g.
+			// `intent_review` after the FINAL stage's units completed —
+			// case (e)). In both, `hereStage` owes its close. Without the
+			// case-(e) arm, the terminal stage never routed through
+			// complete_stage, so it never merged here AND its
+			// record_observations gate never fired (2026-05-20: observations
+			// recorded for every stage EXCEPT the last).
 			if (
 				hereStage &&
-				typeof result.stage === "string" &&
-				result.stage.length > 0 &&
-				result.stage !== hereStage
+				!(typeof result.stage === "string" && result.stage === hereStage)
 			) {
 				const iDir = intentDir(slug)
 				const intentFile = join(iDir, "intent.md")
@@ -973,32 +1029,67 @@ export default defineTool({
 
 		// Stash dispatch_review / dispatch_approval action context on
 		// intent.md so the next tick's drainPendingDispatches stamps
-		// reviews.<role> / approvals.<role>. Without this, the cursor
-		// would re-emit the same dispatch action forever — the prompt
-		// promises "the engine stamps the sigs" but no engine code
-		// stamped them before this fix. See dispatch-stamps.ts for the
-		// full lifecycle contract.
+		// reviews.<role> / approvals.<role>. Batched dispatches (parallel
+		// adversarial roles) stash each role independently — they stamp
+		// independently. See dispatch-stamps.ts for the full lifecycle.
 		if (
 			(result.action === "dispatch_review" ||
 				result.action === "dispatch_approval") &&
-			typeof result.stage === "string" &&
-			typeof result.role === "string" &&
-			Array.isArray(result.units)
+			typeof result.stage === "string"
 		) {
 			try {
 				const { stashPendingDispatch } = await import(
 					"../../orchestrator/workflow/dispatch-stamps.js"
 				)
-				stashPendingDispatch(
-					slug,
-					result.action === "dispatch_review" ? "review" : "approval",
-					result.stage as string,
-					result.role as string,
-					result.units as string[],
-				)
+				const kind = result.action === "dispatch_review" ? "review" : "approval"
+				const dispatches = Array.isArray(result.dispatches)
+					? (result.dispatches as Array<{ role: string; units: string[] }>)
+					: typeof result.role === "string" && Array.isArray(result.units)
+						? [{ role: result.role as string, units: result.units as string[] }]
+						: []
+				for (const d of dispatches) {
+					stashPendingDispatch(
+						slug,
+						kind,
+						result.stage as string,
+						d.role,
+						d.units,
+					)
+				}
 			} catch (err) {
 				console.error(
 					`[haiku_run_next] stashPendingDispatch failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}
+
+		// Lease the dispatched unit hats: stamp `dispatched_at` on each
+		// dispatched unit's open iter so the cursor's `needNextHat` clause
+		// won't re-dispatch them on a mid-wave run_next (the unit-015-class
+		// double-dispatch). The mid-chain relay leases its own unit inside
+		// computeUnitRelayBlock; this covers the cursor wave/needNextHat
+		// dispatch path. Best-effort — a missed stamp just falls back to the
+		// prior re-dispatch behavior, never blocks the dispatch.
+		if (
+			result.action === "start_unit_hat" &&
+			typeof result.stage === "string" &&
+			typeof result.hat === "string" &&
+			Array.isArray(result.units)
+		) {
+			try {
+				const { stampUnitHatLease } = await import("../../state-tools.js")
+				for (const unit of result.units as string[]) {
+					if (typeof unit !== "string") continue
+					stampUnitHatLease({
+						slug,
+						stage: result.stage as string,
+						unit,
+						hat: result.hat as string,
+					})
+				}
+			} catch (err) {
+				console.error(
+					`[haiku_run_next] stampUnitHatLease failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}
@@ -1008,20 +1099,29 @@ export default defineTool({
 		// directly — no stashing needed there. Agent roles (spec,
 		// continuity, studio review-agents) need this engine-side
 		// stamp because nothing else writes their slot on intent.md.
-		if (
-			result.action === "intent_review" &&
-			typeof result.role === "string" &&
-			result.role !== "user"
-		) {
-			try {
-				const { stashPendingIntentReview } = await import(
-					"../../orchestrator/workflow/dispatch-stamps.js"
-				)
-				stashPendingIntentReview(slug, result.role as string)
-			} catch (err) {
-				console.error(
-					`[haiku_run_next] stashPendingIntentReview failed: ${err instanceof Error ? err.message : String(err)}`,
-				)
+		// The adversarial fan-out dispatches MANY roles in one tick
+		// (`dispatches[]`); stash EVERY one so the pre-tick drain signs
+		// each (or re-dispatches the ones that filed findings).
+		if (result.action === "intent_review") {
+			const batchRoles = Array.isArray(result.dispatches)
+				? (result.dispatches as Array<{ role?: unknown }>)
+						.map((d) => (typeof d?.role === "string" ? d.role : ""))
+						.filter((r): r is string => r.length > 0)
+				: typeof result.role === "string"
+					? [result.role]
+					: []
+			const toStash = batchRoles.filter((r) => r !== "user")
+			if (toStash.length > 0) {
+				try {
+					const { stashPendingIntentReview } = await import(
+						"../../orchestrator/workflow/dispatch-stamps.js"
+					)
+					for (const r of toStash) stashPendingIntentReview(slug, r)
+				} catch (err) {
+					console.error(
+						`[haiku_run_next] stashPendingIntentReview failed: ${err instanceof Error ? err.message : String(err)}`,
+					)
+				}
 			}
 		}
 
@@ -1103,11 +1203,13 @@ export default defineTool({
 						invalidates,
 					})
 				}
-				// Refresh witnessed signed_at on the targeted unit when
-				// this is a drift FB — otherwise the drift sweep keeps
-				// finding the same commit past the original sign time.
-				// `targets` and `targetUnit` are reused from the
-				// invalidations block above — same FB, same fields.
+				// Refresh the witnessed CONTENT (body + input premises) on
+				// the targeted unit when this is a drift FB — otherwise the
+				// sweep keeps re-detecting the same content mismatch past the
+				// fix. The sweep compares content hashes, not timestamps, so
+				// we refresh the witnesses and PRESERVE each slot's `at`.
+				// `targets`/`targetUnit` are reused from the invalidations
+				// block above — same FB.
 				if (fbFm.origin === "drift" && targetUnit) {
 					const unitPath = join(
 						findHaikuRoot(),
@@ -1120,31 +1222,50 @@ export default defineTool({
 					)
 					if (existsSync(unitPath)) {
 						const intentDirAbs = join(findHaikuRoot(), "intents", slug)
-						const { buildApprovalRecord, buildReviewRecord } = await import(
+						const { buildReviewRecord } = await import(
 							"../../orchestrator/workflow/sign-slot.js"
 						)
 						const raw = readFileSync(unitPath, "utf8")
 						const parsed = parseFrontmatter(raw)
 						const fm = parsed.data as Record<string, unknown>
-						const outputs = Array.isArray(fm.outputs)
-							? (fm.outputs as string[])
-							: []
 						const reviews =
 							fm.reviews && typeof fm.reviews === "object"
 								? { ...(fm.reviews as Record<string, unknown>) }
 								: {}
-						for (const role of Object.keys(reviews)) {
-							reviews[role] = buildReviewRecord(unitPath)
+						const unitInputs = Array.isArray(fm.inputs)
+							? (fm.inputs as string[])
+							: []
+						// Refresh each signed review's witness (body +
+						// input premises) to current content, but PRESERVE
+						// the slot's `at` — the restamp is engine
+						// bookkeeping, not a re-signature, so the audit
+						// trail survives (mirrors drift-handle-events.ts).
+						let reviewsChanged = false
+						for (const [role, slot] of Object.entries(reviews)) {
+							if (!slot || typeof slot !== "object" || Array.isArray(slot)) {
+								continue
+							}
+							const slotRec = slot as Record<string, unknown>
+							if (typeof slotRec.at !== "string") continue
+							const rebuilt = buildReviewRecord(unitPath, {
+								intentDir: intentDirAbs,
+								unitInputs,
+							})
+							reviews[role] = {
+								...slotRec,
+								body_sha256: rebuilt.body_sha256,
+								input_witnesses: rebuilt.input_witnesses,
+							}
+							reviewsChanged = true
 						}
-						const approvals =
-							fm.approvals && typeof fm.approvals === "object"
-								? { ...(fm.approvals as Record<string, unknown>) }
-								: {}
-						for (const role of Object.keys(approvals)) {
-							approvals[role] = buildApprovalRecord(intentDirAbs, outputs)
+						if (reviewsChanged) {
+							setFrontmatterField(unitPath, "reviews", reviews)
 						}
-						setFrontmatterField(unitPath, "reviews", reviews)
-						setFrontmatterField(unitPath, "approvals", approvals)
+						// Approvals are bookkeeping-only under the premise-
+						// witness model — they witness no file content, so a
+						// drift close never re-stamps them. Doing so would
+						// clobber each approval's sign-off `at` (who approved
+						// when) for zero drift-detection benefit.
 					}
 				}
 				// pre-tick merge + cursor walk handle branch alignment
@@ -1177,6 +1298,17 @@ export default defineTool({
 				const intentMd = join(findHaikuRoot(), "intents", slug, "intent.md")
 				if (existsSync(intentMd)) {
 					setFrontmatterField(intentMd, "sealed_at", new Date().toISOString())
+					// BUG-4 (admin-portal-reimagine): COMMIT the seal stamp. A raw
+					// setFrontmatterField is not a commit, so the branch never goes
+					// ahead-of-origin and the end-of-tick auto-push (guarded on
+					// branchAheadOfOrigin) silently skips — leaving the sealed
+					// intent unpushed and the delivery PR's CI running on stale
+					// pre-fix code (observed: origin 20+ commits behind at seal).
+					// Committing here makes intent main ahead, so the existing
+					// auto-push below pushes it (and any agent-committed
+					// reflection.md). No-op in filesystem mode (gitCommitState
+					// guards on isGitRepo).
+					gitCommitState(`haiku: seal intent ${slug}`)
 					// pre-tick merge + cursor walk handle branch alignment
 					result = dispatchOrchestratorAction(slug)
 				}
@@ -1228,6 +1360,22 @@ export default defineTool({
 			}
 			completeStageLastSig = sig
 			const stageToComplete = result.stage
+			// Forward-only observations gate. A stage owes its free-form
+			// observations.md before it merges (reflection on). Instead of
+			// merging, hand the agent the record_observations instruction;
+			// once the file lands the next tick re-emits complete_stage and
+			// the merge proceeds (carrying observations.md). Fires ONLY for
+			// the frontier stage the cursor just produced complete_stage for
+			// — never for already-merged stages — so it can't rewind an
+			// intent. (2026-05-20.)
+			if (stageOwesObservations(intentDir(slug), stageToComplete)) {
+				result = {
+					action: "record_observations",
+					intent: slug,
+					stage: stageToComplete,
+				}
+				break
+			}
 			try {
 				const { isGitRepo } = await import("../../state-tools.js")
 				if (!isGitRepo()) {
@@ -1236,6 +1384,42 @@ export default defineTool({
 					// fully approved). Re-tick — findCurrentStage walks past.
 					result = dispatchOrchestratorAction(slug)
 					continue
+				}
+				// observations.md is a plain-Write artifact (the agent wrote
+				// it for record_observations) — uncommitted, it never reaches
+				// the stage branch, so the merge below can't carry it onto
+				// intent main where the intent-close reflection pass reads it.
+				// Commit it now, on the stage branch, before the merge.
+				// Targeted to this one file so it can never sweep stray
+				// working-tree changes into the merge.
+				try {
+					const obsStageBranch = `haiku/${slug}/${stageToComplete}`
+					if (_safeCurrentBranchHere() === obsStageBranch) {
+						const obsRel = `.haiku/intents/${slug}/stages/${stageToComplete}/observations.md`
+						const obsDirty = execFileSync(
+							"git",
+							["status", "--porcelain", "--", obsRel],
+							{ encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+						).trim()
+						if (obsDirty) {
+							execFileSync("git", ["add", "--", obsRel], {
+								stdio: "ignore",
+							})
+							execFileSync(
+								"git",
+								[
+									"commit",
+									"-m",
+									`haiku: observations for stage ${stageToComplete}`,
+								],
+								{ stdio: "ignore" },
+							)
+						}
+					}
+				} catch {
+					/* non-fatal — if the commit fails the merge still attempts;
+					   a genuinely blocked tree surfaces as the existing
+					   merge-blocked error path below. */
 				}
 				const { mergeStageBranchIntoMain } = await import(
 					"../../git-worktree.js"
@@ -1256,7 +1440,24 @@ export default defineTool({
 							isError: true,
 						}
 					}
-					break
+					// Non-conflict merge failure (untracked-clobber the
+					// stash-retry couldn't recover, locked worktree, etc.).
+					// Previously this `break` fell through silently — the
+					// stage→intent-main merge never happened, the stage branch
+					// was orphaned, and the cursor rewound to derived state
+					// (bug 2026-05-20). Block loudly instead: the stage branch
+					// is preserved (never deleted on a failed merge), so no
+					// work is lost; the operator resolves the merge and
+					// re-runs.
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Stage '${stageToComplete}' completion blocked: its branch could not be merged into intent-main: ${outcome.message}\n\nThe stage branch \`haiku/${slug}/${stageToComplete}\` is intact (not deleted) — no work is lost. Resolve the merge on \`haiku/${slug}/main\` (commit/stash any blocking untracked files, then \`git merge haiku/${slug}/${stageToComplete}\`), then re-run.`,
+							},
+						],
+						isError: true,
+					}
 				}
 
 				// Downstream-invalidation on revisit re-completion.
@@ -1396,6 +1597,27 @@ export default defineTool({
 		// Helper to enrich result with preview and append instructions.
 		const withInstructions = (resultObj: Record<string, unknown>): string => {
 			enrichActionWithPreview(resultObj as OrchestratorAction)
+			// Drift cascade alarm — surfaced in the response so the
+			// agent sees a "consider /haiku:haiku-repair" recommendation when
+			// the engine has detected a runaway-loop pattern. The flag
+			// is stamped on intent.md by the cursor's pre-tick drift
+			// handler (see `stampDriftCascadeAlarm` in cursor.ts) and
+			// self-heals once the open drift FB count drops below
+			// threshold. The alarm map is keyed by stage so per-stage
+			// noise doesn't leak across the intent.
+			const cascadeMap = intentMeta.drift_cascade_alarm
+			if (
+				cascadeMap &&
+				typeof cascadeMap === "object" &&
+				!Array.isArray(cascadeMap) &&
+				Object.keys(cascadeMap as Record<string, unknown>).length > 0
+			) {
+				resultObj.drift_cascade_alarm = {
+					stages: Object.keys(cascadeMap as Record<string, unknown>),
+					recommendation:
+						"Drift cascade detected — the engine is suppressing new drift FBs while the queue drains. If this recurs after the queue clears, run `/haiku:haiku-repair` to refresh the witness baseline; this typically happens after a plugin version migration.",
+				}
+			}
 			const instructions = buildRunInstructions(
 				slug,
 				intentStudio,
@@ -1442,7 +1664,7 @@ export default defineTool({
 					} catch {
 						/* non-fatal */
 					}
-					result.message = `${(result.message as string) || ""}\n\nThe engine opened the MR for you: ${opened.createdUrl} — base is \`haiku/${slug}/main\` so the workflow engine can detect the merge. Tell the user; they review and merge when ready, then run /haiku:pickup.`
+					result.message = `${(result.message as string) || ""}\n\nThe engine opened the MR for you: ${opened.createdUrl} — base is \`haiku/${slug}/main\` so the workflow engine can detect the merge. Tell the user; they review and merge when ready, then run /haiku:haiku-pickup.`
 				} else if (opened.compareUrl) {
 					result.message = `${(result.message as string) || ""}\n\nEngine couldn't open the MR via gh/glab (${opened.prError ?? opened.pushError ?? "no CLI found"}). Surface this URL to the user — clicking it opens the MR with base \`haiku/${slug}/main\` pre-filled: ${opened.compareUrl}. After the user pastes the resulting URL, call haiku_run_next { intent: "${slug}", external_review_url: "<url>" }.`
 				} else {
@@ -1544,7 +1766,7 @@ export default defineTool({
 				: ((result.next_stage as string | null) ?? null)
 			if (isUserGate && gateKind === "approval" && stage) {
 				try {
-					const { resolveStudioStages } = await import(
+					const { resolveIntentStages } = await import(
 						"../../orchestrator/studio.js"
 					)
 					const intentFile = join(findHaikuRoot(), "intents", slug, "intent.md")
@@ -1553,7 +1775,10 @@ export default defineTool({
 						: {}
 					const studioName = (intentFm.studio as string) || ""
 					if (studioName) {
-						const stages = resolveStudioStages(studioName) ?? []
+						// Route by the intent's CANONICAL plan, not the studio
+						// superset — a dropped optional stage is skipped, and a gate
+						// on the plan's true final stage routes to completion.
+						const stages = resolveIntentStages(intentFm, studioName)
 						const idx = stages.indexOf(stage)
 						if (idx >= 0 && idx < stages.length - 1) {
 							nextStage = stages[idx + 1]
@@ -1628,42 +1853,16 @@ export default defineTool({
 					nextPhase,
 				})
 
-				// v4: gate session pointers land on intent.md regardless of
-				// scope (stage state.json is gone). Stage-scope gates use
-				// keyed fields so multiple stages can have concurrent
-				// sessions without colliding (a discrete-mode intent could
-				// have an external MR open on stage A while stage B's user
-				// gate is also open on the local review server).
-				//
-				// M6 will move these to a session-server side store; for now
-				// stamping intent.md as a transient pointer keeps await_gate
-				// recovery working.
-				try {
-					const intentMdPath = join(intentDir(slug), "intent.md")
-					const sessionKey = stage
-						? `gate_review_session_${stage}`
-						: "gate_review_session_id"
-					const urlKey = stage ? `gate_review_url_${stage}` : "gate_review_url"
-					setFrontmatterField(intentMdPath, sessionKey, prepared.session_id)
-					setFrontmatterField(intentMdPath, urlKey, prepared.review_url)
-					setFrontmatterField(intentMdPath, "gate_review_context", gateContext)
-					if (nextStage !== undefined && nextStage !== null) {
-						setFrontmatterField(
-							intentMdPath,
-							"gate_review_next_stage",
-							nextStage,
-						)
-					}
-					if (nextPhase !== undefined && nextPhase !== null) {
-						setFrontmatterField(
-							intentMdPath,
-							"gate_review_next_phase",
-							nextPhase,
-						)
-					}
-				} catch {
-					/* non-fatal — agent can still pass session_id explicitly */
-				}
+				// No repo-persisted session pointer (2026-05-26 — "the MCP
+				// is long-lived; the connection is to the MCP, not the
+				// tool"). The session id and review url stay in-memory on
+				// the registry (keyed by intent slug); the routing
+				// (gate_context / next_stage / next_phase) is computed here
+				// and handed to the inline await as args below. Nothing
+				// about this gate is written to intent.md, so a refresh or
+				// host restart can't reattach a STALE session id — the
+				// next run_next re-derives the gate from the cursor and the
+				// live registry reattaches the current tab.
 
 				syncSessionMetadata(slug, args.state_file as string | undefined)
 
@@ -1728,11 +1927,24 @@ export default defineTool({
 				// confirmed the tab was open. The user's guidance:
 				// `run_next` should always handle the pop AND the await on
 				// these hosts.
+				// "Attached" means a browser is GENUINELY heartbeating for
+				// this intent — NOT merely that a session record exists.
+				// `findLiveReviewSessionForIntent` returns any non-presence-
+				// lost record, including a session whose SPA never connected;
+				// keying the launch decision off that left a never-attached
+				// session SUPPRESSING the launch, so no browser opened and the
+				// inline await blocked silently for minutes (2026-05-26
+				// CRITICAL — the gate "wouldn't open"). Use genuine attachment
+				// so the browser (re)launches whenever no live tab exists.
 				const isAttachedForIntent = () =>
 					isBrowserAttached(prepared.session_id) ||
-					findLiveReviewSessionForIntent(slug) !== undefined
+					hasAttachedReviewSessionForIntent(slug)
 				if (!prepared.browser_attached && !isAttachedForIntent()) {
-					launchBrowserBestEffort(prepared.review_url, "Gate review")
+					launchBrowserBestEffort(
+						prepared.review_url,
+						"Gate review",
+						prepared.session_id,
+					)
 				}
 
 				// Engine-side blocking: dispatch to haiku_await_gate
@@ -1764,6 +1976,12 @@ export default defineTool({
 						session_id: prepared.session_id,
 						review_url: prepared.review_url,
 						auto_open: false,
+						// Hand the routing inline so await_gate needs no
+						// repo-persisted pointer to know what this gate does
+						// on approval.
+						gate_context: gateContext,
+						next_stage: nextStage,
+						next_phase: nextPhase,
 						...(stFile ? { state_file: stFile } : {}),
 					},
 					signal,
@@ -1996,6 +2214,22 @@ export default defineTool({
 							console.error(
 								`[haiku] auto-push of ${branch} failed: ${pushResult.error}`,
 							)
+						}
+					} else {
+						// No active stage = intent-completion phase: every stage
+						// is merged into intent main. Push intent main so the
+						// delivery PR (intent main → mainline) reflects the full
+						// merged work and its CI runs on it — that's the state
+						// the delivery-verifier audits. Guarded on ahead-of-origin
+						// so a settled intent doesn't fire a network call per tick.
+						const intentMain = `haiku/${slug}/main`
+						if (branchExists(intentMain) && branchAheadOfOrigin(intentMain)) {
+							const mainPush = pushBranchToOrigin(intentMain)
+							if (!mainPush.ok && mainPush.error) {
+								console.error(
+									`[haiku] auto-push of ${intentMain} failed: ${mainPush.error}`,
+								)
+							}
 						}
 					}
 				}

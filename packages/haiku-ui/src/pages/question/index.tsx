@@ -74,7 +74,7 @@ export function QuestionPageModule({
 	}
 
 	return (
-		<SessionShell kind="Question" title={dynamicTitle ?? undefined}>
+		<SessionShell kind="Question" title={dynamicTitle ?? undefined} annotatable>
 			<QuestionPage session={session} sessionId={sessionId} wsRef={wsRef} />
 		</SessionShell>
 	)

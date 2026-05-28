@@ -10,20 +10,22 @@ inputs: []
 
 # Triage
 
-The first response phase. An alert fired, a customer reported impact, or an operator noticed something wrong — and the job of this stage is to convert that noisy signal into a structured incident with named ownership, declared severity, and a known blast radius. Triage is the difference between "something might be wrong" and "we are running incident SEV-2, IC is named, comms are out."
+The first response phase of an incident. An alert fired, a customer reported impact, or an operator noticed something wrong — and this stage converts that noisy signal into a structured incident with named ownership, a declared severity, and a known blast radius. It's the difference between "something might be wrong" and "we're running a SEV-2, the IC is named, comms are out."
 
-## Per-unit baton
+## Scope
 
-Each triage unit walks `incident-commander → first-responder → verifier` in order. A unit here is one triage decision — declaring the incident, classifying severity, or scoping the blast radius for a specific surface:
+Incident framing: ownership, severity, and blast radius from the raw signal. Triage decides *what this incident is, how bad it is, and who runs it* — not why it's happening (investigate) or how to stop it (mitigate). It establishes the source of truth the rest of the response works from.
 
-- **`incident-commander`** (plan) takes ownership, declares severity (SEV-1 / SEV-2 / SEV-3), assigns roles, and frames the response. The baton: a declaration with named IC, scribe, comms lead, and a stated severity with justification.
-- **`first-responder`** (do) confirms the incident is real with ground-truth signals, captures ephemeral diagnostic data before it rotates out of the observability platform, and measures actual user impact. The baton: an `INCIDENT-BRIEF.md` slice with timestamps, affected surfaces, sample errors, and the user-impact number that justified the severity.
-- **`verifier`** (verify) checks the brief against the stage's body-level rules — severity matches measured impact, blast radius accounts for downstream dependencies, escalation path matches the severity tier. Advances or rejects to the responsible hat.
+## What to do
 
-## Inputs and outputs
+- Declare the incident and assign roles — IC, scribe, comms lead — so ownership is unambiguous from the start.
+- Classify severity against measured user impact, with a stated justification, not a gut tier.
+- Confirm the incident is real with ground-truth signals and capture ephemeral diagnostic data before it rotates out.
+- Scope the blast radius to include downstream dependencies, not just the surface that alerted.
 
-This is the first stage in the lifecycle, so `inputs:` is empty — triage works from the raw signal (alert payload, customer report, dashboard observation) that the user brings to the intent. The output `INCIDENT-BRIEF.md` feeds every downstream stage and is the source of truth for "what is this incident."
+## What NOT to do
 
-## Fix loop and gate
-
-When review feedback opens against a triage decision, `fix_hats: [classifier, incident-commander, feedback-assessor]` dispatches per finding. The IC re-owns the corrected decision because severity and ownership are IC-scope choices. The gate is `auto` because triage is time-critical — the workflow advances as soon as the verifier signs off so investigation can start without waiting on a human approval round.
+- Don't chase root cause or build a timeline — that's the investigate stage.
+- Don't apply fixes, rollbacks, or flags to stop impact — that's mitigate.
+- Don't declare a severity the measured impact doesn't justify.
+- Don't stall the structured incident waiting for perfect data; triage is time-critical and downstream stages refine it.

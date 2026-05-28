@@ -12,22 +12,22 @@ inputs:
 
 # Content
 
-Produce the campaign assets the launch stage will distribute: copy, landing pages, emails, social posts, ad creative. Every asset executes the approved messaging framework for a specific audience segment on a specific channel. This is where the strategy becomes something a customer can actually read or see.
+Produce the campaign assets the launch stage will distribute — copy, landing pages, emails, social posts, ad creative. Every asset executes the approved messaging framework for a specific audience segment on a specific channel. This is where the strategy becomes something a customer can actually read or see.
 
-## Per-unit baton
+## Scope
 
-Each content unit walks the three hats in `plan → do → verify` order:
+Authoring channel-ready assets against the messaging framework. Content decides *what the customer-facing material actually says and looks like* — not the strategy it executes (strategy), the live activation sequence (launch), or the results analysis (measure). A unit is one asset family (a launch email sequence, a primary landing page, a channel's ad set), not a single post.
 
-- **`content-creator`** (plan + do) — adapts the messaging framework to this asset's channel and segment, produces drafted copy and asset specifications
-- **`copy-editor`** (do — refinement) — sharpens the creator's draft for clarity, tone fit, and call-to-action strength without rewriting from scratch
-- **`verifier`** (verify) — confirms the asset is on-message, on-brand, complete (no placeholders), and traceable to the strategy
+## What to do
 
-A unit here is one asset family (e.g. "launch email sequence", "primary landing page", "channel A ad set") — not one channel post.
+- Adapt the messaging framework to each asset's specific channel and segment rather than reusing one generic treatment.
+- Sharpen drafts for clarity, tone fit, and call-to-action strength.
+- Keep every asset on-message, on-brand, and traceable back to the strategy it executes.
+- Deliver complete, channel-ready assets — no placeholders, no "copy TBD."
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes `strategy/messaging-framework` (value proposition, proof points, tone, audience-to-channel map). Produces channel-ready content assets and per-asset rationale linking back to the messaging framework, which the `launch` stage distributes.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, content-creator, feedback-assessor]` dispatches per finding — the copy-editor is intentionally not in the fix loop because the creator owns the underlying messaging choices. The gate is `ask` — the user approves assets locally before distribution, since live channel mistakes are expensive to retract.
+- Don't change the messaging strategy to fit an asset — a wrong framework is a revisit to strategy, not a quiet reinterpretation.
+- Don't distribute or schedule anything; launch puts assets live.
+- Don't ship an asset with placeholder copy or an unresolved call to action.
+- Don't add channels or segments the strategy didn't scope.

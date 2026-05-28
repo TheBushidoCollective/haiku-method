@@ -1,6 +1,7 @@
 ---
 name: transformation
 description: Transform and model data for the target schema
+optional: true
 hats: [transformer, data-modeler, verifier]
 fix_hats: [classifier, transformer, feedback-assessor]
 review: ask
@@ -12,45 +13,22 @@ inputs:
 
 # Transformation
 
-Convert raw staged data into the modeled, queryable shape the analytical
-consumers actually need. This stage owns the target data model — grain
-definitions, surrogate keys, SCD strategy, business-rule encoding — and the
-transformation code that produces it. Business logic that lives anywhere
-other than this stage's models is leakage; reviewers downstream will hunt
-for it and find drift.
+Convert raw staged data into the modeled, queryable shape the analytical consumers actually need. This stage owns the target data model and the code that materializes it — it's where the pipeline's business meaning is encoded.
 
-## Per-unit baton
+## Scope
 
-Each transformation unit is one **target model** (one entity, one grain).
-The unit walks the three hats in `plan → do → verify` order:
+Defining the target model — grain, surrogate keys, SCD strategy, business-rule encoding — and writing the transformation code that produces it. Transformation decides *what the modeled data is and how it's computed* — it does not extract data into staging (extraction) or test the result (validation).
 
-- **`data-modeler`** (plan) defines the model — grain, columns, surrogate
-  key, SCD type per dimension, primary-query access patterns — and writes
-  the model spec
-- **`transformer`** (do) writes the transformation code that materializes
-  the model from staged sources, with idempotency, explicit type handling,
-  and named intermediate steps over deep subquery nesting
-- **`verifier`** (verify) validates the artifact body-only against substance,
-  citation, internal consistency, and decision-register accountability
+## What to do
 
-Note: the `hats:` order above is `transformer, data-modeler, verifier`, which
-historically grew do-first. The model spec written by the data-modeler is
-the load-bearing input to the transformer; treat data-modeler as the plan
-role conceptually even though the file order doesn't reflect it. A future
-revision may swap them.
+- Define each model's grain, columns, surrogate key, SCD type, and primary query access patterns before writing transformation code.
+- Materialize models from staged sources with idempotency and explicit type handling.
+- Keep all business logic inside the models; logic that leaks elsewhere is drift downstream reviewers will hunt for.
+- Favor named intermediate steps over deep subquery nesting so the model stays legible.
 
-## Inputs and outputs
+## What NOT to do
 
-Staged data from extraction is the input. The stage produces `DATA-MODEL.md`
-(intent-scope) — the catalog of every target entity, its grain, columns,
-relationships, and SCD strategy — plus the transformation code that
-populates them.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, transformer, feedback-assessor]` dispatches per
-finding. The gate is `ask` — a human signs off on the data model and
-transformation logic before validation tests run against them, because the
-model shape is hard to change once analytical consumers depend on it.
-Project overlays may add house-style modeling conventions (naming, layer
-folders, SCD-type defaults) without modifying plugin defaults.
+- Don't build or re-run extraction connectors — that's the extraction stage.
+- Don't write the data-quality test suite — that's validation.
+- Don't reshape the source profile discovery established; if it's wrong, that's a revisit upstream.
+- Don't scatter business rules outside the model where consumers can't find or trust them.

@@ -3,8 +3,13 @@
 // All routes are session-scoped: each one resolves the session, the
 // session's intent_dir or per-session image base, then delegates to
 // path-safety helpers (rejectUnsafePathParam / resolvePathSafe /
-// serveFile / serveUnderRoot). No auth bypass paths; every request
-// must clear requireTunnelAuth.
+// serveFile / serveArtifact / serveUnderRoot). No auth bypass paths; every
+// request must clear requireTunnelAuth.
+//
+// HTML artifacts route through `serveArtifact`, which inlines adjacent
+// stylesheets so a wireframe's `<link rel="stylesheet">` styles correctly
+// once the SPA srcDocs it (the bytes stay octet-stream/attachment — never a
+// renderable text/html under the tunnel origin). See path-safety.ts.
 //
 // Routes:
 //   GET /files/:sessionId/*            → intent dir + sibling knowledge dir
@@ -21,6 +26,7 @@ import { requireTunnelAuth } from "./auth.js"
 import {
 	rejectUnsafePathParam,
 	resolvePathSafe,
+	serveArtifact,
 	serveFile,
 	serveUnderRoot,
 } from "./path-safety.js"
@@ -57,7 +63,7 @@ export function registerFileServeRoutes(instance: FastifyInstance): void {
 					escaped = true
 					continue
 				}
-				return serveFile(reply, safe.path)
+				return serveArtifact(reply, safe.path, baseDir)
 			}
 			if (escaped) {
 				reply.status(403).send({ error: "forbidden_path_traversal" })
@@ -111,7 +117,15 @@ export function registerFileServeRoutes(instance: FastifyInstance): void {
 			if (!requireTunnelAuth(req, reply, sessionId)) return
 			if (rejectUnsafePathParam(reply, sessionId, filePath)) return
 			const session = getSession(sessionId)
-			if (!session || session.session_type !== "review") {
+			// Review AND view sessions are both rooted at intent_dir and
+			// both expose stage artifacts; `haiku_view` sessions piggyback
+			// on this route so the SPA's artifact-browser can serve files
+			// through the same path-safety + tunnel-auth chain the review
+			// pane already uses.
+			if (
+				!session ||
+				(session.session_type !== "review" && session.session_type !== "view")
+			) {
 				reply.status(404).send("Session not found")
 				return
 			}

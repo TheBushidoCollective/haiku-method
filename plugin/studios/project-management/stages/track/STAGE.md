@@ -15,22 +15,22 @@ outputs:
 
 # Track
 
-Maintain a current, evidence-backed view of project state: actual progress against the plan baseline, the live risk register, the issue log, and any change-control requests. Track is the operational heartbeat — it runs on a cadence (weekly, bi-weekly, per sprint) and produces the inputs `report` turns into stakeholder communication.
+Maintain a current, evidence-backed view of project state: actual progress against the plan baseline, the live risk register, the issue log, and any change-control requests. Track is the operational heartbeat — it runs on a cadence and produces the inputs report turns into stakeholder communication.
 
-## Per-unit baton
+## Scope
 
-Each unit is a tracking surface — a work-package status entry, a risk-register row, an issue log entry, or a change-control item. The three hats walk it in `plan → do → verify` order:
+Progress measurement, risk monitoring, and issue management against the plan baseline. Track decides *where the project actually is versus where the plan said it would be* — not how the work was planned (plan) or how the state is communicated to stakeholders (report). Units are tracking surfaces: a work-package status, a risk-register row, an issue, a change-control item.
 
-- **`tracker`** (plan) collects and verifies progress data, computes planned-vs-actual variance, and identifies items off-track with named causes
-- **`risk-monitor`** (do) reassesses the risk register against current conditions, monitors trigger thresholds, tracks mitigation execution, and surfaces newly-emerged risks
-- **`verifier`** (verify) checks the body for currency of data, specific variance causes (not generic reasons), and named owners / target dates on open issues — advances or rejects to the responsible hat
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+- Collect and verify progress data, compute planned-vs-actual variance, and identify off-track items with named causes.
+- Reassess the risk register against current conditions, monitor trigger thresholds, and surface newly emerged risks.
+- Track mitigation execution and give every open issue a named owner and target date.
+- Keep the data current to the cadence — stale tracking produces stale reporting.
 
-## Inputs and outputs
+## What NOT to do
 
-The track stage consumes `plan/discovery/project-plan` as the baseline. Its output is `STATUS-REPORT.md`, consumed by `report` (turned into stakeholder dashboards) and `close` (the run-history that informs the retrospective).
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, tracker, feedback-assessor]` dispatches per finding. The gate is `auto` — tracking runs at a high cadence and per-cycle status doesn't typically warrant a human gate; significant variance escalates via the issue log and risk register, not by blocking the track cadence. Project overlays at `.haiku/studios/project-management/stages/track/` can integrate with a specific PM tool, ticket tracker, or Gantt / timeline tool without modifying the plugin defaults.
+- Don't change the plan baseline to match reality — variance is a signal to surface, not a number to erase.
+- Don't shape the data into stakeholder reports; that's the report stage consuming this output.
+- Don't record a generic variance cause ("behind schedule") instead of the specific one.
+- Don't leave an open issue without an owner and a target date.

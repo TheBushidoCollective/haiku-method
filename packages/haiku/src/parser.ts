@@ -1,4 +1,4 @@
-import type { Dirent } from "node:fs"
+import { type Dirent, existsSync } from "node:fs"
 import { readdir, readFile } from "node:fs/promises"
 import { basename, join, relative, resolve } from "node:path"
 import {
@@ -6,8 +6,12 @@ import {
 	isDuplicateKeyError,
 } from "@haiku/shared/frontmatter"
 import matter from "gray-matter"
+import { inlineAdjacentStylesheets, intentDirOf } from "./html-inline.js"
 import { extractSections } from "./markdown.js"
-import { STAGE_INTERNAL_ENTRIES } from "./stage-internal-entries.js"
+import {
+	INTENT_ROOT_INTERNAL_ENTRIES,
+	STAGE_INTERNAL_ENTRIES,
+} from "./stage-internal-entries.js"
 import type {
 	DiscoveryFrontmatter,
 	IntentFrontmatter,
@@ -296,6 +300,24 @@ async function deriveStagePhaseFromDisk(
 	if (unitFmList.length === 0) {
 		return { status: "pending", phase: "elaborate" }
 	}
+	// PRE-execute spec review (`reviews.<role>`). The cursor walks this
+	// between elaborate completion and wave-ready hat dispatch, so it MUST
+	// be checked before execute — a stage awaiting spec review has units
+	// with `started_at: null`, which the wave-ready check below would
+	// otherwise mislabel as "execute" (reported 2026-05-19). Reviews are
+	// stamped before any hat runs, so once execution is underway this
+	// passes and execute fires.
+	const allReviewsStamped = unitFmList.every((fm) => {
+		const r = fm.reviews
+		return (
+			r &&
+			typeof r === "object" &&
+			Object.values(r as Record<string, unknown>).every((v) => Boolean(v))
+		)
+	})
+	if (!allReviewsStamped) {
+		return { status: "in_progress", phase: "review" }
+	}
 	const anyWaveReady = unitFmList.some(
 		(fm) => !fm.started_at || fm.started_at === null,
 	)
@@ -331,17 +353,8 @@ async function deriveStagePhaseFromDisk(
 		// stage flips to `completed` status.
 		return { status: "in_progress", phase: "complete" }
 	}
-	const allReviewsStamped = unitFmList.every((fm) => {
-		const r = fm.reviews
-		return (
-			r &&
-			typeof r === "object" &&
-			Object.values(r as Record<string, unknown>).every((v) => Boolean(v))
-		)
-	})
-	if (!allReviewsStamped) {
-		return { status: "in_progress", phase: "review" }
-	}
+	// Reviews were already confirmed stamped above (pre-execute gate). The
+	// remaining unsigned sign-offs are POST-execute approvals.
 	const allApprovalsStamped = unitFmList.every((fm) => {
 		const a = fm.approvals
 		return (
@@ -473,6 +486,50 @@ export async function parseStageArtifacts(
 
 const OUTPUT_IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"]
 const OUTPUT_HTML_EXTS = [".html", ".htm"]
+const OUTPUT_VIDEO_EXTS = [".mp4", ".webm", ".mov", ".m4v", ".ogv"]
+
+/** Map a file extension to a highlight.js language id. Drives the
+ *  syntax-highlighted code renderer in the review SPA. Extensions in
+ *  OUTPUT_TEXT_EXTS that aren't here still render — as a plain `<pre>`
+ *  (language undefined). */
+const EXT_TO_HLJS_LANG: Record<string, string> = {
+	".ts": "typescript",
+	".tsx": "tsx",
+	".js": "javascript",
+	".jsx": "jsx",
+	".mjs": "javascript",
+	".cjs": "javascript",
+	".py": "python",
+	".rb": "ruby",
+	".go": "go",
+	".rs": "rust",
+	".java": "java",
+	".kt": "kotlin",
+	".swift": "swift",
+	".c": "c",
+	".h": "c",
+	".cpp": "cpp",
+	".cs": "csharp",
+	".css": "css",
+	".scss": "scss",
+	".sh": "bash",
+	".bash": "bash",
+	".zsh": "bash",
+	".sql": "sql",
+	".graphql": "graphql",
+	".gql": "graphql",
+	".yaml": "yaml",
+	".yml": "yaml",
+	".json": "json",
+	".toml": "ini",
+	".ini": "ini",
+	".env": "bash",
+	".tf": "terraform",
+	".hcl": "terraform",
+	".cue": "go",
+	".feature": "gherkin",
+	".gherkin": "gherkin",
+}
 // ASCII / text-shaped outputs that the review pane should be able to
 // render inline (read, not download). Gherkin `.feature` files for
 // Cucumber are the canonical case — reviewers reported they couldn't
@@ -525,8 +582,19 @@ const OUTPUT_TEXT_EXTS = [
 export interface OutputArtifact {
 	stage: string
 	name: string
-	type: "markdown" | "html" | "image" | "file"
-	/** Markdown and HTML content is inlined; images and unknown files use relativePath */
+	type: "markdown" | "html" | "image" | "video" | "code" | "file"
+	/** For `type: "code"` — the highlight.js language id (e.g. `tsx`,
+	 *  `python`, `yaml`). Undefined when the extension is text-shaped but
+	 *  has no known grammar — the renderer falls through to a plain
+	 *  `<pre>`. */
+	language?: string
+	/** For "other" files: the top-level subdirectory under
+	 *  `stages/<stage>/` the file lives in (e.g. `proofs`). The SPA groups
+	 *  these into a per-directory tab; a stage-root loose file leaves this
+	 *  undefined and lands in the catch-all "Other" tab. */
+	directory?: string
+	/** Markdown, code, and HTML content is inlined; images, video, and
+	 *  unknown binary files use relativePath */
 	content?: string
 	/** Relative path within the stage artifacts dir (for serving via HTTP) */
 	relativePath?: string
@@ -561,10 +629,11 @@ async function walkArtifactsDir(dir: string): Promise<string[]> {
 
 /**
  * Build an OutputArtifact entry from a file by classifying its extension.
- * `name` is the display name (typically the path-from-some-root with the
- * extension stripped). `relativePath` is intent-dir-relative for HTTP
- * serving by `/stage-artifacts/:sessionId/*`. Returns null when the file
- * can't be read.
+ * `name` is the display name — the path-from-some-root WITH the extension
+ * intact (so `foo.html` and `foo.md` stay distinct and the ext-carrying
+ * unit-frontmatter links resolve). `relativePath` is intent-dir-relative
+ * for HTTP serving by `/stage-artifacts/:sessionId/*`. Returns null when
+ * the file can't be read.
  */
 async function buildArtifactEntry(
 	fullPath: string,
@@ -585,7 +654,15 @@ async function buildArtifactEntry(
 	}
 	if (OUTPUT_HTML_EXTS.includes(ext)) {
 		try {
-			const content = await readFile(fullPath, "utf-8")
+			const raw = await readFile(fullPath, "utf-8")
+			// Inline adjacent stylesheets so the body styles correctly in the
+			// SPA's srcDoc iframe (which has no artifact base URL). See
+			// `inlineAdjacentStylesheets`.
+			const content = await inlineAdjacentStylesheets(
+				raw,
+				fullPath,
+				intentDirOf(fullPath, relativePath),
+			)
 			return { stage, name, type: "html", content, relativePath }
 		} catch {
 			return null
@@ -594,20 +671,25 @@ async function buildArtifactEntry(
 	if (OUTPUT_IMAGE_EXTS.includes(ext)) {
 		return { stage, name, type: "image", relativePath }
 	}
+	if (OUTPUT_VIDEO_EXTS.includes(ext)) {
+		// Binary media — served via the tunnel URL, played in a <video>.
+		return { stage, name, type: "video", relativePath }
+	}
 	if (OUTPUT_TEXT_EXTS.includes(ext)) {
 		try {
 			const content = await readFile(fullPath, "utf-8")
-			// Surface text-shaped outputs (.feature, .yaml, .ts, etc.) as
-			// markdown so the renderer's existing markdown viewer renders
-			// them as readable text rather than offering a download. The
-			// content isn't actually markdown — but the renderer's
-			// markdown path tolerates plain text gracefully (no markdown
-			// syntax = renders as paragraphs), and the alternative
-			// (binary file download) is the bug we're fixing.
+			// Text-shaped outputs (.tsx, .py, .yaml, .feature, …) render as
+			// CODE, not markdown. The old behavior typed them `markdown` and
+			// fed them through remark — which parsed embedded JSX/HTML
+			// (`<div>`, `<Component>`) as inline HTML and DOMPurify stripped
+			// it, leaving an empty box (reported 2026-05-27 on a `.tsx`
+			// output). As `code` the renderer escapes + syntax-highlights the
+			// source and the inline-comment layer can anchor to it.
 			return {
 				stage,
 				name,
-				type: "markdown",
+				type: "code",
+				language: EXT_TO_HLJS_LANG[ext],
 				content,
 				relativePath,
 			}
@@ -616,11 +698,41 @@ async function buildArtifactEntry(
 			// reviewer at least sees the entry.
 		}
 	}
-	// Unknown extension — surface as a download link rather than silently
-	// dropping the file. A stage's artifact set should be visible in the
-	// review screen regardless of whether the renderer has a specialized
-	// view for the format.
+	// Unknown extension: sniff for text. Readable text → `code` with no
+	// language (renders as a plain escaped `<pre>`). Binary → a download
+	// link. Either way the entry stays visible in the review screen rather
+	// than being silently dropped.
+	try {
+		const buf = await readFile(fullPath)
+		if (isProbablyTextBuffer(buf)) {
+			return {
+				stage,
+				name,
+				type: "code",
+				content: buf.toString("utf-8"),
+				relativePath,
+			}
+		}
+	} catch {
+		// Unreadable — fall through to the download entry.
+	}
 	return { stage, name, type: "file", relativePath }
+}
+
+/** Heuristic: is this buffer textual? A NUL byte in the first 8KB is the
+ *  classic binary signal; we also bail if a large share of the sample is
+ *  non-printable control bytes. Good enough to decide `<pre>` vs download
+ *  for an unknown extension. */
+function isProbablyTextBuffer(buf: Buffer): boolean {
+	const sample = buf.subarray(0, 8192)
+	if (sample.length === 0) return true // empty file → render as empty <pre>
+	let suspicious = 0
+	for (const byte of sample) {
+		if (byte === 0) return false // NUL → binary
+		// Allow tab(9), LF(10), CR(13); flag other C0 control bytes.
+		if (byte < 9 || (byte > 13 && byte < 32)) suspicious += 1
+	}
+	return suspicious / sample.length < 0.1
 }
 
 /**
@@ -674,6 +786,17 @@ async function parseUnitOutputs(
 	const out: Array<{ absPath: string; artifact: OutputArtifact }> = []
 	const intentDirAbs = resolve(intentDir)
 	const intentDirAbsSlash = `${intentDirAbs}/`
+	// The repo root is the dir that CONTAINS `.haiku/` — software outputs are
+	// the actual codebase files the unit edited (declared repo-root-relative,
+	// e.g. `web/apps/admin/.../WorkerDates.tsx`), living there, NOT under the
+	// intent dir. Derived from the intent path's `/.haiku/` segment, with a
+	// 3-levels-up fallback (`.haiku/intents/<slug>`).
+	const haikuSeg = intentDirAbs.indexOf("/.haiku/")
+	const repoRootAbs =
+		haikuSeg >= 0
+			? intentDirAbs.slice(0, haikuSeg)
+			: resolve(intentDirAbs, "..", "..", "..")
+	const repoRootAbsSlash = `${repoRootAbs}/`
 	let stageEntries: Dirent<string>[]
 	try {
 		stageEntries = await readdir(join(intentDir, "stages"), {
@@ -713,27 +836,58 @@ async function parseUnitOutputs(
 			}
 			for (const declared of outputs) {
 				const intentRel = intentRelativeOutputPath(declared, intentDir)
-				const absPath = resolve(intentDirAbs, intentRel)
-				// Path-containment check: silently skip anything that
-				// resolves outside the intent dir (`../../.env`,
-				// `/etc/passwd`, symlink-targeted paths, etc.). Equality
-				// check rejects `absPath === intentDirAbs` (declaring the
-				// intent dir itself as an output is meaningless).
-				if (
-					absPath !== intentDirAbs &&
-					!absPath.startsWith(intentDirAbsSlash)
-				) {
-					continue
+				const intentAbs = resolve(intentDirAbs, intentRel)
+				const withinIntent =
+					intentAbs !== intentDirAbs && intentAbs.startsWith(intentDirAbsSlash)
+
+				// Resolve the file to read. Intent-scoped outputs (product/*.md,
+				// features/*.feature, knowledge/*) live under the intent dir.
+				// SOFTWARE outputs are the codebase files the unit edited —
+				// declared repo-root-relative and living at the repo root, NOT
+				// under `.haiku/intents/<slug>/`. Try the intent path first; if
+				// nothing's there, fall back to the repo root so a software
+				// output's content is FOUND + inlined (and syntax-highlighted)
+				// instead of rendering as "not on disk" (reported 2026-05-27).
+				let absPath = intentAbs
+				// Full filename incl. extension — ext-less names collide
+				// same-stem files + break the ext-carrying FM links (2026-05-26).
+				let displayName = relative(intentDirAbs, intentAbs)
+				// Intent-dir-relative path the `/stage-artifacts/:sessionId/*`
+				// tunnel serves. A repo-root file is outside the intent dir and
+				// can't be tunnel-served, so it carries no relativePath — code/
+				// text content is inlined by buildArtifactEntry regardless.
+				let serveRel: string | undefined = displayName
+				if (!(withinIntent && existsSync(intentAbs))) {
+					const repoAbs = resolve(repoRootAbs, declared)
+					const withinRepo =
+						repoAbs !== repoRootAbs && repoAbs.startsWith(repoRootAbsSlash)
+					if (withinRepo) {
+						// Software output: resolve against the repo root. If it
+						// exists, buildArtifactEntry inlines its content (code →
+						// highlighted); if it's missing, it surfaces as a "file"
+						// stub the SPA shows as "not on disk" — either way the
+						// declared output stays visible to the reviewer.
+						absPath = repoAbs
+						displayName = declared
+						serveRel = undefined
+					} else if (!withinIntent) {
+						// Resolves OUTSIDE both the intent dir AND the repo root →
+						// skip (`../../.env`, symlink targets, etc.).
+						continue
+					}
 				}
-				const safeRel = relative(intentDirAbs, absPath)
-				const nameWithDir = safeRel.replace(/\.[^.]+$/, "")
 				const entry = await buildArtifactEntry(
 					absPath,
 					stageName,
-					nameWithDir,
-					safeRel,
+					displayName,
+					serveRel ?? displayName,
 				)
-				if (entry) out.push({ absPath, artifact: entry })
+				if (entry) {
+					// Repo-root output: drop the (un-servable) tunnel relativePath;
+					// the inlined content is what the reviewer reads.
+					if (serveRel === undefined) entry.relativePath = undefined
+					out.push({ absPath, artifact: entry })
+				}
 			}
 		}
 	}
@@ -886,7 +1040,16 @@ export async function parseStageFiles(
 				// "wireframes/knowledge-upload" in the review screen instead of
 				// colliding with another `knowledge-upload` at a different depth.
 				const relFromArtifacts = relative(artifactsDir, fullPath)
-				const nameWithDir = relFromArtifacts.replace(/\.[^.]+$/, "")
+				// Keep the FULL filename (extension included) as the artifact
+				// name. Stripping it (the old behavior) collided same-stem files
+				// of different types — `foo.html` and a supporting `foo.md` both
+				// became "foo" — and broke the unit-frontmatter `outputs:` links,
+				// which carry the extension (`pathToReviewRoute`) and so couldn't
+				// match the ext-less name → "not found" (reported 2026-05-26). The
+				// extension stays intact end to end: display, route `$name`, and
+				// the `name`-keyed detail lookup. HTTP serving uses `relativePath`
+				// and declared-by uses `intentRelativePath` — both already full.
+				const nameWithDir = relFromArtifacts
 				// Intent-dir-relative path so the `/stage-artifacts/:sessionId/*`
 				// route resolves correctly against `session.intent_dir` without
 				// the call site having to add a `stages/` prefix downstream.
@@ -923,7 +1086,16 @@ export async function parseStageFiles(
 		files.sort((a, b) => a.relFromStage.localeCompare(b.relFromStage))
 		for (const { absPath, relFromStage } of files) {
 			if (seen.has(absPath)) continue
-			const nameWithDir = relFromStage.replace(/\.[^.]+$/, "")
+			// Stage-root narrative files have DEDICATED surfaces, so they don't
+			// belong in the catch-all "other" bucket: BRIEF.md → Overview,
+			// elaboration.md → the Elaboration tab, observations.md → Overview.
+			// (They're keyed into `stage_briefs` / `stage_elaborations` /
+			// `stage_observations` server-side.) Without this they double-showed
+			// in "Other" (reported 2026-05-27).
+			if (STAGE_ROOT_DEDICATED_FILES.has(relFromStage)) continue
+			// Keep the full filename (extension included) — see the artifacts
+			// walk above for why stripping it breaks links + collides types.
+			const nameWithDir = relFromStage
 			// HTTP path is intent-dir-relative so the existing
 			// `/stage-artifacts/:sessionId/*` route resolves correctly.
 			const httpPath = `stages/${stageName}/${relFromStage}`
@@ -934,10 +1106,87 @@ export async function parseStageFiles(
 				httpPath,
 			)
 			if (entry) {
+				// Tag the top-level subdirectory (the first path segment when
+				// the file is nested, e.g. `proofs/run-1.png` → `proofs`) so the
+				// SPA can group it into a per-directory tab. A stage-root loose
+				// file has no slash → directory stays undefined → "Other" tab.
+				const slash = relFromStage.indexOf("/")
+				if (slash > 0) entry.directory = relFromStage.slice(0, slash)
 				other.push(entry)
 				seen.add(absPath)
 			}
 		}
 	}
 	return { outputs, other }
+}
+
+/** Stage-root files that have their own dedicated review surface, so they
+ *  must NOT also appear in the catch-all "other" bucket. */
+const STAGE_ROOT_DEDICATED_FILES = new Set([
+	"BRIEF.md",
+	"elaboration.md",
+	"observations.md",
+])
+
+/**
+ * Intent-scope "other" files: anything at the intent ROOT
+ * (`.haiku/intents/{slug}/`) that ISN'T a known category dir, the intent
+ * spec, or a system bookkeeping/journal file (see
+ * `INTENT_ROOT_INTERNAL_ENTRIES` — `action-log.jsonl` / `write-audit.jsonl`
+ * et al. are excluded by design; they're system journals, never shown in
+ * the SPA). These surface in the intent-completion review's "Other" tab,
+ * NOT in any per-stage view (they belong to no stage). Returned as
+ * `OutputArtifact`s with `stage: ""` (the intent-scope marker) so the SPA
+ * can tell them apart from stage-scoped entries. Subdirectory files carry
+ * `directory` for the same per-directory grouping the stage Other tab uses.
+ */
+export async function parseIntentRootFiles(
+	intentDir: string,
+): Promise<OutputArtifact[]> {
+	const out: OutputArtifact[] = []
+	const files = await walkIntentRootRecursive(intentDir)
+	files.sort((a, b) => a.relFromRoot.localeCompare(b.relFromRoot))
+	for (const { absPath, relFromRoot } of files) {
+		const entry = await buildArtifactEntry(
+			absPath,
+			"", // intent-scope: no stage
+			relFromRoot,
+			relFromRoot, // httpPath is intent-dir-relative (no stages/ prefix)
+		)
+		if (!entry) continue
+		const slash = relFromRoot.indexOf("/")
+		if (slash > 0) entry.directory = relFromRoot.slice(0, slash)
+		out.push(entry)
+	}
+	return out
+}
+
+/**
+ * Walk the intent ROOT for files that aren't engine-internal. Skips
+ * `INTENT_ROOT_INTERNAL_ENTRIES` at depth 0 only (category dirs + the
+ * intent spec + system journals); once descended into a non-internal
+ * subdir, every file under it is fair game — same rule as the stage walk.
+ */
+async function walkIntentRootRecursive(
+	rootDir: string,
+	currentRel: string = "",
+): Promise<Array<{ absPath: string; relFromRoot: string }>> {
+	const out: Array<{ absPath: string; relFromRoot: string }> = []
+	let entries: Dirent<string>[]
+	try {
+		entries = await readdir(rootDir, { withFileTypes: true, encoding: "utf8" })
+	} catch {
+		return out
+	}
+	for (const e of entries) {
+		if (currentRel === "" && INTENT_ROOT_INTERNAL_ENTRIES.has(e.name)) continue
+		const rel = currentRel ? `${currentRel}/${e.name}` : e.name
+		const abs = join(rootDir, e.name)
+		if (e.isDirectory()) {
+			out.push(...(await walkIntentRootRecursive(abs, rel)))
+		} else if (e.isFile()) {
+			out.push({ absPath: abs, relFromRoot: rel })
+		}
+	}
+	return out
 }

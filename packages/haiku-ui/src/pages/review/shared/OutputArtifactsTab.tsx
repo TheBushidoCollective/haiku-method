@@ -6,6 +6,7 @@ import {
 } from "../../../organisms/InlineComments"
 import type { OutputArtifact } from "../../../types"
 import { authedAssetUrl } from "./asset-url"
+import { highlightCodeToHtml } from "./codeHighlight"
 import { DeclaringUnitsBanner } from "./DeclaringUnitsBanner"
 import { markdownToSimpleHtml } from "./section-helpers"
 
@@ -89,7 +90,11 @@ export function OutputArtifactsTab({
 						return (
 							<div key={stage}>
 								<h3 className="text-sm font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-3 mt-6 first:mt-0">
-									{stage.charAt(0).toUpperCase() + stage.slice(1)}
+									{/* Intent-scope entries carry stage "" — label them
+									    "Intent root" rather than render a blank header. */}
+									{stage
+										? stage.charAt(0).toUpperCase() + stage.slice(1)
+										: "Intent root"}
 								</h3>
 								{stageArtifacts.map((a, _i) => {
 									const globalIndex = artifacts.indexOf(a)
@@ -194,6 +199,61 @@ export function OutputArtifactsTab({
 														Click to expand
 													</p>
 												)}
+											</Card>
+										)
+									}
+									if (a.type === "code" && a.content) {
+										return (
+											<Card
+												key={`oa-${globalIndex}`}
+												id={`output-${globalIndex}`}
+											>
+												<SectionHeading>{a.name}</SectionHeading>
+												<DeclaringUnitsBanner
+													intentRelativePath={a.intentRelativePath}
+													declaredBy={outputDeclaredBy}
+													onUnitClick={onUnitClick}
+												/>
+												<InlineComments
+													htmlContent={highlightCodeToHtml(
+														a.content,
+														a.language,
+													)}
+													rawContent={a.content}
+													onCommentsChange={onInlineCommentsChange}
+												/>
+											</Card>
+										)
+									}
+									if (a.type === "video" && a.relativePath) {
+										const authedPath = authedAssetUrl(a.relativePath)
+										return (
+											<Card
+												key={`oa-${globalIndex}`}
+												id={`output-${globalIndex}`}
+											>
+												<div className="flex items-center justify-between mb-3">
+													<SectionHeading>{a.name}</SectionHeading>
+													<a
+														href={authedPath}
+														target="_blank"
+														rel="noopener noreferrer"
+														className="text-sm text-teal-600 dark:text-teal-400 hover:underline"
+													>
+														Open in new tab &#8599;
+													</a>
+												</div>
+												<DeclaringUnitsBanner
+													intentRelativePath={a.intentRelativePath}
+													declaredBy={outputDeclaredBy}
+													onUnitClick={onUnitClick}
+												/>
+												{/* biome-ignore lint/a11y/useMediaCaption: artifact videos carry no caption track */}
+												<video
+													src={authedPath}
+													controls
+													className="w-full max-h-[70vh] rounded-lg bg-black"
+												/>
 											</Card>
 										)
 									}

@@ -174,6 +174,71 @@ await test("create is idempotent for same slug/stage/FB", () => {
 	}
 })
 
+await test("creating a worktree gitignores the worktree pool (idempotently)", () => {
+	const { tmp, slug, stage } = setupRepo()
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+
+		// setupRepo writes no .gitignore — the create path must add one.
+		assert.ok(
+			!existsSync(join(tmp, ".gitignore")),
+			"precondition: no .gitignore before first worktree",
+		)
+
+		createFixChainWorktree(slug, stage, "FB-001")
+		const after = readFileSync(join(tmp, ".gitignore"), "utf8")
+		assert.match(
+			after,
+			/^\.haiku\/worktrees\/$/m,
+			`worktree pool must be gitignored. got:\n${after}`,
+		)
+
+		// A second worktree must NOT duplicate the entry.
+		createFixChainWorktree(slug, stage, "FB-002")
+		const again = readFileSync(join(tmp, ".gitignore"), "utf8")
+		const occurrences = again
+			.split("\n")
+			.filter((l) => l.trim() === ".haiku/worktrees/").length
+		assert.strictEqual(
+			occurrences,
+			1,
+			`entry must appear exactly once (idempotent). got:\n${again}`,
+		)
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
+await test("worktree gitignore: pre-existing entry is left untouched", () => {
+	const { tmp, slug, stage } = setupRepo()
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+
+		// A repo that already ignores the pool (slash-free variant) must not
+		// get a second entry appended.
+		writeFileSync(join(tmp, ".gitignore"), "node_modules\n.haiku/worktrees\n")
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-m", "pre-existing gitignore")
+
+		createFixChainWorktree(slug, stage, "FB-001")
+		const after = readFileSync(join(tmp, ".gitignore"), "utf8")
+		assert.ok(
+			!after.includes(".haiku/worktrees/\n"),
+			`must not append the slash variant when slash-free already present. got:\n${after}`,
+		)
+		assert.strictEqual(
+			after.split("\n").filter((l) => l.trim().startsWith(".haiku/worktrees"))
+				.length,
+			1,
+			`exactly one worktree-pool entry. got:\n${after}`,
+		)
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
 console.log("\n=== fix-chain: merge (clean) ===")
 
 await test("merges worktree back when no conflicts", () => {
@@ -988,7 +1053,7 @@ await test("merges from→to stage branch when toBranch is held by a foreign wor
 // ── consolidateStageBranches conflict pattern ───────────────────────────
 //
 // `consolidateStageBranches` is the orphan-discrete-intent recovery
-// merge — used by /haiku:repair on intents that have stage branches
+// merge — used by /haiku:haiku-repair on intents that have stage branches
 // but no haiku/{slug}/main. Originally it caught merge errors and
 // returned a generic `{success: false, message}`. Audit follow-up
 // upgraded it to the standard pattern: detect conflicts via

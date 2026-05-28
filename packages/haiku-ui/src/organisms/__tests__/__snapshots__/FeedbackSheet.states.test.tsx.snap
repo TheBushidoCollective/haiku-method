@@ -5,10 +5,10 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
   <div
     data-cell="closed"
   >
-    <dialog
+    <aside
+      aria-hidden="true"
       aria-labelledby="feedback-sheet-title"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl -translate-x-full transition-transform duration-300 ease-out pointer-events-none"
       data-testid="feedback-sheet"
       id="feedback-sheet"
       role="dialog"
@@ -36,20 +36,18 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
         </button>
       </header>
       <div
-        class="feedback-sheet__body flex-1 overflow-y-auto"
+        class="feedback-sheet__body flex-1 flex flex-col min-h-0"
       />
-    </dialog>
+    </aside>
   </div>
   <div
     data-cell="open-empty"
   >
-    <dialog
+    <aside
       aria-labelledby="feedback-sheet-title"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100 sheet-enter"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
       data-testid="feedback-sheet"
       id="feedback-sheet"
-      open=""
       role="dialog"
     >
       <header
@@ -75,20 +73,18 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
         </button>
       </header>
       <div
-        class="feedback-sheet__body flex-1 overflow-y-auto"
+        class="feedback-sheet__body flex-1 flex flex-col min-h-0"
       />
-    </dialog>
+    </aside>
   </div>
   <div
     data-cell="open-with-body"
   >
-    <dialog
+    <aside
       aria-labelledby="feedback-sheet-title"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100 sheet-enter"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
       data-testid="feedback-sheet"
       id="feedback-sheet"
-      open=""
       role="dialog"
     >
       <header
@@ -114,24 +110,22 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
         </button>
       </header>
       <div
-        class="feedback-sheet__body flex-1 overflow-y-auto"
+        class="feedback-sheet__body flex-1 flex flex-col min-h-0"
       >
         <p>
           Body content
         </p>
       </div>
-    </dialog>
+    </aside>
   </div>
   <div
     data-cell="open-custom-title"
   >
-    <dialog
+    <aside
       aria-labelledby="feedback-sheet-title"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100 sheet-enter"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
       data-testid="feedback-sheet"
       id="feedback-sheet"
-      open=""
       role="dialog"
     >
       <header
@@ -157,20 +151,18 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
         </button>
       </header>
       <div
-        class="feedback-sheet__body flex-1 overflow-y-auto"
+        class="feedback-sheet__body flex-1 flex flex-col min-h-0"
       />
-    </dialog>
+    </aside>
   </div>
   <div
     data-cell="open-custom-id"
   >
-    <dialog
+    <aside
       aria-labelledby="feedback-sheet-title"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100 sheet-enter"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
       data-testid="feedback-sheet"
       id="feedback-sheet-alt"
-      open=""
       role="dialog"
     >
       <header
@@ -196,20 +188,18 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
         </button>
       </header>
       <div
-        class="feedback-sheet__body flex-1 overflow-y-auto"
+        class="feedback-sheet__body flex-1 flex flex-col min-h-0"
       />
-    </dialog>
+    </aside>
   </div>
   <div
     data-cell="open-aria-labelled"
   >
-    <dialog
+    <aside
       aria-labelledby="feedback-sheet-title-alt"
-      aria-modal="true"
-      class="feedback-sheet fixed inset-0 z-50 flex flex-col text-stone-900 dark:text-stone-100 sheet-enter"
+      class="feedback-sheet fixed top-[var(--review-header-h,0px)] left-0 bottom-[calc(var(--review-gatebar-h,0px)-2px)] z-50 w-[min(85vw,360px)] max-w-full flex flex-col bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border-r border-stone-200 dark:border-stone-700 shadow-2xl translate-x-0 transition-transform duration-300 ease-out"
       data-testid="feedback-sheet"
       id="feedback-sheet"
-      open=""
       role="dialog"
     >
       <header
@@ -235,9 +225,9 @@ exports[`FeedbackSheet — state matrix > renders every documented state cell (s
         </button>
       </header>
       <div
-        class="feedback-sheet__body flex-1 overflow-y-auto"
+        class="feedback-sheet__body flex-1 flex flex-col min-h-0"
       />
-    </dialog>
+    </aside>
   </div>
 </div>
 `;

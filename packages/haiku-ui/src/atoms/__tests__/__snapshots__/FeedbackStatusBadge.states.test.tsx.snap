@@ -2,7 +2,7 @@
 
 exports[`FeedbackStatusBadge — state matrix > renders every (status × {default, error-card}) cell (snapshot) 1`] = `
 <div
-  data-token-hash="27cdf90208a68e61"
+  data-token-hash="d61f9f085f138f46"
 >
   <div
     data-cell="default-pending"

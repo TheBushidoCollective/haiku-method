@@ -1,7 +1,7 @@
 ---
 name: extraction
 description: Design and implement data extraction from sources
-hats: [extractor, connector-reviewer]
+hats: [extractor, connector-reviewer, verifier]
 fix_hats: [classifier, extractor, feedback-assessor]
 review: ask
 elaboration: autonomous
@@ -12,41 +12,22 @@ inputs:
 
 # Extraction
 
-Build the connectors that pull data from each source system into a staging
-area without loss, duplication, or surprise load on the source. This stage
-turns the discovery stage's source catalog into running extraction jobs:
-incremental where the source supports it, full-load with reason where it
-doesn't, with idempotency, retry, and observability baked in from the first
-commit.
+Build the connectors that pull data from each source system into a staging area — faithfully, without loss, duplication, or surprise load on the source. This stage turns the discovery catalog into running extraction jobs.
 
-## Per-unit baton
+## Scope
 
-Each extraction unit is one **source connector** (one source system, one
-extraction pattern). The unit walks the two hats:
+Implementing reliable, observable extraction into staging: incremental where the source supports it, full-load with a stated reason where it doesn't, with idempotency and retry built in from the first commit. Extraction decides *how data lands in staging intact* — it does not catalog sources (discovery), model the staged data (transformation), or test it (validation).
 
-- **`extractor`** (do) implements the connector — incremental logic,
-  watermarks, retry / backoff, schema-drift detection, dead-letter
-  handling, and extraction metadata for auditability
-- **`connector-reviewer`** (verify) reviews the connector for idempotency,
-  partial-failure safety, and operational debugability — and either advances
-  or rejects to the implementer
+## What to do
 
-The plan role is implicit in the source-catalog input — discovery has already
-named the integration pattern per source, so the extractor reads that
-decision rather than re-planning it.
+- Honor the integration pattern discovery named for each source, or document why it had to change.
+- Build idempotency, retry, and observability into every connector from the start, not as a later pass.
+- Record each connector's operational shape — source, target staging, pattern, watermark, schedule, retry policy — alongside the code.
+- Protect the source: extract incrementally and watermark wherever the source allows it.
 
-## Inputs and outputs
+## What NOT to do
 
-`SOURCE-CATALOG.md` from discovery is the contract. Each extraction unit
-produces a connector implementation plus its row in `EXTRACTION-JOBS.md`
-(intent-scope), which records the unit's source, target staging location,
-extraction pattern, watermark column, schedule, and retry policy.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, extractor, feedback-assessor]` dispatches per finding.
-The gate is `ask` — a human reviews extraction logic before it lands in the
-staging area, because re-running a misconfigured connector against a
-production source is the easy way to overload it. Project overlays may add
-team-specific connector templates, secrets-management conventions, or
-warehouse-staging naming patterns without modifying plugin defaults.
+- Don't re-profile or re-catalog sources — that was the discovery stage's job.
+- Don't model, reshape, or apply business logic to the data — that's transformation.
+- Don't author data-quality tests — that's validation.
+- Don't ship a connector that can overload a production source on re-run.

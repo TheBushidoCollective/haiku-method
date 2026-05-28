@@ -10,23 +10,22 @@ inputs: []
 
 # Inception
 
-Library inception is a research / distillation stage that covers both discovery (what problem does this solve, who are the target consumers, what's the competitive landscape) AND API shape (public surface, semver policy, extension points, error model). Unlike application development there is no separate product or design phase — API decisions are made here because the API *is* the product.
+The opening stage of library work: understand the problem the library solves, who consumes it, and what the public API should be. Unlike application development there's no separate product or design phase — the API *is* the product, so its shape is decided here. This is where ambiguity about scope, consumers, and surface gets resolved before any implementation begins.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the four hats in `plan → do → verify` order with an additional architect step for API-shape units:
+Discovery and API design: the problem and its ecosystem (consumers, competing libraries, prior art, constraints) plus the public surface (signatures, semver policy, extension points, error model). Inception decides *what the library is and what its contract looks like* — not how that contract is implemented (development), how it's published (release), or how it's attacked (security).
 
-- **`researcher`** (plan / discovery) gathers ecosystem evidence for the topic — consumers, competing libraries, prior art, constraints
-- **`api-architect`** (do for API-shape topics) translates the research into a proposed public signature set + semver policy + error model
-- **`distiller`** (do for non-API-shape topics) turns raw research into a structured knowledge artifact
-- **`verifier`** (verify) validates the body for substance, citation, internal consistency, and decision-register accountability
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain.
+- Research the ecosystem — target consumers, competing libraries, prior art — and ground every API decision in that evidence.
+- Design the public surface deliberately: signatures, semver policy, extension points, and a coherent error model.
+- Resolve API ambiguity with the user now; the public contract is expensive to change once consumers depend on it.
+- Decompose into knowledge and API-shape units that downstream stages can build, publish, and audit against.
 
-## Inputs and outputs
+## What NOT to do
 
-The stage has no upstream inputs (it's the first stage in libdev). Outputs feed every downstream stage: `discovery` artifacts ground the development plan; `api-surface` artifacts are the contract the development stage builds against and the release stage publishes.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, researcher, feedback-assessor]` dispatches per finding. The classifier routes the FB to the right unit and approval roles; `researcher` is the implementer (re-authoring the affected artifact); the assessor independently decides closure. The gate is `ask` — local human approval since the API surface decisions need a human in the loop. Project overlays at `.haiku/studios/libdev/stages/inception/` may add house-style conventions (signature-doc patterns, vocabulary lists, decision-record headers) without modifying the plugin defaults.
+- Don't implement the library — that's development; inception defines the contract, not the code behind it.
+- Don't defer hard API decisions downstream; a vague surface here becomes a breaking change later.
+- Don't design release mechanics or threat models; those are the release and security stages.
+- Don't ship a decision without recording it — an unstated API rationale can't be defended in review.

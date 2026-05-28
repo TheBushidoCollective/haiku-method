@@ -45,7 +45,7 @@ category: engineering
 studio: data-pipeline
 ```
 
-Or specify it per-intent when running `/haiku:start`.
+Or specify it per-intent when running `/haiku:haiku-start`.
 
 ## Creating a Custom Stage
 
@@ -82,6 +82,7 @@ inputs:
 | `description` | string | yes | What this stage accomplishes |
 | `hats` | list | yes | Ordered hat sequence — agents execute in this order |
 | `review` | enum | yes | `auto`, `ask`, `external`, `await`, or `[external, ask]` |
+| `produces` | enum | no | `build` or `knowledge` (default `knowledge`). Set `produces: build` for stages that ship executable artifacts (code, firmware): any unit declaring `outputs:` must then also declare a `quality_gates:` field (an explicit `[]` is allowed), so a producing unit can't be authored with nothing verifying it. Knowledge stages (research, design, docs) need no gates and should leave this unset. |
 | `gate-protocol` | object | no | Timeout duration, timeout action (`escalate`, `auto-advance`, `block`), and pre-conditions |
 | `unit_types` | list | no | Constrains which unit types this stage processes |
 | `inputs` | list | no | Artifacts required from prior stages |
@@ -150,7 +151,7 @@ This augments (not replaces) the built-in builder instructions.
 
 H·AI·K·U ships with default instructions for each provider category (ticketing, spec, design, comms). To override them for your project:
 
-1. Run `/haiku:setup` — it offers to create override files during provider configuration
+1. Run `/haiku:haiku-setup` — it offers to create override files during provider configuration
 2. Or manually create `.haiku/providers/{type}.md` (e.g., `.haiku/providers/jira.md`)
 
 The override file replaces the built-in instructions for that provider type. See [Providers](/docs/providers/) for details.
@@ -168,14 +169,14 @@ For all customizable artifacts, H·AI·K·U checks project-level first:
 
 Project-level takes precedence. For hats, project-level **augments** (appends to) the built-in rather than replacing it — unless no built-in exists.
 
-## Scaffolding with `/haiku:scaffold`
+## Scaffolding with `/haiku:haiku-scaffold`
 
-Use `/haiku:scaffold` to generate the directory structure and template files for custom artifacts:
+Use `/haiku:haiku-scaffold` to generate the directory structure and template files for custom artifacts:
 
 ```
-/haiku:scaffold studio data-pipeline
-/haiku:scaffold stage data-pipeline validation
-/haiku:scaffold hat data-pipeline validation data-quality-reviewer
+/haiku:haiku-scaffold studio data-pipeline
+/haiku:haiku-scaffold stage data-pipeline validation
+/haiku:haiku-scaffold hat data-pipeline validation data-quality-reviewer
 ```
 
 This creates the files with the correct frontmatter structure, ready for you to fill in.

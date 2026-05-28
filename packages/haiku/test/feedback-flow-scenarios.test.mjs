@@ -129,6 +129,189 @@ test("FB on stage A doesn't affect stage B's queue", async () => {
 	})
 })
 
+// ── Severity-first fix-loop ordering ─────────────────────────────────
+
+test("fix-loop dispatches the blocker before the lower-numbered low", async () => {
+	if (!HAS_GIT) return
+	await withRepo(
+		"test-fb-severity-order",
+		async ({ repoRoot, intentDir, slug }) => {
+			makeStudio({
+				repoRoot,
+				studio: "test",
+				stages: [
+					{
+						name: "a",
+						hats: ["planner", "verifier"],
+						fix_hats: ["classifier", "planner", "feedback-assessor"],
+						review: "ask",
+						review_agents: ["code-reviewer"],
+					},
+				],
+			})
+			makeIntent({ intentDir, slug, studio: "test" })
+			writeUnit(intentDir, "a", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				started_at: null,
+				iterations: [],
+				reviews: {},
+				approvals: {},
+				discovery: {},
+			})
+
+			// FB-001 (lower number, would win on walk order) is LOW; FB-002 is
+			// the BLOCKER. Agent origin so both auto-triage and flow straight to
+			// the fix-loop dispatch. If severity ordering works, the blocker is
+			// dispatched first despite its higher number.
+			makeFeedback({
+				intentDir,
+				stage: "a",
+				id: "01",
+				title: "low nit",
+				body: "cosmetic",
+				origin: "adversarial-review",
+				author: "code-reviewer",
+				severity: "low",
+				closed: false,
+			})
+			makeFeedback({
+				intentDir,
+				stage: "a",
+				id: "02",
+				title: "blocker bug",
+				body: "broken",
+				origin: "adversarial-review",
+				author: "code-reviewer",
+				severity: "blocker",
+				closed: false,
+			})
+
+			const action = await runTick(slug)
+			assert.strictEqual(
+				action.action,
+				"start_feedback_hat",
+				`expected fix-hat dispatch; got: ${action.action}`,
+			)
+			assert.strictEqual(
+				action.feedback_ids[0],
+				"FB-002",
+				`expected the blocker (FB-002) dispatched first; got order ${JSON.stringify(action.feedback_ids)}`,
+			)
+		},
+	)
+})
+
+test("a lone low finding does NOT trigger a fix wave (stage proceeds)", async () => {
+	if (!HAS_GIT) return
+	await withRepo(
+		"test-fb-low-no-wave",
+		async ({ repoRoot, intentDir, slug }) => {
+			makeStudio({
+				repoRoot,
+				studio: "test",
+				stages: [
+					{
+						name: "a",
+						hats: ["planner", "verifier"],
+						fix_hats: ["classifier", "planner", "feedback-assessor"],
+						review: "ask",
+						review_agents: ["code-reviewer"],
+					},
+				],
+			})
+			makeIntent({ intentDir, slug, studio: "test" })
+			writeUnit(intentDir, "a", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				started_at: null,
+				iterations: [],
+				reviews: {},
+				approvals: {},
+				discovery: {},
+			})
+			// A single classified `low` from a reviewer — below the default
+			// `high` threshold, nothing in flight, so it must NOT spin up a
+			// fix-chain. The stage walks Track A instead.
+			makeFeedback({
+				intentDir,
+				stage: "a",
+				id: "01",
+				title: "low nit",
+				body: "cosmetic rename",
+				origin: "adversarial-review",
+				author: "code-reviewer",
+				severity: "low",
+				closed: false,
+			})
+
+			const action = await runTick(slug)
+			assert.notStrictEqual(
+				action.action,
+				"start_feedback_hat",
+				`a lone low must not trigger a fix wave; got: ${action.action}`,
+			)
+		},
+	)
+})
+
+test("HAIKU_FIX_SEVERITY_THRESHOLD=medium makes a medium finding blocking", async () => {
+	if (!HAS_GIT) return
+	const prev = process.env.HAIKU_FIX_SEVERITY_THRESHOLD
+	process.env.HAIKU_FIX_SEVERITY_THRESHOLD = "medium"
+	try {
+		await withRepo(
+			"test-fb-threshold-env",
+			async ({ repoRoot, intentDir, slug }) => {
+				makeStudio({
+					repoRoot,
+					studio: "test",
+					stages: [
+						{
+							name: "a",
+							hats: ["planner", "verifier"],
+							fix_hats: ["classifier", "planner", "feedback-assessor"],
+							review: "ask",
+							review_agents: ["code-reviewer"],
+						},
+					],
+				})
+				makeIntent({ intentDir, slug, studio: "test" })
+				writeUnit(intentDir, "a", "unit-01", {
+					title: "u1",
+					depends_on: [],
+					started_at: null,
+					iterations: [],
+					reviews: {},
+					approvals: {},
+					discovery: {},
+				})
+				makeFeedback({
+					intentDir,
+					stage: "a",
+					id: "01",
+					title: "medium issue",
+					body: "worth fixing",
+					origin: "adversarial-review",
+					author: "code-reviewer",
+					severity: "medium",
+					closed: false,
+				})
+
+				const action = await runTick(slug)
+				assert.strictEqual(
+					action.action,
+					"start_feedback_hat",
+					`with threshold=medium a medium must trigger a wave; got: ${action.action}`,
+				)
+			},
+		)
+	} finally {
+		if (prev === undefined) delete process.env.HAIKU_FIX_SEVERITY_THRESHOLD
+		else process.env.HAIKU_FIX_SEVERITY_THRESHOLD = prev
+	}
+})
+
 // ── Intent-scope vs stage-scope FBs ──────────────────────────────────
 
 test("intent-scope FB is preserved separately from stage-scope FBs", async () => {

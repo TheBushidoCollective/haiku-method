@@ -658,7 +658,7 @@ await test("V-11.B6 (blue-team): wasBaselinePreviouslyEstablished — intent-lev
 	// Pre-fix bug: the intent-level sidecar walk inside
 	// `hasValidatedBaselineSidecar` returned true here, flipping
 	// `wasBaselinePreviouslyEstablished("design")` to true and forcing
-	// the drift gate to demand `/haiku:repair --confirm-baseline-reset`
+	// the drift gate to demand `/haiku:haiku-repair --confirm-baseline-reset`
 	// on every fresh stage transition. Post-fix: the function only
 	// looks at per-stage sidecars, so the cross-stage signal is silent.
 	assert.strictEqual(wasBaselinePreviouslyEstablished(dir, "design"), false)

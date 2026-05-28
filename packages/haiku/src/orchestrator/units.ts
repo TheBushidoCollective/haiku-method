@@ -241,3 +241,53 @@ export function currentWaveNumber(
 	}
 	return 0
 }
+
+/** A compact, human/agent-readable snapshot of a stage's unit pool —
+ *  appended to `haiku_unit_advance_hat` / `_reject_hat` returns so the
+ *  parent agent (and the user watching its transcript) can see where the
+ *  wave is instead of a bare "advanced to X". Pure on-disk read; it does
+ *  NOT drive any decision (the engine still threads the workflow via the
+ *  relay breadcrumb), so this is reporting, not mechanics teaching
+ *  (`.claude/rules/no-agent-mechanics-teaching.md`).
+ *
+ *  Reuses the same wave computation the cursor's dispatch uses
+ *  (`computeUnitWaves` / `currentWaveNumber`) so the numbers reflect the
+ *  REAL pool model, not a parallel reinvention. Deliberately names no
+ *  unit IDs — only status counts and a per-hat in-flight tally — so the
+ *  string can't accidentally leak a sibling unit's name into a return
+ *  that contractually must not relay one (relay-no-cross-unit-suggest).
+ *  Best-effort: returns "" on any failure so it never blocks a closure. */
+export function summarizeStageLoop(
+	intentDirPath: string,
+	stage: string,
+): string {
+	try {
+		const units = listUnits(intentDirPath, stage)
+		if (units.length === 0) return ""
+		const total = units.length
+		const done = units.filter((u) => u.status === "completed").length
+		const active = units.filter((u) => u.status === "active").length
+		const pending = units.filter((u) => u.status === "pending").length
+		const { unitWave, totalWaves } = computeUnitWaves(units)
+		const wave = currentWaveNumber(units, unitWave, totalWaves)
+		// Per-hat tally of the in-flight units — "where in the loop" the
+		// live pool actually is, so the parent can see whether the hats are
+		// rotating in parallel or piling up on one.
+		const hatTally = new Map<string, number>()
+		for (const u of units) {
+			if (u.status !== "active") continue
+			const h = u.hat || "?"
+			hatTally.set(h, (hatTally.get(h) ?? 0) + 1)
+		}
+		const hatBreak = [...hatTally.entries()]
+			.map(([h, n]) => `${h}×${n}`)
+			.join(", ")
+		const head =
+			`pool · stage \`${stage}\`: ${done}/${total} units done · ` +
+			`${active} in flight · ${pending} pending` +
+			(totalWaves > 1 ? ` · wave ${wave + 1}/${totalWaves}` : "")
+		return hatBreak ? `${head}\n  in flight by hat: ${hatBreak}` : head
+	} catch {
+		return ""
+	}
+}

@@ -1,0 +1,256 @@
+// drift-input-output-baton.test.mjs
+//
+// A file the CURRENT stage produces (a discovery/output `location:` or a
+// unit `outputs:` entry) must NOT fire `input_mutation` drift when it's
+// also witnessed as an input — it's the loop's own output evolving, not
+// external/upstream drift. Regression for the 2026-05-20
+// drift-input-output-loop report: the design stage's `designer-prep` hats
+// append per-unit sections to `.haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md` and
+// `.haiku/knowledge/DESIGN-TOKENS.md` (both design discovery `location:`
+// files — promoted to project scope, repo-rooted, persist across intents),
+// which are ALSO drift-witnessed inputs for the pre-execute review slots.
+// Every append changed the whole-file hash and re-fired drift against
+// every witnessing slot — an input==output cycle that never converges
+// (six findings on two files, one misclassified as a "material deletion"
+// against a pure 393-insertion append).
+//
+// Control: a NON-produced upstream input that mutates must still fire
+// drift (external mutation is real drift).
+
+import assert from "node:assert/strict"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { dirname, join } from "node:path"
+import { test } from "node:test"
+import { fileURLToPath } from "node:url"
+import matter from "gray-matter"
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const SRC = join(HERE, "..", "src")
+process.env.CLAUDE_PLUGIN_ROOT = join(HERE, "..", "..", "..", "plugin")
+
+async function withIntent(name, fn) {
+	const root = mkdtempSync(join(tmpdir(), `drift-baton-${name}-`))
+	const intentDir = join(root, ".haiku", "intents", name)
+	mkdirSync(join(intentDir, "stages", "design", "units"), { recursive: true })
+	mkdirSync(join(intentDir, "knowledge"), { recursive: true })
+	writeFileSync(
+		join(intentDir, "intent.md"),
+		matter.stringify("Intent body.\n", {
+			title: "x",
+			studio: "software",
+			mode: "continuous",
+			plugin_version: "9.0.0",
+		}),
+	)
+	try {
+		await fn({ root, intentDir })
+	} finally {
+		rmSync(root, { recursive: true, force: true })
+	}
+}
+
+async function signUnitWithInput(intentDir, unitName, inputRel) {
+	const { buildReviewRecord } = await import(
+		`${SRC}/orchestrator/workflow/sign-slot.ts`
+	)
+	const unitPath = join(intentDir, "stages", "design", "units", `${unitName}.md`)
+	writeFileSync(
+		unitPath,
+		matter.stringify("Spec body.\n", {
+			title: unitName,
+			started_at: "2026-05-01T00:00:00Z",
+			inputs: [inputRel],
+			iterations: [
+				{ hat: "verifier", started_at: "2026-05-01T00:00:00Z", completed_at: "2026-05-01T00:00:00Z", result: "advance" },
+			],
+			reviews: {},
+			approvals: {},
+			discovery: {},
+		}),
+	)
+	const signed = buildReviewRecord(unitPath, { intentDir, unitInputs: [inputRel] })
+	const fm = matter(readFileSync(unitPath, "utf8"))
+	writeFileSync(
+		unitPath,
+		matter.stringify(fm.content, { ...fm.data, reviews: { spec: signed } }),
+	)
+	return unitPath
+}
+
+async function sweep(intentDir) {
+	const { runDriftSweep } = await import(`${SRC}/orchestrator/workflow/drift-sweep.ts`)
+	return runDriftSweep({
+		intentDir,
+		stage: "design",
+		studio: "software",
+		repoRoot: join(intentDir, "..", "..", ".."),
+	})
+}
+
+test("stage-produced baton (design discovery location) does NOT fire input_mutation when appended in-loop", async () => {
+	await withIntent("baton", async ({ intentDir }) => {
+		// DESIGN-SYSTEM-ANCHOR.md is a design-stage discovery `location:`,
+		// now PROJECT-scope (`.haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md`,
+		// repo-rooted), AND a witnessed input. The witness key + the
+		// produced-set key both normalize to the repo-relative form, so the
+		// in-loop append exemption still matches at the promoted path.
+		const repoRoot = join(intentDir, "..", "..", "..")
+		const batonRel = ".haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md"
+		const baton = join(repoRoot, batonRel)
+		mkdirSync(dirname(baton), { recursive: true })
+		writeFileSync(baton, matter.stringify("# Anchor\n\n## Section 1\n", { title: "anchor" }))
+		await signUnitWithInput(intentDir, "unit-01", batonRel)
+
+		// A designer-prep hat appends Section 2 (additive, in-loop write).
+		writeFileSync(
+			baton,
+			matter.stringify("# Anchor\n\n## Section 1\n\n## Section 2 (appended by designer-prep unit-02)\n", { title: "anchor" }),
+		)
+
+		const result = await sweep(intentDir)
+		const mut = result.events.filter(
+			(e) => e.kind === "input_mutation" && e.file === batonRel,
+		)
+		assert.equal(
+			mut.length,
+			0,
+			`a stage-produced baton must NOT fire input_mutation on an in-loop append; got: ${JSON.stringify(result.events)}`,
+		)
+	})
+})
+
+test("non-produced upstream input STILL fires input_mutation (external drift is real)", async () => {
+	await withIntent("upstream", async ({ intentDir }) => {
+		// Not a design discovery location and not a unit output → external.
+		const upstream = join(intentDir, "knowledge", "UPSTREAM-CONTRACT.md")
+		writeFileSync(upstream, matter.stringify("Original contract.\n", { title: "c" }))
+		await signUnitWithInput(intentDir, "unit-01", "knowledge/UPSTREAM-CONTRACT.md")
+
+		writeFileSync(upstream, matter.stringify("MUTATED contract.\n", { title: "c" }))
+
+		const result = await sweep(intentDir)
+		const mut = result.events.filter(
+			(e) => e.kind === "input_mutation" && e.file === "knowledge/UPSTREAM-CONTRACT.md",
+		)
+		assert.ok(
+			mut.length >= 1,
+			`external input mutation must still fire drift; got: ${JSON.stringify(result.events)}`,
+		)
+	})
+})
+
+test("unit-output baton (declared in outputs:) is also exempt from input_mutation", async () => {
+	await withIntent("unit-out", async ({ intentDir }) => {
+		const shared = join(intentDir, "knowledge", "SHARED-BATON.md")
+		writeFileSync(shared, matter.stringify("v1\n", { title: "s" }))
+		// unit-02 declares the shared file as an OUTPUT.
+		const u2 = join(intentDir, "stages", "design", "units", "unit-02.md")
+		writeFileSync(
+			u2,
+			matter.stringify("Spec.\n", {
+				title: "unit-02",
+				started_at: "2026-05-01T00:00:00Z",
+				inputs: [],
+				outputs: ["knowledge/SHARED-BATON.md"],
+				iterations: [{ hat: "verifier", started_at: "2026-05-01T00:00:00Z", completed_at: "2026-05-01T00:00:00Z", result: "advance" }],
+				reviews: {},
+				approvals: {},
+				discovery: {},
+			}),
+		)
+		// unit-01 witnesses it as input.
+		await signUnitWithInput(intentDir, "unit-01", "knowledge/SHARED-BATON.md")
+		// unit-02 writes it (in-loop output).
+		writeFileSync(shared, matter.stringify("v1\nv2 appended\n", { title: "s" }))
+
+		const result = await sweep(intentDir)
+		const mut = result.events.filter(
+			(e) => e.kind === "input_mutation" && e.file === "knowledge/SHARED-BATON.md",
+		)
+		assert.equal(mut.length, 0, `a unit-output baton must NOT fire input_mutation; got: ${JSON.stringify(result.events)}`)
+	})
+})
+
+test("unit-output baton declared REPO-RELATIVE is normalized + still exempt from input_mutation", async () => {
+	await withIntent("repo-rel-out", async ({ intentDir }) => {
+		const shared = join(intentDir, "knowledge", "SHARED-BATON.md")
+		writeFileSync(shared, matter.stringify("v1\n", { title: "s" }))
+		// unit-02 declares the SAME file as an output, but in REPO-RELATIVE
+		// form (`.haiku/intents/<slug>/knowledge/...`). The consumer's witness
+		// key is intent-relative (`knowledge/SHARED-BATON.md`). Before path
+		// normalization, the produced-set stored the repo-relative string
+		// verbatim, so the `.has()` baton check never matched and drift
+		// re-fired on every in-loop write — the actual gap behind "I keep
+		// seeing drift on same-stage input==output files".
+		const u2 = join(intentDir, "stages", "design", "units", "unit-02.md")
+		writeFileSync(
+			u2,
+			matter.stringify("Spec.\n", {
+				title: "unit-02",
+				started_at: "2026-05-01T00:00:00Z",
+				inputs: [],
+				outputs: [".haiku/intents/repo-rel-out/knowledge/SHARED-BATON.md"],
+				iterations: [{ hat: "verifier", started_at: "2026-05-01T00:00:00Z", completed_at: "2026-05-01T00:00:00Z", result: "advance" }],
+				reviews: {},
+				approvals: {},
+				discovery: {},
+			}),
+		)
+		await signUnitWithInput(intentDir, "unit-01", "knowledge/SHARED-BATON.md")
+		writeFileSync(shared, matter.stringify("v1\nv2 appended\n", { title: "s" }))
+
+		const result = await sweep(intentDir)
+		const mut = result.events.filter(
+			(e) => e.kind === "input_mutation" && e.file === "knowledge/SHARED-BATON.md",
+		)
+		assert.equal(mut.length, 0, `a repo-relative-declared output baton must normalize + be exempt; got: ${JSON.stringify(result.events)}`)
+	})
+})
+
+test("stage-produced baton that's transiently ABSENT does NOT fire input_deletion (in-loop output, not premise drift)", async () => {
+	await withIntent("del-baton", async ({ intentDir }) => {
+		const shared = join(intentDir, "knowledge", "SHARED-BATON.md")
+		writeFileSync(shared, matter.stringify("v1\n", { title: "s" }))
+		// unit-02 owns the file as an output; unit-01 witnessed it as input.
+		const u2 = join(intentDir, "stages", "design", "units", "unit-02.md")
+		writeFileSync(
+			u2,
+			matter.stringify("Spec.\n", {
+				title: "unit-02",
+				started_at: "2026-05-01T00:00:00Z",
+				inputs: [],
+				outputs: ["knowledge/SHARED-BATON.md"],
+				iterations: [{ hat: "verifier", started_at: "2026-05-01T00:00:00Z", completed_at: "2026-05-01T00:00:00Z", result: "advance" }],
+				reviews: {},
+				approvals: {},
+				discovery: {},
+			}),
+		)
+		await signUnitWithInput(intentDir, "unit-01", "knowledge/SHARED-BATON.md")
+		// The producing hat is mid-loop: the baton is transiently gone.
+		rmSync(shared)
+
+		const result = await sweep(intentDir)
+		const del = result.events.filter(
+			(e) => e.kind === "input_deletion" && e.file === "knowledge/SHARED-BATON.md",
+		)
+		assert.equal(del.length, 0, `a stage-produced baton's transient absence must NOT fire input_deletion; got: ${JSON.stringify(result.events)}`)
+	})
+})
+
+test("CONTROL: a NON-produced upstream input that's deleted STILL fires input_deletion", async () => {
+	await withIntent("del-upstream", async ({ intentDir }) => {
+		// Not a discovery location, not any unit's output → genuinely external.
+		const upstream = join(intentDir, "knowledge", "UPSTREAM-GONE.md")
+		writeFileSync(upstream, matter.stringify("here\n", { title: "u" }))
+		await signUnitWithInput(intentDir, "unit-01", "knowledge/UPSTREAM-GONE.md")
+		rmSync(upstream)
+
+		const result = await sweep(intentDir)
+		const del = result.events.filter(
+			(e) => e.kind === "input_deletion" && e.file === "knowledge/UPSTREAM-GONE.md",
+		)
+		assert.ok(del.length >= 1, `external input deletion must still fire (suppression must be scoped to stage-produced only); got: ${JSON.stringify(result.events)}`)
+	})
+})

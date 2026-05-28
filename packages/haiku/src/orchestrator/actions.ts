@@ -16,9 +16,12 @@ import type { OrchestratorAction } from "../orchestrator.js"
 import { MAX_STAGE_ITERATIONS } from "../state-tools.js"
 import { emitTelemetry } from "../telemetry.js"
 
-// v4: manual_change_assessment removed. Drift detection runs in
-// the cursor's Track C and surfaces as drift_detected → FB; the
-// feedback track handles assessment. No separate handler needed.
+// v4: manual_change_assessment removed. v9 (2026-05-17): drift
+// handling went engine-internal. The cursor's Track C still runs the
+// sweep, but no agent-facing action surfaces — see
+// `orchestrator/workflow/drift-handle-events.ts`. Drift events
+// produce engine-emitted FBs that flow through the standard
+// `fix_hats:` chain like any other FB.
 
 /** Compact feedback summary for orchestrator action responses.
  *  Returns id/title/origin/author/status + file path — NO body.
@@ -129,7 +132,7 @@ export function maybeEscalate(
 
 	const reason = iter.exceeded ? "iteration_limit" : "loop_detected"
 	const message = iter.exceeded
-		? `Stage '${stage}' has exceeded ${MAX_STAGE_ITERATIONS} agent-invoked iterations (now at ${iter.count}). The autonomous loop has stopped — a human must decide whether to keep pushing, reject feedback items, split the work, or terminate the intent. To force another cycle (user-invoked, uncapped), file feedback at the target stage via \`haiku_feedback({ intent, stage: "<target-stage>", resolution: "stage_revisit", title, body })\` and call \`haiku_run_next\` — the pre-tick feedback walk reroutes through that stage. Or use \`haiku_feedback_reject\` to dismiss specific items, or mark the stage complete manually.`
+		? `Stage '${stage}' has exceeded ${MAX_STAGE_ITERATIONS} agent-invoked iterations (now at ${iter.count}). The autonomous loop has stopped — a human must decide whether to keep pushing, reject feedback items, split the work, or terminate the intent. To force another cycle (user-invoked, uncapped), file feedback at the target stage via \`haiku_feedback({ intent, stage: "<target-stage>", resolution: "stage_revisit", severity: "blocker", title, body })\` and call \`haiku_run_next\` — the pre-tick feedback walk reroutes through that stage. Or use \`haiku_feedback_reject\` to dismiss specific items, or mark the stage complete manually.`
 		: `Stage '${stage}' is in a loop: iteration ${iter.count}'s feedback set is the same as the previous iteration's. The agent keeps regenerating identical findings, which usually means the spec is wrong or the criteria are unreachable. A human must intervene — adjust the feedback items, relax the criteria, or terminate the intent.`
 
 	emitTelemetry("haiku.stage.escalate", {

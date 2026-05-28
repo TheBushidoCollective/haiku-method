@@ -9,11 +9,16 @@ import ListHaikuBranchesQuery from "./graphql/github/__generated__/operationsLis
 import type { operationsListIntentsQuery$data } from "./graphql/github/__generated__/operationsListIntentsQuery.graphql"
 import ListIntentsQuery from "./graphql/github/__generated__/operationsListIntentsQuery.graphql"
 import ReadFileQuery from "./graphql/github/__generated__/operationsReadFileQuery.graphql"
+import { blobToDataUrl, mimeFromPath } from "./html-render"
 import {
 	classifyArtifact,
 	deriveActiveStageFromStageTree,
 	deriveStageStateFromUnits,
 	deriveV4ActiveStage,
+	normalizeStageProgression,
+	isCollectibleIntentAsset,
+	isCollectibleStageFile,
+	isV4Intent,
 	mergeKnowledge as mergeKnowledgeShared,
 	parseElaborationVerified,
 	parseFeedback,
@@ -25,6 +30,7 @@ import { parseSettingsYaml } from "./resolve-links"
 import type {
 	BrowseProvider,
 	HaikuArtifact,
+	HaikuAsset,
 	HaikuFeedback,
 	HaikuIntent,
 	HaikuIntentDetail,
@@ -109,6 +115,26 @@ export class GitHubProvider implements BrowseProvider {
 	private expr(path: string): string {
 		const ref = this.branch || "HEAD"
 		return `${ref}:${path}`
+	}
+
+	/** Resolve a repo-root-relative path to a `data:` URL by fetching the raw
+	 *  contents (authed) and inlining the bytes — so an HTML output's relative
+	 *  CSS/images load inside the sandboxed (opaque-origin) iframe, which
+	 *  can't reach parent-origin blob URLs or attach an auth header. Mirrors
+	 *  the artifact rawUrl scheme used at session build
+	 *  (raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>). */
+	async resolveAssetUrl(path: string): Promise<string | null> {
+		try {
+			const ref = this.branch || "HEAD"
+			const url = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${encodeURIComponent(ref)}/${path}`
+			const headers: Record<string, string> = {}
+			if (this.token) headers.Authorization = `Bearer ${this.token}`
+			const res = await fetch(url, { headers })
+			if (!res.ok) return null
+			return blobToDataUrl(await res.blob(), mimeFromPath(path))
+		} catch {
+			return null
+		}
 	}
 
 	/**
@@ -208,6 +234,7 @@ export class GitHubProvider implements BrowseProvider {
 				owner: this.owner,
 				name: this.repo,
 				intentExpr: `${ref}:.haiku/intents/${slug}/intent.md`,
+				intentTreeExpr: `${ref}:.haiku/intents/${slug}`,
 				stagesExpr,
 				knowledgeExpr: `${ref}:.haiku/intents/${slug}/knowledge`,
 				operationsExpr: `${ref}:.haiku/intents/${slug}/operations`,
@@ -392,9 +419,7 @@ export class GitHubProvider implements BrowseProvider {
 			// (cheap directory listing — no per-unit reads) and pick the
 			// last stage that has any unit files. Falls back to stages[0]
 			// when the agent hasn't touched any stage yet.
-			const isV4 =
-				typeof intent.raw.plugin_version === "string" &&
-				intent.raw.plugin_version.startsWith("4.")
+			const isV4 = isV4Intent(intent.raw)
 			if (isV4 && intent.studioStages.length > 0) {
 				const stagesWithUnits = await this.probeStagesWithUnits(
 					slug,
@@ -405,6 +430,14 @@ export class GitHubProvider implements BrowseProvider {
 					intent.studioStages,
 					stagesWithUnits,
 				)
+				// Recompute progress to match the refined active stage — v4
+				// intent.md has no active_stage, so the initial parse left
+				// stagesComplete at 0 and the list-view progress bar (gated on
+				// stagesComplete > 0) stayed hidden for in-flight intents.
+				if (intent.status !== "completed") {
+					const idx = intent.studioStages.indexOf(intent.activeStage)
+					if (idx >= 0) intent.stagesComplete = idx
+				}
 			}
 			intentsBySlug.set(slug, intent)
 			this.intentBranchMap.set(slug, branchName)
@@ -486,6 +519,7 @@ export class GitHubProvider implements BrowseProvider {
 					owner: this.owner,
 					name: this.repo,
 					intentExpr: `${effectiveRef}:${basePath}/intent.md`,
+					intentTreeExpr: `${effectiveRef}:${basePath}`,
 					stagesExpr: `${effectiveRef}:${basePath}/stages`,
 					knowledgeExpr: `${effectiveRef}:${basePath}/knowledge`,
 					operationsExpr: `${effectiveRef}:${basePath}/operations`,
@@ -512,6 +546,7 @@ export class GitHubProvider implements BrowseProvider {
 		stageNames: string[],
 		ref: string,
 		intentMode: string,
+		schemaIsV4: boolean,
 	): HaikuStageState | null {
 		const entries = stageEntries ?? []
 		const stageEntry = entries.find(
@@ -539,25 +574,38 @@ export class GitHubProvider implements BrowseProvider {
 			)
 		}
 
-		// Artifacts
+		// Artifacts: surface every file under the stage dir that isn't a
+		// structured entry (units/feedback/state.json/brief/observations) or
+		// engine bookkeeping — `artifacts/**`, `proof/**` (runtime-verifier
+		// screenshots), and strays. The query fetches each stage subdir's files
+		// one level deep, so `proof/<shot>.png` is already in `stageChildren`
+		// (binary blobs return null `text` → a raw download URL). The artifact
+		// `name` is the stage-relative path so provenance stays visible.
 		const artifacts: HaikuArtifact[] = []
-		const artifactsEntry = stageChildren.find(
-			(e) => e.name === "artifacts" && e.type === "tree",
-		)
-		for (const ae of artifactsEntry?.object?.entries ?? []) {
-			if (ae.type !== "blob") continue
-			const artType = classifyArtifact(ae.name)
-			if (ae.object?.text != null) {
-				artifacts.push({
-					name: ae.name,
-					content: ae.object.text,
-					type: artType,
-				})
+		const stageBase = `.haiku/intents/${slug}/stages/${stageName}`
+		const pushArtifact = (rel: string, text: string | null | undefined) => {
+			if (!isCollectibleStageFile(rel)) return
+			const artType = classifyArtifact(rel)
+			if (text != null) {
+				artifacts.push({ name: rel, content: text, type: artType })
 			} else {
-				const basePath = `.haiku/intents/${slug}`
-				const filePath = `${basePath}/stages/${stageName}/artifacts/${ae.name}`
-				const rawUrl = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${encodeURIComponent(ref)}/${filePath}`
-				artifacts.push({ name: ae.name, rawUrl, type: artType })
+				const rawUrl = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${encodeURIComponent(ref)}/${stageBase}/${rel}`
+				artifacts.push({ name: rel, rawUrl, type: artType })
+			}
+		}
+		for (const child of stageChildren) {
+			if (child.type === "tree") {
+				// A subdir (artifacts/, proof/, …). Skip the structured ones
+				// cheaply; iterate the rest's files (one level — the query's
+				// depth). Per-file `isCollectibleStageFile` is the final say.
+				for (const f of child.object?.entries ?? []) {
+					if (f.type !== "blob") continue
+					pushArtifact(`${child.name}/${f.name}`, f.object?.text)
+				}
+			} else if (child.type === "blob") {
+				// A stray file at the stage root (structured blobs like
+				// state.json / elaboration.md are filtered out downstream).
+				pushArtifact(child.name, child.object?.text)
 			}
 		}
 
@@ -589,8 +637,13 @@ export class GitHubProvider implements BrowseProvider {
 		const stateEntry = stageChildren.find(
 			(e) => e.name === "state.json" && e.type === "blob",
 		)
-		const { phase: v3Phase, startedAt, completedAt, gateOutcome, stateStatus } =
-			parseStageStateJson(stateEntry?.object?.text)
+		const {
+			phase: v3Phase,
+			startedAt,
+			completedAt,
+			gateOutcome,
+			stateStatus,
+		} = parseStageStateJson(stateEntry?.object?.text)
 
 		// elaboration.md verification — load the file's frontmatter so the
 		// derivation can tell whether the elaborate gate has cleared. v4
@@ -613,6 +666,7 @@ export class GitHubProvider implements BrowseProvider {
 		//   3. v3 active_stage / stage-order fallback
 		let status: "pending" | "active" | "complete" = "pending"
 		let phase: HaikuStageState["phase"] = v3Phase
+		let milestones: HaikuStageState["milestones"]
 		if (stateStatus === "active") status = "active"
 		else if (stateStatus === "completed") status = "complete"
 		else if (units.length > 0 || stateEntry == null) {
@@ -620,23 +674,37 @@ export class GitHubProvider implements BrowseProvider {
 				stage: stageName,
 				intentMode,
 				elaborationVerified,
+				schemaIsV4,
 			})
 			status = derived.status
 			phase = derived.phase
+			milestones = derived.milestones
 		} else if (stageName === activeStage) status = "active"
 		else if (stageNames.indexOf(stageName) < stageNames.indexOf(activeStage))
 			status = "complete"
+
+		// Per-stage user-facing BRIEF + agent OBSERVATIONS — direct blob
+		// children of the stage dir (fetched at the stage-children depth).
+		const briefText = stageChildren.find(
+			(e) => e.name === "BRIEF.md" && e.type === "blob",
+		)?.object?.text
+		const observationsText = stageChildren.find(
+			(e) => e.name === "observations.md" && e.type === "blob",
+		)?.object?.text
 
 		return {
 			name: stageName,
 			status,
 			phase,
+			milestones,
 			startedAt,
 			completedAt,
 			gateOutcome,
 			units,
 			artifacts: artifacts.length > 0 ? artifacts : undefined,
 			feedback: feedback.length > 0 ? feedback : undefined,
+			brief: briefText?.trim() || null,
+			observations: observationsText?.trim() || null,
 		}
 	}
 
@@ -693,6 +761,37 @@ export class GitHubProvider implements BrowseProvider {
 		return (data?.repository?.knowledgeTree?.entries ?? [])
 			.filter((e) => e.type === "blob" && e.name.endsWith(".md"))
 			.map((e) => ({ name: e.name, content: e.object?.text || "" }))
+	}
+
+	/** Intent-level loose assets from the intentTree — every file under the
+	 *  intent root that isn't a structured dir/file or bookkeeping. Surfaces
+	 *  intent-level `proof/**` (the intent-review runtime-verifier's journey
+	 *  screenshots), mockups, and strays as URL-based assets. The query
+	 *  fetches one level into each intent-root subdir (so `proof/<shot>.png`
+	 *  is present); deeper nesting isn't fetched (matches the stage depth). */
+	private parseIntentAssets(
+		slug: string,
+		ref: string,
+		data: operationsGetIntentQuery$data | null,
+	): HaikuAsset[] {
+		const base = `.haiku/intents/${slug}`
+		const out: HaikuAsset[] = []
+		const push = (rel: string) => {
+			if (!isCollectibleIntentAsset(rel)) return
+			const rawUrl = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${encodeURIComponent(ref)}/${base}/${rel}`
+			out.push({ path: rel, name: rel.split("/").pop() ?? rel, rawUrl })
+		}
+		for (const e of data?.repository?.intentTree?.entries ?? []) {
+			if (e.type === "tree") {
+				for (const f of e.object?.entries ?? []) {
+					if (f.type !== "blob") continue
+					push(`${e.name}/${f.name}`)
+				}
+			} else if (e.type === "blob") {
+				push(e.name)
+			}
+		}
+		return out
 	}
 
 	/** Merge knowledge files — overlay wins on filename collision.
@@ -786,6 +885,7 @@ export class GitHubProvider implements BrowseProvider {
 		const stageNames = (frontmatter.stages as string[]) || []
 		const activeStage = (frontmatter.active_stage as string) || ""
 		const intentMode = (frontmatter.mode as string) || "continuous"
+		const schemaIsV4 = isV4Intent(frontmatter)
 
 		// Determine ordered stage list from frontmatter or directory listing
 		const fallbackDirNames =
@@ -822,6 +922,7 @@ export class GitHubProvider implements BrowseProvider {
 					stageNames,
 					stageBranchRef.branch,
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -835,6 +936,7 @@ export class GitHubProvider implements BrowseProvider {
 					stageNames,
 					intentBranch ?? "HEAD",
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -848,6 +950,7 @@ export class GitHubProvider implements BrowseProvider {
 					stageNames,
 					"HEAD",
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -882,13 +985,19 @@ export class GitHubProvider implements BrowseProvider {
 		// stage in the UI. The per-stage status above is already derived
 		// from the stage-branch trust source, so the walk reflects what
 		// the cursor would see.
-		const stageStatusByName: Record<
-			string,
-			"pending" | "active" | "complete"
-		> = {}
+		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
+			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
+		// Monotonic pipeline invariant: a later complete stage back-fills
+		// earlier ones, so the dots can't show an earlier stage active while a
+		// later is complete (see normalizeStageProgression).
+		const normalizedStatus = normalizeStageProgression(
+			orderedStages,
+			stageStatusByName,
+		)
+		for (const s of stages) s.status = normalizedStatus[s.name] ?? s.status
 		const refinedActiveStage =
-			deriveV4ActiveStage(orderedStages, stageStatusByName) || activeStage
+			deriveV4ActiveStage(orderedStages, normalizedStatus) || activeStage
 
 		// Re-parse intent.md off the current stage's branch when one is
 		// present. Engine invariant: every commit during a stage's work
@@ -946,6 +1055,20 @@ export class GitHubProvider implements BrowseProvider {
 			intentFeedbackRef,
 		)
 
+		// Intent-level loose assets (intent-level proof/**, mockups, strays).
+		// Intent branch wins over default on path collision; default uses HEAD
+		// (multi-branch mode leaves `this.branch` empty → effective ref HEAD).
+		const intentAssetsByPath = new Map<string, HaikuAsset>()
+		for (const a of this.parseIntentAssets(slug, "HEAD", defaultData)) {
+			intentAssetsByPath.set(a.path, a)
+		}
+		if (intentData && intentBranch) {
+			for (const a of this.parseIntentAssets(slug, intentBranch, intentData)) {
+				intentAssetsByPath.set(a.path, a)
+			}
+		}
+		const assets = Array.from(intentAssetsByPath.values())
+
 		// Volatile fields read off the current stage's branch (cursor's
 		// trust source); structural fields (studio, stages list, mode,
 		// created_at) come from the intent-branch parse since they're
@@ -1000,7 +1123,7 @@ export class GitHubProvider implements BrowseProvider {
 			operations,
 			reflection,
 			content,
-			assets: [],
+			assets,
 			intentFeedback,
 			intentApprovals: parseIntentApprovals(currentStageFrontmatter),
 			...(this.intentMetaMap.get(slug) || {}),
@@ -1091,6 +1214,7 @@ export class GitHubProvider implements BrowseProvider {
 		const stageNames = (frontmatter.stages as string[]) || []
 		const activeStage = (frontmatter.active_stage as string) || ""
 		const intentMode = (frontmatter.mode as string) || "continuous"
+		const schemaIsV4 = isV4Intent(frontmatter)
 		const ref = this.branch || "HEAD"
 
 		const fallbackDirNames =
@@ -1099,8 +1223,7 @@ export class GitHubProvider implements BrowseProvider {
 				.map((e) => e.name)
 				.sort() ?? []
 
-		const orderedStages =
-			stageNames.length > 0 ? stageNames : fallbackDirNames
+		const orderedStages = stageNames.length > 0 ? stageNames : fallbackDirNames
 		const stages: HaikuStageState[] = []
 		for (const stageName of orderedStages) {
 			const parsed = this.parseStageFromTree(
@@ -1111,6 +1234,7 @@ export class GitHubProvider implements BrowseProvider {
 				stageNames,
 				ref,
 				intentMode,
+				schemaIsV4,
 			)
 			if (parsed) stages.push(parsed)
 		}
@@ -1119,13 +1243,19 @@ export class GitHubProvider implements BrowseProvider {
 		// we just derived, mirroring engine getCurrentState. v4 dropped
 		// intent.md.active_stage, so trusting the FM here would always
 		// show the wrong stage for v4 intents.
-		const stageStatusByName: Record<
-			string,
-			"pending" | "active" | "complete"
-		> = {}
+		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
+			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
+		// Monotonic pipeline invariant: a later complete stage back-fills
+		// earlier ones, so the dots can't show an earlier stage active while a
+		// later is complete (see normalizeStageProgression).
+		const normalizedStatus = normalizeStageProgression(
+			orderedStages,
+			stageStatusByName,
+		)
+		for (const s of stages) s.status = normalizedStatus[s.name] ?? s.status
 		const refinedActiveStage =
-			deriveV4ActiveStage(orderedStages, stageStatusByName) || activeStage
+			deriveV4ActiveStage(orderedStages, normalizedStatus) || activeStage
 
 		const knowledge = this.parseKnowledgeFromTree(data)
 		const operations: HaikuKnowledgeFile[] = (
@@ -1138,6 +1268,7 @@ export class GitHubProvider implements BrowseProvider {
 			slug,
 			this.branch || "HEAD",
 		)
+		const assets = this.parseIntentAssets(slug, this.branch || "HEAD", data)
 
 		return {
 			slug,
@@ -1172,7 +1303,7 @@ export class GitHubProvider implements BrowseProvider {
 			operations,
 			reflection,
 			content,
-			assets: [],
+			assets,
 			intentFeedback,
 			intentApprovals: parseIntentApprovals(frontmatter),
 			branch: this.branch,

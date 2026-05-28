@@ -208,6 +208,16 @@ export function selfRepairMissingApprovals(
 			reviewAgents = []
 		}
 		const isAutopilot = mode === "autopilot"
+		// Self-repair stamps the legacy role set: spec + (optionally
+		// studio agents) + user for reviews; same plus quality_gates
+		// for approvals. The engine-built `continuity` and
+		// `cross-stage-consistency` roles (2026-05-17 pre/post split) are
+		// auto-managed by the cursor's dispatch loop and not part of the
+		// "migration backfill" surface — self-repair fires when a stage
+		// is iteration-complete and a later stage has work (i.e., the
+		// agent's work proves the stage shipped), so the missing engine
+		// stamps will be supplied by the next cursor walk's dispatch loop
+		// rather than synthesized here.
 		const reviewRoles: string[] = isAutopilot
 			? ["spec"]
 			: ["spec", ...reviewAgents, "user"]

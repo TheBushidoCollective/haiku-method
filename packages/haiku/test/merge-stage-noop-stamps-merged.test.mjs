@@ -101,6 +101,7 @@ function setupSpinTrap(slug) {
 			title: "spin trap",
 			studio: "software",
 			mode: "continuous",
+			autotune: false,
 			plugin_version: "4.0.0",
 		}),
 	)

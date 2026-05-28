@@ -135,11 +135,6 @@ export const navigation: NavCategory[] = [
 						href: "/docs/providers/",
 						description: "Ticketing, design, spec, and comms integrations",
 					},
-					{
-						title: "Operations",
-						href: "/docs/operations-guide/",
-						description: "Post-build operations and deployment",
-					},
 				],
 			},
 		],

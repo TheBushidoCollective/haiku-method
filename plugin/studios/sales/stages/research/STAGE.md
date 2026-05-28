@@ -10,22 +10,22 @@ inputs: []
 
 # Research
 
-The research stage turns a named prospect (and the seller's hypothesis about them) into a structured `PROSPECT-BRIEF.md` that every later stage in the sales lifecycle consumes. This stage is research/distillation per architecture §4.1 — units are knowledge topics about the prospect, not execution work.
+The entry stage of the sales lifecycle: turn a named prospect and the seller's hypothesis about them into a structured prospect brief every later stage consumes. This is where the team builds a grounded picture of who they're selling to before any qualifying judgment is made.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the three hats in `plan → do → verify` order:
+Prospect intelligence: the company, its stakeholders and buying committee, its tech environment, recent strategic shifts, and the competitive and market pressures acting on it. Research decides *who the prospect is and what's true about them* — not whether they're worth pursuing (qualification) or what to offer them (proposal).
 
-- **`prospect-researcher`** (plan/do) investigates one knowledge topic about the prospect — the company itself, a specific stakeholder cluster, the buying committee, the tech environment, a recent strategic shift, etc. Produces raw findings with cited sources.
-- **`industry-analyst`** (do) reframes the researcher's findings into sales-relevant intelligence — competitive pressure on this prospect specifically, regulatory drivers, market timing signals that create urgency or risk.
-- **`verifier`** (verify) validates the unit body for substance, citation, internal consistency, and decision-register alignment, then advances or rejects.
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+- Investigate each knowledge topic to a real finding, cited to a source — not a guess dressed as fact.
+- Reframe raw findings into sales-relevant intelligence: where's the competitive pressure, the regulatory driver, the timing signal that creates urgency or risk.
+- Map the buying committee and the stakeholders well enough that qualification can reason about authority and influence.
+- Distinguish what you verified from what you're inferring, so downstream stages know how much weight to put on it.
 
-## Inputs and outputs
+## What NOT to do
 
-The research stage takes nothing from upstream (it's the entry point of the sales lifecycle); its outputs feed `qualification`, `proposal`, `negotiation`, and `close`. The single intent-scope artifact is `PROSPECT-BRIEF.md` (declared in `discovery/`); per-unit bodies are the working drafts that the brief consolidates from.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, prospect-researcher, feedback-assessor]` dispatches per finding. The gate is `auto` — research is a knowledge-distillation stage, no external human signoff is required to advance to qualification. Project overlays at `.haiku/studios/sales/stages/research/` may add house-style conventions (specific data sources to consult, named research playbooks, account-tiering frameworks) without modifying the plugin defaults.
+- Don't score or qualify the opportunity — go/no-go is qualification's call.
+- Don't draft proposals, pricing, or solution shapes.
+- Don't present an unsourced claim as established fact.
+- Don't leave a stakeholder map or tech-environment picture half-built when a later stage depends on it.

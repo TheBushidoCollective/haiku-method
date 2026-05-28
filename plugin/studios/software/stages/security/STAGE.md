@@ -1,7 +1,8 @@
 ---
 name: security
 description: Threat modeling, security review, and vulnerability assessment
-hats: [threat-modeler, security-engineer, security-reviewer, red-team, blue-team]
+optional: true
+hats: [threat-modeler, security-engineer, security-reviewer]
 fix_hats: [classifier, security-engineer, feedback-assessor]
 review: [external, ask]
 elaboration: autonomous
@@ -31,24 +32,21 @@ gate-protocol:
 
 # Security
 
-Take the built system and adversarially evaluate whether it withstands realistic threats. This stage is the project's defensive backstop — it catches the class of bugs that pass functional review (the feature works as specified) but fail under abuse (the feature is used in ways the spec didn't model).
+Adversarially evaluate whether the built system withstands realistic threats. This is the project's defensive backstop — it catches the class of bugs that pass functional review (the feature works as specified) but fail under abuse (the feature is used in ways the spec never modeled).
 
-## Per-unit baton
+## Scope
 
-Units in this stage are **attack surfaces**, not features. Each unit walks `threat-modeler → security-engineer → security-reviewer → red-team → blue-team` per architecture §3.5 (plan → do → verify + adversarial loop):
+Adversarial security evaluation of what was built: threat modeling, mitigations, and active attempts to defeat them. Units here are **attack surfaces**, not features. Not functional review, not new feature work.
 
-- **`threat-modeler`** (plan) enumerates entry points, applies STRIDE (or equivalent) per entry point, identifies trust boundaries, and proposes mitigations
-- **`security-engineer`** (do) implements / specifies the mitigations and produces the threat-model artifact
-- **`security-reviewer`** (verify) confirms every identified threat has a specific mitigation and the model is comprehensive
-- **`red-team`** (adversarial-do) attempts to defeat the model — exploitation feasibility, abuse-of-feature paths, side channels, supply-chain angles
-- **`blue-team`** (adversarial-verify) closes the loop on red-team findings, either confirming each is mitigated or escalating
+## What to do
 
-Detailed process lives in each hat's md file.
+- Model the attack surfaces and trust boundaries, and enumerate threats against each.
+- Pair every identified threat with a specific, concrete mitigation — not a note that it exists.
+- Actually try to defeat the model: abuse-of-feature paths, side channels, supply-chain angles.
+- Route findings back to the stage that owns the fix (development, operations) as feedback.
 
-## Inputs and outputs
+## What NOT to do
 
-The frontmatter above declares the canonical I/O contract. This stage pulls in `development/{security, architecture}` and `operations/reliability` review agents so build-time and deploy-time security concerns flow into the final adversarial pass. Outputs are the threat model, mitigations record, and any findings that route back to development or operations as feedback.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, security-engineer, feedback-assessor]` dispatches per finding. The gate is `[external, ask]` with a `gate-protocol` timeout that escalates after 72h if no HIGH findings remain — the protocol exists so security review can't silently block delivery indefinitely. Project overlays at `.haiku/studios/software/stages/security/` may add team-specific threat libraries, named scanners, or compliance-driven check additions without modifying the plugin defaults.
+- Don't re-grade whether the feature works as specified — functional review already covered that.
+- Don't accept a threat with no mitigation, or wave through "the scanner found nothing" as proof of safety.
+- Don't add features or change behavior.

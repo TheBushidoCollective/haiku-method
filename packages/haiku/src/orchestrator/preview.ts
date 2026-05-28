@@ -181,7 +181,7 @@ export function enrichActionWithPreview(action: OrchestratorAction): void {
 					? `Stage '${stage}' is stuck in a loop — iteration ${escIteration} regenerated the same feedback set as iteration ${escIteration - 1}.`
 					: `Stage '${stage}' hit the ${escMax}-iteration ceiling (now at ${escIteration}) — stopping the autonomous loop.`
 			next_step =
-				'STOP. Surface this to the human: the autonomous loop is halted. Do NOT call haiku_run_next again until the human makes a decision (reject feedback items, file a stage_revisit feedback via `haiku_feedback({ resolution: "stage_revisit" })` to force another cycle, or terminate the intent).'
+				'STOP. Surface this to the human: the autonomous loop is halted. Do NOT call haiku_run_next again until the human makes a decision (reject feedback items, file a stage_revisit feedback via `haiku_feedback({ resolution: "stage_revisit", severity: "blocker" })` to force another cycle, or terminate the intent).'
 			break
 		}
 
@@ -225,12 +225,13 @@ export function enrichActionWithPreview(action: OrchestratorAction): void {
 
 		case "external_review_requested":
 			tell_user = `Stage '${stage}' needs external review — submit the work through your project's review process.`
-			next_step = "After external approval, run /haiku:pickup to continue."
+			next_step =
+				"After external approval, run /haiku:haiku-pickup to continue."
 			break
 
 		case "awaiting_external_review":
 			tell_user = `Stage '${stage}' is waiting on external review.`
-			next_step = "Run /haiku:pickup after the review is approved."
+			next_step = "Run /haiku:haiku-pickup after the review is approved."
 			break
 
 		case "blocked":

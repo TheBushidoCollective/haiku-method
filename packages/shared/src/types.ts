@@ -1,5 +1,7 @@
 // Shared H·AI·K·U types used by both the website and review-app
 
+import type { ProgressStep } from "./progress-milestones"
+
 export interface HaikuIntent {
 	slug: string
 	title: string
@@ -39,6 +41,9 @@ export interface HaikuUnit {
 	startedAt: string | null
 	completedAt: string | null
 	refs: string[]
+	/** Intent-relative paths the unit consumes (upstream outputs, knowledge
+	 *  artifacts, the spec it implements). From the unit FM `inputs:` field. */
+	inputs: string[]
 	outputs: string[]
 	criteria: Array<{ text: string; checked: boolean }>
 	content: string
@@ -61,6 +66,12 @@ export interface HaikuStageState {
 	name: string
 	status: "pending" | "active" | "complete"
 	phase: string
+	/** Granular per-stage milestone track (elaborate → each review role →
+	 *  execute → each approval role), derived from per-unit FM. Mirrors the
+	 *  status-line / SPA track so the browse PhaseStepper can render a
+	 *  fine-grained strip. Absent/empty on stages derived from a legacy
+	 *  state.json or with no units — the stepper falls back to coarse phases. */
+	milestones?: ProgressStep[]
 	startedAt: string | null
 	completedAt: string | null
 	gateOutcome: string | null
@@ -69,6 +80,15 @@ export interface HaikuStageState {
 	/** Stage-scoped feedback items targeting units in this stage or the
 	 *  stage itself. Loaded by the detail view only. */
 	feedback?: HaikuFeedback[]
+	/** The per-stage user-facing BRIEF (`stages/<stage>/BRIEF.md`) — the
+	 *  plain-language summary the briefer wrote before the gate. Read
+	 *  server-side / by the browse provider; agents never read it. Absent
+	 *  when the stage has no brief yet. */
+	brief?: string | null
+	/** The per-stage agent OBSERVATIONS (`stages/<stage>/observations.md`) —
+	 *  the free-form reflection written at stage close. Absent until the
+	 *  stage completes (or when reflection is opted out). */
+	observations?: string | null
 	/** The git branch for this stage (e.g. haiku/{slug}/{stage}) */
 	branch?: string
 	/** PR/MR URL if one exists for this stage's branch */
@@ -95,6 +115,11 @@ export interface HaikuFeedback {
 	/** Whether the FB was authored by a human or an agent. Drives the
 	 *  amber-vs-stone styling in the UI. */
 	authorType: "agent" | "human" | "system" | null
+	/** Finding severity (`blocker` | `high` | `medium` | `low`). Review agents
+	 *  classify as they file; user/SPA findings land severity-less and the
+	 *  classifier fix-hat backfills it. `null` when unclassified. Drives the
+	 *  fix-loop dispatch order; surfaced here as a badge + filter. */
+	severity: "blocker" | "high" | "medium" | "low" | null
 	/** Markdown body of the FB file (everything after the YAML frontmatter). */
 	body: string
 	/** Unit slug this FB targets, or null for stage/intent-scope items. */

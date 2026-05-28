@@ -11,11 +11,13 @@ import { appendFileSync } from "node:fs"
 import { WsClientMessageSchema, type WsServerMessage } from "haiku-api"
 import type { WebSocket as WsWebSocket } from "ws"
 import { broadcastIntent } from "../intent-broadcaster.js"
+import { closeMicroApp } from "../micro-app.js"
 import {
 	getSession,
 	type QuestionAnnotations,
 	type QuestionAnswer,
 	type ReviewAnnotations,
+	recordHeartbeat,
 	updateDesignDirectionSession,
 	updateQuestionSession,
 	updateSession,
@@ -124,6 +126,12 @@ export function closeSessionConnection(
 	logClose(
 		`closeSessionConnection(${sessionId}) invoked [build:fastify] reason=${reason ?? "null"}`,
 	)
+	// Tear down a micro-app window if this session opened one — the gate
+	// resolved (or the session was cancelled), so the standalone SPA
+	// window should close. Runs before the early-return below so it
+	// fires even when no WS socket was ever registered (headless-launch
+	// hosts, or a window that closed its own socket).
+	closeMicroApp(sessionId)
 	const socket = wsConnections.get(sessionId)
 	if (!socket) {
 		logClose(
@@ -177,6 +185,24 @@ export function handleWebSocketMessage(sessionId: string, raw: string): void {
 	const msg = schemaResult.data
 	const session = getSession(sessionId)
 	if (!session) return
+
+	// Liveness heartbeat — connection-level, not session-type-specific.
+	// The SPA sends one every 30s over this long-lived socket; recording
+	// it keeps the presence watch from tripping (and from re-launching a
+	// browser / declaring a deadlock) while the human is sitting at the
+	// gate. The ack is the client's proof the engine still sees it. This
+	// is the WS analog of the HTTP HEAD /heartbeat route — the WS path is
+	// preferred because it rides the same connection the gate review uses,
+	// so a refresh that reconnects the socket resumes presence with no
+	// extra request.
+	if (msg.type === "heartbeat") {
+		recordHeartbeat(sessionId)
+		sendToWebSocket(sessionId, {
+			type: "heartbeat_ack",
+			...(typeof msg.t === "number" ? { t: msg.t } : {}),
+		} satisfies WsServerMessage)
+		return
+	}
 
 	if (session.session_type === "review" && msg.type === "decide") {
 		const decision =

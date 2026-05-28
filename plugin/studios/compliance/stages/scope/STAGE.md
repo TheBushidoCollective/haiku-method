@@ -10,24 +10,22 @@ inputs: []
 
 # Scope
 
-Frame the compliance engagement before any assessment work begins. This stage produces the intent-scope `CONTROL-MAPPING.md` — the document every downstream stage reads to know which controls apply, which systems are in-scope, and what data sensitivity those systems handle. Get this wrong and the rest of the lifecycle assesses, remediates, or certifies the wrong surface.
+The opening stage of the compliance lifecycle: frame the engagement before any assessment begins. This is where the applicable framework, the in-scope systems, and the data sensitivity get pinned down — the boundary every later stage assesses, remediates, certifies, and documents against.
 
-## Per-unit baton
+## Scope
 
-Each scoping unit walks the three hats in `plan → do → verify` order:
+Naming the framework(s) and version(s) in play, mapping their control families to specific systems and data flows, and drawing an explicit in-scope / out-of-scope line with rationale. Scope decides *what compliance surface is in play* — not whether each control is met (that's assess), nor how to close a gap (that's remediate).
 
-- **`compliance-analyst`** (plan) reads the engagement brief, names the applicable framework(s) and version(s), and identifies the control families in play
-- **`scope-definer`** (do) maps controls to specific systems, services, and data flows; produces the system inventory and explicit in-scope / out-of-scope rationale
-- **`verifier`** (verify) validates the scoping memo against substance, citation, and decision-register consistency, then advances or rejects to the responsible hat
+## What to do
 
-Detailed process lives in each hat's md — this stage enforces the chain, not the substance.
+- Identify the applicable framework(s) and version(s) precisely; cite the controlling authority, not a paraphrase.
+- Inventory the systems, services, and data flows each control family touches, and classify the data sensitivity each carries.
+- State the in-scope / out-of-scope boundary explicitly, with a defensible reason for every exclusion.
+- Produce a control mapping concrete enough that a downstream stage can answer "is this in-scope?" without re-deciding it.
 
-## Inputs and outputs
+## What NOT to do
 
-This is the entry stage, so `inputs:` is empty. The output (`CONTROL-MAPPING.md`) is intent-scope and feeds the `assess` stage's per-control evaluation work plus every downstream stage's "is this in-scope?" question.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, compliance-analyst, feedback-assessor]` dispatches per finding — the classifier routes the FB to the right unit, `compliance-analyst` re-authors the scoping content, the assessor independently decides closure. The gate is `auto`: scoping decisions live in the body and downstream stages will surface real misclassifications via their own findings, so the engine advances once verifiers approve.
-
-Project overlays at `.haiku/studios/compliance/stages/scope/` may add framework-specific conventions (control-id formatting, system-inventory templates, named GRC tooling) without modifying these plugin defaults.
+- Don't evaluate whether controls are met or rank gaps — that's the assess stage.
+- Don't design or implement control changes — that belongs to remediate.
+- Don't leave a system unclassified or an exclusion unjustified; an ambiguous boundary here misdirects every stage that follows.
+- Don't assume what a source's docs claim about its data; scope what's actually true.

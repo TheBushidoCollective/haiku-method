@@ -115,18 +115,18 @@ test("start_unit_hat falls back to studio default when units carry no per-unit m
 			"",
 		)
 		const prompt = readPromptBody(wrapper)
-		// Both units annotated with the studio default (sonnet).
+		// File-backed dispatch (2026-05-19): the per-unit model lands as
+		// the `model="..."` attribute on each unit's `<subagent>` block,
+		// not as a prose `(model: X)` annotation. Each block is headed
+		// by the unit name, so a non-greedy match from the unit's heading
+		// to its `<subagent ... model="X">` tag pins the tier to the unit.
 		assert.ok(
-			/`unit-01`.*\(model: sonnet\)/.test(prompt),
-			`expected unit-01 annotated as sonnet; got:\n${prompt.slice(0, 800)}`,
+			/`unit-01`[\s\S]*?<subagent[^>]*model="sonnet"/.test(prompt),
+			`expected unit-01's dispatch block to carry model="sonnet"; got:\n${prompt.slice(0, 1200)}`,
 		)
 		assert.ok(
-			/`unit-02`.*\(model: sonnet\)/.test(prompt),
-			`expected unit-02 annotated as sonnet; got:\n${prompt.slice(0, 800)}`,
-		)
-		assert.ok(
-			/Per-unit model:/.test(prompt),
-			`expected the dispatch instruction to call out per-unit model; got:\n${prompt.slice(0, 800)}`,
+			/`unit-02`[\s\S]*?<subagent[^>]*model="sonnet"/.test(prompt),
+			`expected unit-02's dispatch block to carry model="sonnet"; got:\n${prompt.slice(0, 1200)}`,
 		)
 	})
 })
@@ -190,12 +190,12 @@ test("start_unit_hat picks up per-unit model overrides — escalated units stay 
 		)
 		const prompt = readPromptBody(wrapper)
 		assert.ok(
-			/`unit-01`.*\(model: sonnet\)/.test(prompt),
-			`unit-01 should still be sonnet (studio default); got:\n${prompt.slice(0, 800)}`,
+			/`unit-01`[\s\S]*?<subagent[^>]*model="sonnet"/.test(prompt),
+			`unit-01's dispatch block should carry model="sonnet" (studio default); got:\n${prompt.slice(0, 1200)}`,
 		)
 		assert.ok(
-			/`unit-02`.*\(model: opus\)/.test(prompt),
-			`unit-02 should be opus (escalated); got:\n${prompt.slice(0, 800)}`,
+			/`unit-02`[\s\S]*?<subagent[^>]*model="opus"/.test(prompt),
+			`unit-02's dispatch block should carry model="opus" (escalated); got:\n${prompt.slice(0, 1200)}`,
 		)
 	})
 })

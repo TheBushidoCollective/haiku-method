@@ -113,6 +113,20 @@ test("elaborate fresh: emits stage def + workflow contracts + decide block", () 
 			"workflow contracts block emitted",
 		)
 		assert.match(body, /haiku_run_next/, "agent told to call haiku_run_next")
+		// Unit authoring must name the MCP tool up front so the agent doesn't
+		// reach for generic Write and burn a round-trip on the guard hook.
+		assert.match(
+			body,
+			/haiku_unit_write/,
+			"decompose body must name haiku_unit_write as the unit-authoring tool",
+		)
+		// …and must NOT tell the agent to 'write unit files to <path>', the old
+		// phrasing that invited the generic Write the guard hook blocks.
+		assert.doesNotMatch(
+			body,
+			/write unit files to/i,
+			"decompose body must not invite generic Write to a units/ path",
+		)
 		assert.ok(body.length > 500, `body too short (${body.length} chars)`)
 	} finally {
 		process.chdir(cwd)
@@ -266,6 +280,100 @@ test("elaborate body always names the slug (anti-ambiguity)", () => {
 			dir: intentDir,
 		})
 		assert.match(body, /named-slug/, "slug name appears in body")
+	} finally {
+		process.chdir(cwd)
+		rmSync(root, { recursive: true, force: true })
+	}
+})
+
+test("elaborate in autopilot: autonomous mechanics + zero-user-interaction directive (never the collaborative ask-the-user path)", () => {
+	// Regression: `action.elaboration` was never populated by the cursor, so the
+	// builder pinned EVERY mode to collaborative — autopilot included — which
+	// instructs the agent to ask the user questions during elaboration. In
+	// autopilot the only human touchpoint is the pre-intent conversation.
+	const root = mkdtempSync(join(tmpdir(), "elab-autopilot-"))
+	gitInit(root)
+	setupSyntheticStudio(root)
+	const intentDir = join(root, ".haiku", "intents", "auto")
+	mkdirSync(join(intentDir, "stages", "a", "units"), { recursive: true })
+	mkdirSync(join(intentDir, "stages", "a", "feedback"), { recursive: true })
+	writeFileSync(
+		join(intentDir, "intent.md"),
+		`---\ntitle: auto\nstudio: synth\nmode: autopilot\nplugin_version: "9.0.0"\nstarted_at: 2026-04-01T00:00:00.000Z\napprovals: {}\nsealed_at: null\n---\n# auto\n`,
+	)
+	const cwd = process.cwd()
+	process.chdir(root)
+	try {
+		const body = buildElaboratePromptBody({
+			slug: "auto",
+			studio: "synth",
+			// Action says collaborative AND STAGE.md says collaborative — autopilot
+			// must override both to the autonomous, no-interaction path.
+			action: {
+				action: "elaborate",
+				stage: "a",
+				elaboration: "collaborative",
+				iteration: 0,
+				completed_units: [],
+				pending_units: [],
+				iterative: false,
+			},
+			dir: intentDir,
+		})
+		assert.match(
+			body,
+			/Mode: \*\*autonomous\*\*/,
+			"autopilot uses the autonomous mechanics block",
+		)
+		assert.doesNotMatch(
+			body,
+			/Mode: \*\*collaborative\*\*/,
+			"autopilot must NOT use the collaborative (ask-the-user) mechanics",
+		)
+		assert.match(
+			body,
+			/Autopilot — zero user interaction/,
+			"autopilot no-interaction directive present",
+		)
+		assert.match(
+			body,
+			/Do NOT call `AskUserQuestion`/,
+			"autopilot explicitly bans user-facing prompt tools",
+		)
+	} finally {
+		process.chdir(cwd)
+		rmSync(root, { recursive: true, force: true })
+	}
+})
+
+test("elaborate in continuous mode keeps the stage's collaborative path (no autopilot directive)", () => {
+	const root = mkdtempSync(join(tmpdir(), "elab-continuous-"))
+	gitInit(root)
+	setupSyntheticStudio(root)
+	const intentDir = setupIntent(root, "cont") // setupIntent → mode: continuous
+	const cwd = process.cwd()
+	process.chdir(root)
+	try {
+		const body = buildElaboratePromptBody({
+			slug: "cont",
+			studio: "synth",
+			action: {
+				action: "elaborate",
+				stage: "a",
+				iteration: 0,
+				completed_units: [],
+				pending_units: [],
+				iterative: false,
+			},
+			dir: intentDir,
+		})
+		// STAGE.md declares `elaboration: collaborative`; continuous honors it.
+		assert.match(body, /Mode: \*\*collaborative\*\*/, "collaborative path kept")
+		assert.doesNotMatch(
+			body,
+			/Autopilot — zero user interaction/,
+			"no autopilot directive outside autopilot",
+		)
 	} finally {
 		process.chdir(cwd)
 		rmSync(root, { recursive: true, force: true })

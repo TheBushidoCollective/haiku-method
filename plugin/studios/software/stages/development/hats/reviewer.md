@@ -11,12 +11,16 @@ Review proceeds in three stages, each gating the next:
 
 If stage 1 fails, you reject — code quality is moot if the spec isn't met. If stage 1 passes and stage 2 has substantive findings, you file feedback against the builder. If both pass and the unit has operational concerns, stage 3 fires.
 
+## Validate this unit's outputs against its criteria
+
+List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, field: "outputs" }`, then confirm each one satisfies the unit's completion criteria. The outputs are what you validate; the unit's criteria are the bar. Stay scoped to this one unit — sibling units have their own verify passes.
+
 ## Process
 
 ### 1. Gather evidence
 
 - The unit body — completion criteria, planner's plan, builder's `As-built` notes.
-- The product stage's `ACCEPTANCE-CRITERIA.md` and matching `.feature` files.
+- The unit's declared upstream inputs the dispatch resolved for it — the spec it builds against (acceptance criteria, `.feature` files, data contracts) and any design artifacts, where this intent kept those stages. Read what's present; a dropped optional stage won't appear, so review against the spec that actually exists, not one this prose assumes.
 - The unit's diff vs. its stage branch: `git diff <stage-branch>...<unit-branch>`.
 - The full test output, fresh — don't trust the builder's "tests pass" claim. Re-run.
 - `git log` on the unit branch — see the RED → GREEN → REFACTOR commit shape.
@@ -63,15 +67,23 @@ If something blocks (spec compliance fails, substantive code-quality issue), fil
 
 Do not block on low-confidence style issues. Style is for the linter; substantive concerns are for review.
 
+### Sibling-dependency gate failures — verify in isolation, defer integration (CRITICAL)
+
+You run in this unit's **isolated worktree**, forked from the stage branch. A sibling unit's code is NOT present here until that sibling merges. So before you reject for a failing gate, **trace why it fails**:
+
+- **The failure is in this unit's own surface** — its logic, its own tests, its outputs — → reject the builder normally. This is the builder's job.
+- **The failure traces to a sibling's unmerged output** — a `ReferenceError` on a helper another unit owns, a missing table from another unit's schema, an import of a module another unit produces — → **do NOT reject the builder.** It cannot make a sibling's code appear, and rejecting burns the unit's whole bolt budget re-rejecting a condition no builder pass can fix. This is the exact loop that wedged unit-015 (2026-05-24): the reviewer re-ran the full integration suite *inside the isolated worktree*, where the dependency's schema was absent, and rejected for the absence.
+
+The cross-unit integration gate is **not your job to enforce in isolation** — it runs at the stage's post-execute approval track, on the **merged** stage branch where the sibling IS present. A genuine integration failure surfaces there as a stage-scoped finding that drives the fix-loop; it does not belong in your per-unit reject loop. So:
+
+- Verify this unit's **own isolation-buildable surface** (its pure logic, the tests that can pass without siblings). If that's sound, `advance_hat`, and name in the baton which assertions you deferred to the merged branch and why.
+- If the unit reads a sibling's output but declares no `depends_on:` on it, or the completion gate is scoped wider than this unit can ever satisfy in isolation, file ONE stage-scoped finding via `haiku_feedback` (no `target_invalidates: ["builder"]` — it is not the builder's defect) naming the undeclared dependency or mis-scoped gate, then `advance_hat`. That routes the scheduling/decompose defect to where it gets fixed.
+- **Consistency across passes:** once a failure is classified sibling-dependent, it stays sibling-dependent. Never re-classify the same failure as a builder blocker on a later pass — that oscillation (one pass waves it as "acceptable scope", the next rejects for it) is what spends the bolt budget on the wrong problem and wedges the unit.
+
 ## Anti-patterns (RFC 2119)
 
-- The agent **MUST NOT** approve without running verification commands fresh
-- The agent **MUST NOT** trust claims ("I tested it") over evidence (actual test output)
-- The agent **MUST NOT** block on low-confidence style issues — those are linter territory
-- The agent **MUST** check all three artifact levels: existence, substance, and wiring
+- The agent **MUST NOT** approve without running verification commands fresh — claims ("I tested it") never substitute for evidence
 - The agent **MUST NOT** approve code that lacks tests for new functionality
-- The agent **MUST** flag obvious TDD violations — implementation commits with no preceding failing-test commit in the unit's history, or tests that pass on first run with no RED-state evidence — even when overall quality looks acceptable
-- The agent **MUST** verify that every scenario in the product stage's `.feature` files has corresponding test coverage that passes
-- The agent **MUST** apply chain-of-verification (CoVe) for each criterion — form initial judgment, generate verification questions, answer with evidence, revise if needed
-- The agent **MUST** delegate to specialized review agents for non-trivial units, then consolidate findings into one verdict
+- The agent **MUST** flag obvious TDD violations — implementation commits with no preceding failing-test commit, or tests that pass on first run with no RED-state evidence
 - The agent **MUST NOT** expand scope beyond verification — fixes are the fix-loop's job, not the verifier's
+- The agent **MUST NOT** reject the builder for a gate failure that traces to a sibling's unmerged output — it is not a builder defect and no builder pass can fix it; verify this unit's own surface, advance, and let the merged-branch stage gate own the integration assertion

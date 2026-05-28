@@ -10,24 +10,22 @@ inputs: []
 
 # Landscape
 
-The opening stage of the executive-strategy lifecycle. Take the strategic question the user landed with and build the shared picture of the world it has to be decided in: market forces, competitor moves, regulatory pressure, organizational capability, and the uncertainties that matter most. Downstream stages (`options`, `evaluate`, `decide`) cannot do useful work if this picture is missing or wrong.
+The opening stage of the executive-strategy lifecycle: take the strategic question the user landed with and build the shared picture of the world it has to be decided in. The options, evaluation, and decision stages can't do useful work if this picture is missing or wrong.
 
-Units in this stage are **knowledge topics** — one investigable surface per unit (e.g. "regulatory environment", "competitive positioning", "internal capability"). The stage produces the intent-scope `LANDSCAPE-ANALYSIS.md` synthesizing all topics into one coherent view.
+## Scope
 
-## Per-unit baton
+Investigating the forces that bound the decision — market dynamics, competitor moves, regulatory pressure, organizational capability, and the uncertainties that matter most — and synthesizing them into one coherent view. Landscape decides *what the strategic context is* — it does not generate options (options), score them (evaluate), or recommend one (decide).
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`strategist`** (plan) frames the topic, defines scope, and names the questions the analysis must answer
-- **`analyst`** (do) gathers and validates the evidence — market data, competitor moves, capability signals
-- **`verifier`** (verify) checks substance, citation, internal consistency, and decision-register accountability
+- Frame each topic as an investigable surface and name the questions the analysis must answer.
+- Gather and validate the evidence — market data, competitor moves, capability signals — and cite it.
+- Surface the uncertainties that actually move the decision, not just the comfortable knowns.
+- Use frameworks like SWOT, Porter's Five Forces, or PESTEL as structuring concepts, never as a checklist every topic must fit.
 
-Detailed process lives in each hat's md file.
+## What NOT to do
 
-## Inputs and outputs
-
-No upstream inputs — this is stage zero. The output `LANDSCAPE-ANALYSIS.md` feeds `options` and `evaluate`. Frameworks like SWOT, Porter's Five Forces, and PESTEL are legitimate generic structuring devices; use them as concepts, not as a checklist that forces every topic to fit.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, strategist, feedback-assessor]` dispatches per finding — the classifier targets the FB, the strategist re-frames or re-sources, and the assessor independently decides closure. The gate is `auto` — once verifier hats advance and review agents are clean, the workflow engine moves on without human approval. Project overlays at `.haiku/studios/executive-strategy/stages/landscape/` may add house-style conventions (org-specific framing language, decision-register format, citation style) without modifying the plugin defaults.
+- Don't generate or pre-favor strategic options — that's the options stage.
+- Don't score, rank, or stress-test anything — that's evaluate.
+- Don't make or pre-load a recommendation — that's decide.
+- Don't assert a market or capability claim without the evidence behind it.

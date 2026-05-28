@@ -1,0 +1,12 @@
+description = "Zero-ceremony single-unit execution — run one task directly through a stage's hat loop without intent or workflow scaffolding"
+prompt = """
+# Zap
+
+Run a single task directly through a stage's hat loop — no intent file, no unit decomposition, no workflow tick. Stateless: nothing is written to `.haiku/`. Use it for bug fixes, typos, config tweaks, and small refactors where the cost of a mistake is "edit and re-run."
+
+Call `haiku_zap { task: "<the task>", studio?, stage? }`.
+
+- `studio` / `stage` are optional. Omit them to default to the build-class execution stage of the software studio.
+- If the tool returns `zap_studio_not_found` or `zap_stage_not_found`, surface the `valid_studios` / `valid_stages` list with `AskUserQuestion`, let the user pick, and call `haiku_zap` again with their choice.
+- Otherwise follow the returned `message` verbatim. It contains the resolved studio/stage, the ordered hat sequence with each hat's role, a ready-to-spawn subagent prompt per hat, and the full run/verify/commit procedure (preflight, sequential dispatch, PASS/FAIL parsing, retry cap, commit-only-on-PASS).
+"""

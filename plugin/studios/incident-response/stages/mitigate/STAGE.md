@@ -1,7 +1,7 @@
 ---
 name: mitigate
 description: Apply immediate fixes to stop the bleeding — rollbacks, feature flags, scaling
-hats: [mitigator, verifier]
+hats: [mitigation-planner, mitigator, verifier]
 fix_hats: [classifier, mitigator, feedback-assessor]
 review: [ask, await]
 elaboration: collaborative
@@ -12,21 +12,22 @@ inputs:
 
 # Mitigate
 
-Stop user-facing impact as fast as safely possible. Mitigation is not the permanent fix — it's the action that returns the system to acceptable behavior while the resolve stage builds the proper fix on a calmer timeline. Common mitigation moves are reversible by design: roll back a deploy, flip a feature flag off, scale a resource up, shed load, drain traffic from a failing region. The mitigate stage runs in parallel with investigate; you do not need a confirmed root cause to apply a known-safe mitigation, but you must name what hypothesis the mitigation is acting on and what signal will confirm it worked.
+Stop user-facing impact as fast as safely possible. Mitigation is not the permanent fix — it returns the system to acceptable behavior while resolve builds the proper fix on a calmer timeline. It runs in parallel with investigate: a known-safe mitigation doesn't wait for a confirmed root cause, as long as the action names the hypothesis it's acting on.
 
-## Per-unit baton
+## Scope
 
-Each mitigate unit walks `mitigator → verifier` in order. A unit here is one mitigation action — one rollback, one flag flip, one scaling operation, one traffic redirect:
+Restoring acceptable behavior with reversible actions: rollbacks, feature-flag flips, scaling, load shedding, traffic draining. Mitigate decides *how to stop the bleeding now* — not why it's bleeding (investigate) or how to fix it for good (resolve). Its moves are temporary by design and meant to be undone once resolve lands.
 
-- **`mitigator`** (plan + do) chooses the fastest reversible action that addresses the hypothesized cause, names the exact commands or config changes, applies them, and documents what changed. The baton: a `MITIGATION-LOG.md` slice with the action, the exact change applied, the timestamp, and the rollback procedure for the mitigation itself.
-- **`verifier`** (verify) confirms the mitigation actually stopped user-facing impact by measuring the same signals that detected the incident, waits long enough for metrics to stabilize, and checks for side effects introduced by the mitigation. Advances or rejects to the responsible hat.
+## What to do
 
-This stage runs `plan → do → verify` with `mitigator` carrying the plan-and-do roles because a separate planner step adds latency during an active incident; the planning and the action are tightly coupled and live in the same head.
+- Prefer reversible, known-safe actions; name the hypothesis each mitigation targets and the signal that will confirm it worked.
+- Record every action — the exact change, the timestamp, and the rollback procedure — as you go.
+- Watch the verification signal; a non-recovering signal means the hypothesis was wrong, not that you should escalate the same move.
+- Require an explicit acknowledgment that user-facing impact has actually stopped before calling the incident mitigated.
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes `investigate/root-cause` — the working hypothesis and supporting evidence. The mitigate stage does not block on a confirmed root cause if a known-safe mitigation is available against the hypothesis, but the log records which hypothesis the mitigation acted on so that a wrong hypothesis can be detected from a non-recovering signal. Produces `MITIGATION-LOG.md` recording every action attempted, what changed, when, and the verification signal that proved (or refuted) recovery.
-
-## Fix loop and gate
-
-When review feedback opens against a mitigation action, `fix_hats: [classifier, mitigator, feedback-assessor]` dispatches per finding. The gate is `[ask, await]` — the user chooses between a fast local approval (because mitigation success is the canonical "incident over" moment and a human typically signs off explicitly) or `await` to block on an external event (e.g., a status-page resolution post, regulatory clock closure). Both paths require an explicit acknowledgment that user-facing impact has stopped.
+- Don't build the permanent fix or ship the regression test — that's resolve; mitigation is the holding action.
+- Don't redo the diagnosis; consume investigate's working hypothesis.
+- Don't apply an irreversible change as a mitigation when a reversible one exists.
+- Don't leave a mitigation in place without recording which hypothesis it's holding back, or resolve can't clean it up safely.

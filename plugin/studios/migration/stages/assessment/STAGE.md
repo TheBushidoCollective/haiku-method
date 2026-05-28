@@ -1,7 +1,7 @@
 ---
 name: assessment
 description: Inventory what's being migrated, identify risks and dependencies
-hats: [migration-analyst, risk-assessor]
+hats: [migration-analyst, risk-assessor, verifier]
 fix_hats: [classifier, migration-analyst, feedback-assessor]
 review: auto
 elaboration: collaborative
@@ -10,21 +10,22 @@ inputs: []
 
 # Assessment
 
-Inventory the migration scope and surface the risk register. This is the research stage of the migration studio — units are knowledge topics (source-system surfaces, dependency clusters, risk categories), NOT execution work. Downstream stages create their own units from what this stage discovers.
+The opening stage of a migration: inventory everything in scope and surface the risk register before any mapping or moving begins. This is where the unknowns about the source system get turned into a documented picture — what exists, who owns it, what depends on what, and where the migration can hurt.
 
-## Per-unit baton
+## Scope
 
-Each assessment unit walks two hats in `plan → do` order, with the workflow engine's universal spec-verify gate acting as the verify role at stage close:
+Source-system inventory, dependency mapping, and risk classification. Assessment decides *what is being migrated and what could go wrong* — not how source maps to target (mapping), how the move is implemented (migrate), how it's verified (validation), or how it's cut over (cutover). Units are knowledge topics; downstream stages create their own work from what this stage finds.
 
-- **`migration-analyst`** (plan) reads the migration brief, scopes the unit's slice of the source system, and produces the inventory rows for that slice (artifacts, owners, volumes, dependencies, runtime touchpoints).
-- **`risk-assessor`** (do) consumes the inventory rows and produces the risk register entries that flow from them — data-loss vectors, downtime windows, blast radius, ordering constraints, mitigations.
+## What to do
 
-The baton is the inventory itself: every risk entry MUST cite the inventory row(s) it derives from. A risk with no source row is a sign the inventory missed something.
+- Inventory the source surfaces — artifacts, owners, volumes, runtime touchpoints — and source every entry.
+- Map the dependency graph so ordering constraints and blast radius are visible.
+- Build a risk register where every entry (data-loss vector, downtime window, ordering constraint) cites the inventory row it derives from.
+- Surface unknowns explicitly rather than assuming a surface is simple because it's undocumented.
 
-## Inputs and outputs
+## What NOT to do
 
-Assessment has no upstream stage inputs — it's the entry point. Outputs are `MIGRATION-INVENTORY.md` (the source-system inventory + dependency graph + risk register), which feeds every downstream stage.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, migration-analyst, feedback-assessor]` dispatches per finding. The classifier routes the FB to the right unit; `migration-analyst` is the implementer (re-authoring the inventory or risk section where the finding lands); `feedback-assessor` decides closure. The gate is `auto` — assessment passes when the inventory and risk register are substantively complete and the review agents sign off; no external doc review is required at this stage. Project overlays at `.haiku/studios/migration/stages/assessment/` may add team-specific risk taxonomies or inventory column conventions without modifying the plugin defaults.
+- Don't define transformation rules or field mappings — that's the mapping stage.
+- Don't write migration code or plan the cutover; those are downstream stages.
+- Don't record a risk with no source inventory row, or an inventory that glosses over an unowned surface.
+- Don't treat an undocumented dependency as nonexistent; a missed dependency is a migration failure later.

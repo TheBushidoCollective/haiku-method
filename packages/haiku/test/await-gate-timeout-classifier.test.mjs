@@ -7,7 +7,9 @@
 import assert from "node:assert"
 import {
 	buildAwaitTimeoutResponse,
+	isAwaitPresenceLostError,
 	isAwaitWaitTimeoutError,
+	resolveGateReviewUrl,
 } from "../src/tools/orchestrator/_await_gate_timeout.ts"
 
 let passed = 0
@@ -93,6 +95,51 @@ test("response does NOT use alarming language ('failed', 'error')", () => {
 		!text.includes("fail"),
 		"timeout message must not mention 'fail' — same reason",
 	)
+})
+
+console.log("\n── presence-loss → return URL + hold (2026-05-26) ─────────")
+
+test("isAwaitPresenceLostError matches the lost-presence throw", () => {
+	assert.strictEqual(
+		isAwaitPresenceLostError("Review session X lost presence — the SPA…"),
+		true,
+	)
+	assert.strictEqual(isAwaitPresenceLostError("Review timeout"), false)
+})
+
+test("resolveGateReviewUrl prefers the passed URL", () => {
+	assert.strictEqual(
+		resolveGateReviewUrl("http://passed", { gate_review_url: "http://fm" }, ""),
+		"http://passed",
+	)
+})
+
+test("resolveGateReviewUrl falls back to the stage-scoped pointer, then intent-scoped", () => {
+	// stage-scoped wins over intent-scoped when present
+	assert.strictEqual(
+		resolveGateReviewUrl(
+			undefined,
+			{
+				gate_review_url: "http://intent",
+				gate_review_url_inception: "http://stage",
+			},
+			"inception",
+		),
+		"http://stage",
+	)
+	// no stage pointer → intent-scoped
+	assert.strictEqual(
+		resolveGateReviewUrl(
+			undefined,
+			{ gate_review_url: "http://intent" },
+			"design",
+		),
+		"http://intent",
+	)
+})
+
+test("resolveGateReviewUrl returns '' when no URL is known (agent told to re-open)", () => {
+	assert.strictEqual(resolveGateReviewUrl(undefined, {}, "inception"), "")
 })
 
 console.log(

@@ -9,12 +9,30 @@
  * corresponding artifact's review URL (added 2026-05-13 — pre-fix
  * these were inert text and reviewers had to manually jump around
  * the stepper). Path-to-route mapping lives in `pathToReviewRoute`
- * below; it covers the four kinds the SPA can route to:
- *   - `units/<name>` → /stages/<stage>/units/<name>
- *   - `knowledge/<NAME>.md` → /stages/<stage>/knowledge/<NAME>.md
- *   - `stages/<stage>/artifacts/<file>` → /stages/<stage>/outputs/<file>
- *   - `stages/<stage>/<file>` (root-level stage file) →
- *     /stages/<stage>/other/<file>
+ * below.
+ *
+ * Resolution has two layers (first hit wins):
+ *
+ *   1. SHAPE rules — paths whose route can be read off the string alone:
+ *      - bare `unit-*` → /stages/<currentStage>/units/<name>
+ *      - `knowledge/<NAME>.md` → /stages/<currentStage>/knowledge/<NAME>.md
+ *      - `stages/<stage>/units/<file>` → /stages/<stage>/units/<file>
+ *      - `stages/<stage>/artifacts/<file>` → /stages/<stage>/outputs/<file>
+ *      - `stages/<stage>/<file>` (root-level) → /stages/<stage>/other/<file>
+ *
+ *   2. ARTIFACT-INDEX lookup — paths that DON'T carry their own stage
+ *      segment but DO point at a real artifact the session knows about.
+ *      Units routinely declare inputs/outputs as INTENT-dir-relative
+ *      paths outside the `stages/` tree (`product/ACCEPTANCE-CRITERIA.md`,
+ *      `features/worker_new_badge.feature`) — these are `scope: intent`
+ *      discovery artifacts that the server surfaces as output / knowledge
+ *      artifacts carrying the PRODUCING stage. The shape rules can't infer
+ *      that stage from the string, so before falling back to plain text we
+ *      look the path up in the index the caller builds from the session's
+ *      `output_artifacts` + `stage_artifacts` + `knowledge_files`. A hit
+ *      routes to the producing stage's outputs / knowledge tab. (Pre-fix,
+ *      these inputs fell through to inert gray text while siblings like
+ *      `knowledge/…` linked — the "half-state" the reviewer reported.)
  *
  * Only renders the rows that have data — empty arrays + missing
  * fields collapse the panel completely so we never show a stub
@@ -22,6 +40,21 @@
  */
 
 import { useNavigate } from "@tanstack/react-router"
+
+/**
+ * One resolvable artifact the session knows about, keyed by its
+ * intent-dir-relative path. Built by the caller (StageReview) from the
+ * session's output / stage / knowledge artifact lists. The `name` is
+ * exactly what the artifact-detail route matches on, so a hit can route
+ * straight to `/stages/<stage>/<kind>/<name>`.
+ */
+export interface ArtifactIndexEntry {
+	stage: string
+	kind: "knowledge" | "outputs" | "other"
+	name: string
+}
+
+export type ArtifactIndex = Map<string, ArtifactIndexEntry>
 
 interface UnitMetaPanelProps {
 	inputs?: string[]
@@ -34,6 +67,12 @@ interface UnitMetaPanelProps {
 	 *  panel contract for any caller that hasn't wired routing yet. */
 	sessionId?: string
 	currentStage?: string
+	/** Index of every artifact the session can route to, keyed by the
+	 *  artifact's intent-dir-relative path. Lets the resolver link paths
+	 *  that don't carry a stage segment (e.g. `product/foo.md`,
+	 *  `features/bar.feature`) by matching them against real artifacts.
+	 *  Optional — without it, only the shape rules apply. */
+	artifactIndex?: ArtifactIndex
 }
 
 interface ParsedPath {
@@ -56,6 +95,7 @@ interface ParsedPath {
 export function pathToReviewRoute(
 	path: string,
 	currentStage: string,
+	artifactIndex?: ArtifactIndex,
 ): ParsedPath | null {
 	// Bare unit name (no slash) → depends_on shape, current stage.
 	if (!path.includes("/") && /^unit-/.test(path)) {
@@ -103,6 +143,32 @@ export function pathToReviewRoute(
 			name: stageRootMatch[2],
 		}
 	}
+	// Artifact-index lookup — for paths the shape rules couldn't claim
+	// (no `stages/`-rooted or `knowledge/`-rooted prefix), match against
+	// real artifacts the session surfaced. Covers intent-dir-relative
+	// `scope: intent` discovery artifacts a unit declares directly
+	// (`product/ACCEPTANCE-CRITERIA.md`, `features/worker_new_badge.feature`)
+	// — the server emits these as outputs/knowledge keyed by the producing
+	// stage, which the string alone can't tell us. Tolerate a
+	// workspace-relative `.haiku/intents/<slug>/` prefix on the declared
+	// path by also probing the segment after `intents/<slug>/`.
+	if (artifactIndex) {
+		const direct = artifactIndex.get(path)
+		if (direct) {
+			return { stage: direct.stage, kind: direct.kind, name: direct.name }
+		}
+		const wsMatch = path.match(/^\.haiku\/intents\/[^/]+\/(.+)$/)
+		if (wsMatch) {
+			const stripped = artifactIndex.get(wsMatch[1])
+			if (stripped) {
+				return {
+					stage: stripped.stage,
+					kind: stripped.kind,
+					name: stripped.name,
+				}
+			}
+		}
+	}
 	return null
 }
 
@@ -110,14 +176,18 @@ function PathLink({
 	path,
 	sessionId,
 	currentStage,
+	artifactIndex,
 }: {
 	path: string
 	sessionId?: string
 	currentStage?: string
+	artifactIndex?: ArtifactIndex
 }) {
 	const navigate = useNavigate()
 	const route =
-		sessionId && currentStage ? pathToReviewRoute(path, currentStage) : null
+		sessionId && currentStage
+			? pathToReviewRoute(path, currentStage, artifactIndex)
+			: null
 	if (!route) {
 		// Non-routable path or no routing context — render plain text
 		// (preserves the older panel contract).
@@ -153,10 +223,12 @@ function PathList({
 	paths,
 	sessionId,
 	currentStage,
+	artifactIndex,
 }: {
 	paths: string[]
 	sessionId?: string
 	currentStage?: string
+	artifactIndex?: ArtifactIndex
 }) {
 	return (
 		<ul className="space-y-0.5">
@@ -166,6 +238,7 @@ function PathList({
 						path={p}
 						sessionId={sessionId}
 						currentStage={currentStage}
+						artifactIndex={artifactIndex}
 					/>
 				</li>
 			))}
@@ -198,6 +271,7 @@ export function UnitMetaPanel({
 	bolt,
 	sessionId,
 	currentStage,
+	artifactIndex,
 }: UnitMetaPanelProps): React.ReactElement | null {
 	const hasInputs = inputs && inputs.length > 0
 	const hasOutputs = outputs && outputs.length > 0
@@ -217,6 +291,7 @@ export function UnitMetaPanel({
 						paths={inputs as string[]}
 						sessionId={sessionId}
 						currentStage={currentStage}
+						artifactIndex={artifactIndex}
 					/>
 				</MetaRow>
 			)}
@@ -226,6 +301,7 @@ export function UnitMetaPanel({
 						paths={outputs as string[]}
 						sessionId={sessionId}
 						currentStage={currentStage}
+						artifactIndex={artifactIndex}
 					/>
 				</MetaRow>
 			)}
@@ -241,6 +317,7 @@ export function UnitMetaPanel({
 									path={d}
 									sessionId={sessionId}
 									currentStage={currentStage}
+									artifactIndex={artifactIndex}
 								/>
 							</li>
 						))}

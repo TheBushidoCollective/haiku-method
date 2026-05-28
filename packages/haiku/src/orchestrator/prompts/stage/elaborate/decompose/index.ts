@@ -44,32 +44,37 @@ import { getCapabilities } from "../../../../../harness.js"
 import {
 	listInstalledSkills,
 	parseFrontmatter,
+	readIntentBody,
 } from "../../../../../state-tools.js"
 import {
 	filterReviewAgentsByScope,
+	readDiscoveryBody,
+	readPhaseBody,
 	readPhaseOverride,
+	readReviewAgentBody,
 	readReviewAgentPaths,
+	readStageArtifactDefs,
+	readStageBody,
 	readStageDef,
 	resolveStageInputs,
 	studioSearchPaths,
 } from "../../../../../studio-reader.js"
 import {
+	filterInputsByPlanStages,
 	resolveIntentStages,
-	resolveStudioFilePath,
 } from "../../../../studio.js"
 import { buildOutputRequirements } from "../../../../validators.js"
 import {
 	batchDispatchDirective,
 	buildConcurrentElaborateLoopBlock,
 	emitSubagentDispatchBlock,
-	inlineFile,
+	providerSpliceBlock,
+	readIntentMode,
 	resolveStudioMandateModel,
+	studioReadRef,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
-import {
-	WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK,
-	WORKFLOW_CONTRACTS_ELABORATE_BLOCK,
-} from "../../../_shared/index.js"
+import { sharedBlockRef } from "../../../_shared/index.js"
 import { definePromptBuilder } from "../../../define.js"
 import type { PromptBuilderContext } from "../../../types.js"
 
@@ -117,10 +122,17 @@ const ELABORATE_OUTPUT_TAIL_TPL = loadTemplate(
 	"blocks/elaborate-output-tail.eta.md",
 )
 const SCOPE_HEADER = loadTemplate(import.meta.url, "blocks/scope-header.md")
-const TICKETING = loadTemplate(import.meta.url, "blocks/ticketing.md")
 const FILE_BASED_POINTER_TPL = loadTemplate(
 	import.meta.url,
 	"blocks/file-based-pointer.eta.md",
+)
+const DISCOVERY_SUBAGENT_TPL = loadTemplate(
+	import.meta.url,
+	"blocks/discovery-subagent.eta.md",
+)
+const SKILL_REGISTRY_TPL = loadTemplate(
+	import.meta.url,
+	"blocks/skill-registry-section.eta.md",
 )
 
 interface PendingFeedback {
@@ -139,27 +151,16 @@ function readFrontmatter(filePath: string): Record<string, unknown> {
 	return data
 }
 
-/** Strip the YAML frontmatter from a review-agent file body so the
- *  inlined "lens" content is just the mandate prose. */
-function readReviewAgentBody(absPath: string): string {
-	if (!existsSync(absPath)) return ""
-	const raw = readFileSync(absPath, "utf8")
-	try {
-		const { body } = parseFrontmatter(raw)
-		return (body || raw).trim()
-	} catch {
-		return raw.trim()
-	}
-}
-
 /** Build the per-stage review-agent lens section. Pulls every per-stage
  *  review agent that scopes to this stage's declared outputs (via
- *  `applies_to:` glob) and inlines its body under a per-agent
- *  subheading. */
+ *  `applies_to:` glob) and emits a snapshot Read per agent (the same
+ *  resolution `haiku_read_review_agent` uses), so the planner reads each
+ *  lens from an immutable snapshot rather than an inlined body. */
 function buildReviewAgentLensSection(
 	studio: string,
 	stage: string,
 	dir: string,
+	slug: string,
 ): string | null {
 	const agentPaths = filterReviewAgentsByScope(
 		readReviewAgentPaths(studio, stage),
@@ -168,29 +169,37 @@ function buildReviewAgentLensSection(
 	)
 	const names = Object.keys(agentPaths).sort()
 	if (names.length === 0) return null
-	const lines: string[] = [LENS_PREAMBLE, ""]
-	for (const name of names) {
-		const body = readReviewAgentBody(agentPaths[name])
-		if (!body) continue
+	const lines = names.map((name) => {
 		const heading = name
 			.split(/[-_]/)
 			.map((p) => (p.length === 0 ? p : p[0].toUpperCase() + p.slice(1)))
 			.join(" ")
-		lines.push(`### ${heading} lens`, "", body, "")
-	}
-	return lines.join("\n").trimEnd()
+		const ref = studioReadRef({
+			resolveBody: () => readReviewAgentBody(studio, stage, name),
+			toolName: "haiku_read_review_agent",
+			toolArgs: { studio, stage, role: name },
+			intent: slug,
+			stage,
+			kind: "review-agent",
+			name,
+		})
+		return `- **${heading}** — ${ref}`
+	})
+	return [LENS_PREAMBLE, "", ...lines].join("\n").trimEnd()
 }
 
 /** Build the "## Available Skills" injection block. */
 function buildSkillRegistrySection(): string | null {
 	const skills = listInstalledSkills()
 	if (skills.length === 0) return null
-	const lines: string[] = [SKILL_REGISTRY_PREAMBLE, ""]
-	for (const skill of skills) {
+	const skillLines = skills.map((skill) => {
 		const desc = skill.description ? ` — ${skill.description}` : ""
-		lines.push(`- \`/${skill.slug}\`${desc}`)
-	}
-	return lines.join("\n")
+		return `- \`/${skill.slug}\`${desc}`
+	})
+	return eta.renderString(SKILL_REGISTRY_TPL, {
+		preamble: SKILL_REGISTRY_PREAMBLE,
+		skillLines,
+	})
 }
 
 // Exported so the workflow handler (`handlers/elaborate.ts`) can write
@@ -206,8 +215,23 @@ export function buildElaboratePromptBody(ctx: PromptBuilderContext): string {
 function renderElaborate(ctx: PromptBuilderContext): string {
 	const { slug, studio, action, dir } = ctx
 	const stage = action.stage as string
-	const elaboration = (action.elaboration as string) || "collaborative"
 	const stageDef = readStageDef(studio, stage)
+	// Elaboration mechanics by mode. Autopilot is fully autonomous — the ONLY
+	// human touchpoint is the pre-intent conversation, so it forces the
+	// autonomous path regardless of the stage's declared default and bans
+	// in-elaboration user questions (see the autopilot directive on the
+	// mechanics block below). Every other mode honors the stage's
+	// `elaboration:` field from STAGE.md, defaulting to collaborative.
+	//
+	// (`action.elaboration` was never populated by the cursor, so the prior
+	// `action.elaboration || "collaborative"` pinned EVERY mode — autopilot
+	// included — to the ask-the-user collaborative path. That's the autopilot
+	// "agent keeps asking me questions during elaboration" bug.)
+	const intentMode = readIntentMode(dir)
+	const isAutopilot = intentMode === "autopilot"
+	const elaboration = isAutopilot
+		? "autonomous"
+		: (stageDef?.data?.elaboration as string) || "collaborative"
 	const iteration =
 		(action.iteration as number) || (action.visits as number) || 0
 	const completedUnits = (action.completed_units as string[]) || []
@@ -273,9 +297,9 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			)
 		}
 
-		sections.push(WORKFLOW_CONTRACTS_ELABORATE_BLOCK)
+		sections.push(sharedBlockRef("workflow-contracts-elaborate"))
 
-		const lenses = buildReviewAgentLensSection(studio, stage, dir)
+		const lenses = buildReviewAgentLensSection(studio, stage, dir, slug)
 		if (lenses) sections.push(lenses)
 
 		sections.push(eta.renderString(ITERATIVE_DECIDE_TPL, { slug }))
@@ -308,7 +332,7 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 					)}\n\nYou MUST open every file above and read it completely before drafting units. The title is only a handle; the body carries requirements, tests, and acceptance criteria.`,
 			)
 		}
-		const lenses = buildReviewAgentLensSection(studio, stage, dir)
+		const lenses = buildReviewAgentLensSection(studio, stage, dir, slug)
 		if (lenses) sections.push(lenses)
 		const revisitSkillSection = buildSkillRegistrySection()
 		if (revisitSkillSection) sections.push(revisitSkillSection)
@@ -325,27 +349,53 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	if (!composed) sections.push(`## Elaborate: ${stage}`)
 	if (stageDef) sections.push(`${stageDef.body}`)
 
-	const elaborationOverride = readPhaseOverride(studio, stage, "ELABORATION")
-	if (elaborationOverride) {
-		sections.push(
-			`### Phase: Elaboration Override\n\n${elaborationOverride.body}`,
-		)
+	if (readPhaseOverride(studio, stage, "ELABORATION")) {
+		const phaseRef = studioReadRef({
+			resolveBody: () => readPhaseBody(studio, stage, "ELABORATION"),
+			toolName: "haiku_read_phase",
+			toolArgs: { studio, stage, phase: "ELABORATION" },
+			intent: slug,
+			stage,
+			kind: "phase",
+			name: "ELABORATION",
+		})
+		sections.push(`### Phase: Elaboration Override\n\n${phaseRef}`)
 	}
 
-	sections.push(WORKFLOW_CONTRACTS_ELABORATE_BLOCK)
+	sections.push(sharedBlockRef("workflow-contracts-elaborate"))
 
-	const lenses = buildReviewAgentLensSection(studio, stage, dir)
+	// Provider splice: source providers (spec, knowledge, design) and
+	// always-on / workflow providers (git, ticketing if active) inject
+	// their behavior contracts for the elaborate phase.
+	const providerBlock = providerSpliceBlock("elaborate", dir)
+	if (providerBlock) sections.push(providerBlock)
+
+	const lenses = buildReviewAgentLensSection(studio, stage, dir, slug)
 	if (lenses) sections.push(lenses)
+
+	// Plan stages for this intent — the canonical materialized list with any
+	// dropped optional stages excluded. Used to auto-ignore inputs from
+	// out-of-plan stages here AND to enumerate prior stages below.
+	const planStages = resolveIntentStages(
+		existsSync(join(dir, "intent.md"))
+			? readFrontmatter(join(dir, "intent.md"))
+			: {},
+		studio,
+	)
 
 	// Upstream context — REFERENCES, not inlined bodies.
 	const upstreamReferenceLines: string[] = []
 	let upstreamRefPaths: string[] = []
 	if (stageDef?.data?.inputs && Array.isArray(stageDef.data.inputs)) {
-		const inputs = stageDef.data.inputs as Array<{
+		const declaredInputs = stageDef.data.inputs as Array<{
 			stage: string
 			discovery?: string
 			output?: string
 		}>
+		// Auto-ignore inputs whose source stage was dropped from the plan —
+		// without this they'd fall into the missing-warning below and tell the
+		// agent to file a stage_revisit at a stage that isn't in the plan.
+		const inputs = filterInputsByPlanStages(declaredInputs, planStages)
 		const resolved = resolveStageInputs(studio, inputs, dir, slug)
 		const found = resolved.filter((r) => r.exists)
 		const missing = resolved.filter((r) => !r.exists)
@@ -376,19 +426,14 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	// Prior-stage reference enumeration.
 	const priorStageReferenceLines: string[] = []
 	{
-		const orderedStages = resolveIntentStages(
-			existsSync(join(dir, "intent.md"))
-				? readFrontmatter(join(dir, "intent.md"))
-				: {},
-			studio,
-		)
+		const orderedStages = planStages
 		const myIdx = orderedStages.indexOf(stage)
 		const priorStages = myIdx > 0 ? orderedStages.slice(0, myIdx) : []
 		for (const prior of priorStages) {
 			const priorDir = `.haiku/intents/${slug}/stages/${prior}`
 			priorStageReferenceLines.push(
 				`- **${prior}**`,
-				`  - knowledge / discovery: \`${priorDir}/knowledge/\` (+ project-scope \`.haiku/knowledge/\` produced during that stage)`,
+				`  - knowledge / discovery: \`${priorDir}/knowledge/\``,
 				`  - unit specs: \`${priorDir}/units/unit-*.md\``,
 				`  - stage outputs: any files under \`${priorDir}/\` outside \`units/\` (\`.md\` reports, \`artifacts/\`)`,
 				`  - resolved feedback: \`${priorDir}/feedback/*.md\``,
@@ -420,6 +465,37 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 		if (upstreamRefPaths.length > 0) {
 			sections.push(
 				`## Unit Inputs Requirement (MANDATORY)\n\nEvery unit **MUST** have a non-empty \`inputs:\` field in its frontmatter. At minimum, every unit should reference the intent document and discovery docs. Units will be **blocked from execution** if \`inputs:\` is empty.\n\nAvailable upstream artifacts:\n\`\`\`yaml\ninputs:\n${upstreamRefPaths.map((p) => `  - ${p}`).join("\n")}\n\`\`\`\nInclude all inputs relevant to the unit's scope. Frontend/UI units should reference design artifacts. Backend units should reference behavioral specs and data contracts.`,
+			)
+		}
+	}
+
+	// Long-lived repo knowledge (scope: project) — cross-intent priors.
+	// Unlike intent-scoped discovery (produced once per intent, then
+	// skipped), these persist at `.haiku/knowledge/` across every intent.
+	// When one already exists, the agent READS it as a starting point and
+	// refreshes it in place only if this intent's work shows it diverged.
+	// This is a NON-blocking reference, never a gate signal: the cursor
+	// gates discovery on existence (cursor.ts), so forcing a "refresh"
+	// signal would re-emit every tick (the file still exists after the
+	// refresh). The read-as-prior splice gives the value (don't rediscover)
+	// without the loop.
+	{
+		const priors = readStageArtifactDefs(studio, stage)
+			.filter(
+				(d) => d.kind === "discovery" && d.scope === "project" && d.location,
+			)
+			.map((d) => ({
+				name: d.name,
+				rel: d.location.replace(/\{intent-slug\}/g, slug),
+			}))
+			.filter((p) => existsSync(join(process.cwd(), p.rel)))
+			.sort((a, b) => a.name.localeCompare(b.name))
+		if (priors.length > 0) {
+			const list = priors
+				.map((p) => `- **${p.name}** — \`${p.rel}\``)
+				.join("\n")
+			sections.push(
+				`## Long-Lived Repo Knowledge (read as prior)\n\nThis project carries knowledge that persists across intents (\`scope: project\`). It already exists on disk — read it FIRST as your starting point so you build on what the project already established instead of rediscovering or reinventing it:\n\n${list}\n\nThese are priors, not gospel. The research and work this intent requires may confirm or contradict them. If your work shows a prior has diverged from the codebase's current reality (a value moved, a pattern changed, a component was removed), update it in place during this stage — preserve what still holds, correct what doesn't. If it still holds, leave it untouched. When a unit builds on one of these, list its path in that unit's \`inputs:\` so the downstream hat reads the same prior.`,
 			)
 		}
 	}
@@ -500,12 +576,33 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			.map((a) => `\`${a.name}\``)
 			.join(", ")
 		const plural = discoveryArtifacts.length !== 1 ? "s" : ""
-		const intentPath = join(dir, "intent.md")
-		const stagePath = resolveStudioFilePath(
-			join(studio, "stages", stage, "STAGE.md"),
-		)
 
-		let fanOutText = `## Discovery Fan-Out (REQUIRED)\n\nThis stage produces ${discoveryArtifacts.length} discovery artifact${plural}: ${artifactNames}.\n\n${WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK}\n\n**Spawn one subagent per artifact** using the \`prompt_file\` attribute on each \`<subagent>\` block — pass \`"Read <prompt_file> and execute its instructions exactly."\` as the spawn prompt (substituting the attribute's path). Each subagent writes inside its own isolation worktree, then calls \`haiku_discovery_complete { intent, stage, template }\` to hand the merge-back over to the engine (which takes a per-stage lock so parallel siblings serialize cleanly).\n\n${batchDispatchDirective(discoveryArtifacts.length, "discovery subagents")}\n\n`
+		// Snapshot the intent goal + stage scope once via the same readers
+		// haiku_read_intent / haiku_read_stage use, and reference them from
+		// every discovery subagent. (intent.md is guarded against generic
+		// Read by the workflow hook, so a referenced snapshot is also how
+		// the subagent gets it at all.) The per-artifact discovery template
+		// is snapshotted inside the loop.
+		const intentRef = studioReadRef({
+			resolveBody: () => readIntentBody(slug),
+			toolName: "haiku_read_intent",
+			toolArgs: { intent: slug },
+			intent: slug,
+			stage,
+			kind: "intent-goal",
+			name: "intent",
+		})
+		const stageRef = studioReadRef({
+			resolveBody: () => readStageBody(studio, stage),
+			toolName: "haiku_read_stage",
+			toolArgs: { studio, stage },
+			intent: slug,
+			stage,
+			kind: "stage-scope",
+			name: stage,
+		})
+
+		let fanOutText = `## Discovery Fan-Out (REQUIRED)\n\nThis stage produces ${discoveryArtifacts.length} discovery artifact${plural}: ${artifactNames}.\n\n${sharedBlockRef("workflow-contracts-announcement")}\n\n**Spawn one subagent per artifact** using the \`prompt_file\` attribute on each \`<subagent>\` block — pass \`"Read <prompt_file> and execute its instructions exactly."\` as the spawn prompt (substituting the attribute's path). Each subagent writes inside its own isolation worktree, then calls \`haiku_discovery_complete { intent, stage, template }\` to hand the merge-back over to the engine (which takes a per-stage lock so parallel siblings serialize cleanly).\n\n${batchDispatchDirective(discoveryArtifacts.length, "discovery subagents", { forceForeground: isAutopilot })}\n\n`
 
 		for (const a of discoveryArtifacts) {
 			const wt = createDiscoveryWorktree(slug, stage, a.name)
@@ -531,73 +628,27 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 							`${a.name.toUpperCase()}.md`,
 						)
 				: null
-			const lines: string[] = [
-				`You are researching and producing the "${a.name}" discovery artifact for intent "${slug}" in stage "${stage}" of studio "${studio}".`,
-				"",
-			]
-			if (wt) {
-				lines.push(
-					"## Isolation worktree (REQUIRED)",
-					`Do ALL work for this subagent inside the dedicated worktree at:`,
-					``,
-					`    ${wt}`,
-					``,
-					`This worktree is on branch \`${discoveryBranchName(slug, stage, a.name)}\`, forked from the stage branch at dispatch time.`,
-					"",
-				)
-				if (expectedArtifactPath) {
-					lines.push(
-						"## Required artifact path (EXACT)",
-						"",
-						`You MUST create exactly ONE file at this absolute path:`,
-						"",
-						`    ${expectedArtifactPath}`,
-						"",
-						`This is the path the engine's existence check reads. Writing the artifact anywhere else (a different filename, a different directory, intent main instead of the worktree) will cause \`haiku_discovery_complete\` to return \`discovery_artifact_missing\` and the cursor to keep flagging discovery as incomplete on every tick.`,
-						"",
-					)
-				}
-				lines.push(
-					`**Rules:**`,
-					`- Write the populated discovery artifact at the EXACT path above (inside the worktree, not on intent main).`,
-					`- Commit your work via \`git -C "${wt}" add -A && git -C "${wt}" commit -m "..."\` (no push).`,
-					`- When the artifact is complete and committed, call \`haiku_discovery_complete { intent: "${slug}", stage: "${stage}", template: "${a.name}" }\`. The engine verifies the file exists at the expected path, then takes a per-stage lock and merges your branch into the stage branch, then reaps the worktree + branch. On clean success the tool returns \`{ ok: true }\` and you're done. On \`discovery_artifact_missing\` you skipped or misplaced the write — the response carries the expected path; write the file there, commit, and re-call. On \`discovery_merge_conflict\` the response lists the conflict files — surface that to the parent agent so the integrator can resolve. On \`discovery_merge_failed\` the response carries the git error — surface it and stop.`,
-					`- Do NOT run \`git worktree remove\`, \`git branch -d\`, or \`git merge\` yourself — \`haiku_discovery_complete\` owns those.`,
-					"",
-				)
-			}
-			lines.push(
-				"## Required context (inlined below)",
-				"The intent goal, stage scope, and your discovery template are embedded below — no need to fan out Read tool calls for them.",
-				"",
-				inlineFile(intentPath, "Intent goal"),
-			)
-			if (stagePath) lines.push(inlineFile(stagePath, "Stage scope"))
-			lines.push(
-				inlineFile(
-					a.templatePath,
-					`Discovery template: ${a.name} (content guide + quality signals + output location)`,
-				),
-			)
-			lines.push(
-				"",
-				"## Scope (STRICT)",
-				"",
-				`- You research **only** the axis defined by the "${a.name}" template. Other discovery artifacts in this stage are being researched by **sibling subagents in parallel** — do NOT investigate adjacent domains, do NOT pre-empt their work, do NOT leave notes for them.`,
-				"- If you encounter information that belongs primarily in a sibling artifact, do NOT write it to the sibling's file path — that creates merge conflicts at the integrator step. Note it briefly as a *context boundary* in your own artifact (e.g. *\"depends on auth model — see security artifact\"*) and let the sibling agent author the substance. Cross-cutting constraints that genuinely shape multiple axes (security boundaries, hard dependencies) should be noted in your artifact too, in the boundary section, so they're not lost if the sibling misses them.",
-				"- Your write path is ONE file at the template's `location:`. Any other file write — sibling artifacts, intent.md, unit specs, knowledge files outside your `location:` — is a scope violation.",
-				"- Do NOT attempt to summarize or synthesize across sibling artifacts. The elaborate phase does that on the next workflow tick, after all discovery merges back.",
-				"",
-				"## Instructions",
-				"",
-				"1. Research the problem space along the axis defined by your template.",
-				"2. Use the template's Content Guide as the document structure.",
-				"3. Meet the template's Quality Signals as your acceptance bar.",
-				"4. Write the populated document to the stage's discovery path as defined in the template's `location:` frontmatter above — **inside your isolation worktree** when one is allocated. **This is your ONLY write path** — any file written elsewhere is a scope violation.",
-				"5. Commit the artifact inside your worktree (see the Rules block above for the exact git invocation).",
-				`6. Call \`haiku_discovery_complete { intent: "${slug}", stage: "${stage}", template: "${a.name}" }\` to merge your work into the stage branch. The engine takes a per-stage lock so parallel siblings serialize. Surface any conflict / failure response to the parent agent.`,
-				"7. Be thorough on YOUR axis — this artifact informs all downstream work. Thoroughness within scope is the goal; thoroughness across scope is a violation.",
-			)
+			const templateRef = studioReadRef({
+				resolveBody: () => readDiscoveryBody(studio, stage, a.name),
+				toolName: "haiku_read_discovery",
+				toolArgs: { studio, stage, template: a.name },
+				intent: slug,
+				stage,
+				kind: "discovery-template",
+				name: a.name,
+			})
+			const promptBody = eta.renderString(DISCOVERY_SUBAGENT_TPL, {
+				artifactName: a.name,
+				slug,
+				stage,
+				studio,
+				worktree: wt,
+				branchName: wt ? discoveryBranchName(slug, stage, a.name) : "",
+				expectedArtifactPath,
+				intentRef,
+				stageRef,
+				templateRef,
+			})
 			const discoveryModel = resolveStudioMandateModel({
 				mandatePath: a.templatePath,
 				studio,
@@ -607,17 +658,25 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 				unit: "discovery",
 				hat: a.name,
 				bolt: 1,
+				intent: slug,
+				stage,
 				agentType: "general-purpose",
 				model: discoveryModel,
-				promptBody: lines.join("\n"),
+				promptBody,
 				heading: `### Subagent: \`${a.name}\``,
+				forceForeground: isAutopilot,
+				omitBolt: true,
 			})}\n\n`
 		}
 
-		const elabBgLine = getCapabilities().subagents.backgroundSpawn
-			? ' Each `<subagent>` carries `background="true"` — pass `run_in_background: true` to the Task tool so the parent thread stays responsive while discovery agents run.'
-			: ""
-		fanOutText += `### Parent Instructions (do NOT include in subagent prompts)\n\nSpawn each subagent above using the \`prompt_file\` attribute — pass \`"Read <prompt_file> and execute its instructions exactly."\` as the spawn prompt (substituting the attribute's path). Do NOT include the \`<subagent>\` block body itself in the spawn prompt.${elabBgLine} When ALL subagents return, call \`haiku_run_next { intent: "${slug}" }\` — the workflow engine merges their isolation worktrees back into the stage branch (resolving conflicts via the integrator if needed) and then emits the unit-decomposition instructions. **Do NOT proceed to decomposition in this response** — wait for the next workflow tick so the merged knowledge artifacts are visible.`
+		const elabBgLine =
+			getCapabilities().subagents.backgroundSpawn && !isAutopilot
+				? ' Each `<subagent>` carries `background="true"` — pass `run_in_background: true` to the Task tool so the parent thread stays responsive while discovery agents run.'
+				: ""
+		const tickGuidance = isAutopilot
+			? ` **You are in autopilot mode — do NOT yield.** Spawn the subagents in the foreground (the \`<subagent>\` blocks above carry no \`background\` attribute) and wait for every one to return in this same response. The instant the last subagent returns, call \`haiku_run_next { intent: "${slug}" }\` in the SAME response. The next tick emits the unit-decomposition instructions, which you also handle in-turn. Autopilot is a contiguous drive — pausing across turns defeats the mode.`
+			: ` When ALL subagents return, call \`haiku_run_next { intent: "${slug}" }\` — the workflow engine merges their isolation worktrees back into the stage branch (resolving conflicts via the integrator if needed) and then emits the unit-decomposition instructions. **Do NOT proceed to decomposition in this response** — wait for the next workflow tick so the merged knowledge artifacts are visible.`
+		fanOutText += `### Parent Instructions (do NOT include in subagent prompts)\n\nSpawn each subagent above using the \`prompt_file\` attribute — pass \`"Read <prompt_file> and execute its instructions exactly."\` as the spawn prompt (substituting the attribute's path). Do NOT include the \`<subagent>\` block body itself in the spawn prompt.${elabBgLine}${tickGuidance}`
 
 		sections.push(fanOutText)
 		if (!composed) {
@@ -632,8 +691,21 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 		studio,
 		stage,
 		"## Stage Output Expectations\n\nThis stage must ultimately produce the following outputs during execution. Plan units accordingly:",
+		slug,
 	)
 	if (outputExpectations) sections.push(outputExpectations)
+
+	// Build-class stages: every producing unit must carry a `quality_gates:`
+	// field. `haiku_unit_write` rejects a build-stage unit that declares
+	// `outputs:` but omits `quality_gates:`, so authoring it up front avoids a
+	// round-trip. (Content directive, not workflow mechanics — it tells the
+	// agent what to put in the spec, per the build/knowledge distinction this
+	// stage's ELABORATION describes.)
+	if (stageDef?.data?.produces === "build") {
+		sections.push(
+			"## Build-Class Units: Declare Verification\n\nThis is a **build** stage — every unit that declares `outputs:` MUST also declare a `quality_gates:` field. Pair each produced artifact with the executable check that verifies it (the verify-command pattern in this stage's elaboration guidance). If a unit genuinely defers verification to a sibling test unit, declare an explicit empty list (`quality_gates: []`) — but the field must be present so the choice is deliberate and reviewable. `haiku_unit_write` will reject a producing unit that omits it.\n\n**Gates that need a live dependency** (a test suite that hits a database, a migration, a check that talks to a queue/cache) only verify something when that dependency is running. Declare the dependency once as a service in `.haiku/boot.md` — a `processes:` entry with `service: true` and `requires_tool: docker` (e.g. a `docker compose up` Postgres with a `ready_url` health probe). At gate time the engine brings declared services up via the live tool, or — if the tool isn't available — escalates to the user. It will NOT advance a gate that couldn't reach its dependency, so a missing service recipe turns into a hold, not a false green. If this project already has a `docker-compose.yml` / `Makefile` the engine can auto-detect it, but a `.haiku/boot.md` service entry is the reproducible declaration.\n\n**Declare real internal services; never mock them.** Internal infrastructure the app owns — its database, cache, queue, search, object store (Postgres, Redis, Mongo, Elasticsearch, Kafka, …) — MUST be a real `service:` process in `.haiku/boot.md`; never a mock, in-memory fake, or SQLite stand-in, because a gate that passes against a faked datastore verified nothing about migrations/queries/persistence. Third-party SaaS the app only calls across the network (Stripe, Twilio, SendGrid, vendor LLM/auth APIs) is the opposite: do NOT declare it as a `service:` to run — stub it or use the vendor sandbox at the app's edge, since hitting it live costs money and fires real side effects. The line is ownership: a process we stand up ourselves is real; a vendor API we call out to is mocked.",
+		)
+	}
 
 	// Detect design stages and add MCP provider instructions.
 	const stageHats = (stageDef?.data?.hats as string[]) || []
@@ -659,21 +731,23 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 		elaboration === "collaborative"
 			? COLLABORATIVE_MECHANICS
 			: AUTONOMOUS_MECHANICS
+	// Autopilot supersedes the autonomous block's "when you DO need user input,
+	// use AskUserQuestion" allowance — in autopilot there is NO in-elaboration
+	// human interaction at all (the pre-intent conversation is the only one).
+	const autopilotDirective = isAutopilot
+		? '\n\n**Autopilot — zero user interaction.** You are driving this intent autonomously; the only human touchpoint is the pre-intent conversation, which already happened. Do NOT call `AskUserQuestion`, `ask_user_visual_question`, `pick_design_direction`, or any other user-facing prompt during elaboration — not even for a "genuine blocker". Resolve every ambiguity yourself from the codebase, prior-stage outputs, established conventions, and the intent description: make the most defensible call and record the reasoning in the unit body, never as a question.'
+		: ""
 	const tail = eta.renderString(ELABORATE_OUTPUT_TAIL_TPL, { slug, stage })
-	sections.push(`${SCOPE_HEADER}\n\n${mechanicsBlock}\n\n${tail}`)
+	sections.push(
+		`${SCOPE_HEADER}\n\n${mechanicsBlock}${autopilotDirective}\n\n${tail}`,
+	)
 
-	// Check for ticketing provider.
-	try {
-		const settingsPath = join(process.cwd(), ".haiku", "settings.yml")
-		if (existsSync(settingsPath)) {
-			const settingsRaw = readFileSync(settingsPath, "utf8")
-			if (settingsRaw.includes("ticketing")) {
-				sections.push(TICKETING)
-			}
-		}
-	} catch {
-		/* non-fatal */
-	}
+	// Ticketing-provider guidance was previously injected here as an
+	// inline block when `.haiku/settings.yml` contained the string
+	// "ticketing". Replaced 2026-05-19 by the provider-injection layer
+	// — `providerSpliceBlock("elaborate", dir)` (called above) emits
+	// the full ticketing behavior contract from `plugin/providers/
+	// ticketing.md` via the per-project shared/providers/ tree.
 
 	if (!composed) {
 		sections.push(

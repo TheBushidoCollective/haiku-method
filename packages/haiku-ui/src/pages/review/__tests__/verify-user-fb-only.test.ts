@@ -17,7 +17,7 @@ import { describe, expect, it } from "vitest"
 import {
 	countItemsAwaitingUserSubmission,
 	countItemsNeedingUserVerification,
-} from "../FeedbackSidebar"
+} from "../review-decision"
 
 type Item = Parameters<typeof countItemsNeedingUserVerification>[0][number]
 

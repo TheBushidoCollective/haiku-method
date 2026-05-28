@@ -11,15 +11,19 @@ import ListFilesQueryArtifact from "./graphql/gitlab/__generated__/operationsLis
 import type { operationsListIntentsTreeQuery$data } from "./graphql/gitlab/__generated__/operationsListIntentsTreeQuery.graphql"
 import ListIntentsTreeQuery from "./graphql/gitlab/__generated__/operationsListIntentsTreeQuery.graphql"
 import ReadFileQuery from "./graphql/gitlab/__generated__/operationsReadFileQuery.graphql"
+import { blobToDataUrl, mimeFromPath } from "./html-render"
 import {
 	classifyArtifact,
 	deriveActiveStageFromStageTree,
 	deriveStageStateFromUnits,
 	deriveV4ActiveStage,
-	parseElaborationVerified,
-	parseIntentApprovals,
+	isCollectibleStageFile,
+	isV4Intent,
+	normalizeStageProgression,
 	mergeKnowledge as mergeKnowledgeShared,
+	parseElaborationVerified,
 	parseFeedback,
+	parseIntentApprovals,
 	parseIntentFromRaw as parseIntentFromRawShared,
 	parseStageStateJson,
 } from "./intent-parsing"
@@ -122,6 +126,24 @@ export class GitLabProvider implements BrowseProvider {
 	/** Ref parameter for GraphQL queries. null means HEAD (server default). */
 	private get ref(): string | null {
 		return this.branch || null
+	}
+
+	/** Resolve a repo-root-relative path to a `data:` URL by fetching the raw
+	 *  file (authed) and inlining the bytes — so an HTML output's relative
+	 *  CSS/images load inside the sandboxed (opaque-origin) iframe, which
+	 *  can't reach parent-origin blob URLs or attach an auth header. Mirrors
+	 *  the artifact rawUrl scheme used at session build (files/:path/raw). */
+	async resolveAssetUrl(path: string): Promise<string | null> {
+		try {
+			const encodedPath = encodeURIComponent(path)
+			const ref = this.branch || "HEAD"
+			const url = `https://${this.host}/api/v4/projects/${this.encodedProject}/repository/files/${encodedPath}/raw?ref=${encodeURIComponent(ref)}`
+			const res = await fetch(url, { headers: this.restHeaders() })
+			if (!res.ok) return null
+			return blobToDataUrl(await res.blob(), mimeFromPath(path))
+		} catch {
+			return null
+		}
 	}
 
 	/**
@@ -377,10 +399,8 @@ export class GitLabProvider implements BrowseProvider {
 				prStatus,
 				prNumber,
 			})
-			// v4 active-stage refinement (see github-provider.ts).
-			const isV4 =
-				typeof intent.raw.plugin_version === "string" &&
-				intent.raw.plugin_version.startsWith("4.")
+			// v4+ active-stage refinement (see github-provider.ts).
+			const isV4 = isV4Intent(intent.raw)
 			if (isV4 && intent.studioStages.length > 0) {
 				const stagesWithUnits = await this.probeStagesWithUnits(
 					slug,
@@ -391,6 +411,13 @@ export class GitLabProvider implements BrowseProvider {
 					intent.studioStages,
 					stagesWithUnits,
 				)
+				// Recompute progress to match the refined active stage — v4
+				// intent.md has no active_stage, so the initial parse left
+				// stagesComplete at 0 and hid the list-view progress bar.
+				if (intent.status !== "completed") {
+					const idx = intent.studioStages.indexOf(intent.activeStage)
+					if (idx >= 0) intent.stagesComplete = idx
+				}
 			}
 			intentsBySlug.set(slug, intent)
 			this.intentBranchMap.set(slug, branchName)
@@ -618,6 +645,7 @@ export class GitLabProvider implements BrowseProvider {
 		stageNames: string[],
 		ref: string,
 		intentMode: string,
+		schemaIsV4: boolean,
 	): HaikuStageState | null {
 		const basePath = `.haiku/intents/${slug}`
 		const stagePath = `${basePath}/stages/${stageName}`
@@ -647,21 +675,26 @@ export class GitLabProvider implements BrowseProvider {
 			)
 		}
 
-		// Parse artifacts
+		// Parse artifacts: surface every file under the stage dir that isn't a
+		// structured entry (units/feedback/state.json/brief/observations) or
+		// engine bookkeeping — `artifacts/**`, `proof/**` (runtime-verifier
+		// screenshots), and strays. The artifact `name` is the stage-relative
+		// path so provenance (`proof/`, `artifacts/`) stays visible. Binary
+		// blobs aren't in `blobByPath` (text only) → build a raw download URL.
 		const artifacts: HaikuArtifact[] = []
-		const artifactsPrefix = `${stagePath}/artifacts/`
+		const stagePrefix = `${stagePath}/`
 		for (const blob of data.allBlobs) {
-			if (!blob.path.startsWith(artifactsPrefix)) continue
-			const fileName = blob.path.slice(artifactsPrefix.length)
-			if (fileName.includes("/")) continue
-			const artType = classifyArtifact(fileName)
+			if (!blob.path.startsWith(stagePrefix)) continue
+			const rel = blob.path.slice(stagePrefix.length)
+			if (!isCollectibleStageFile(rel)) continue
+			const artType = classifyArtifact(rel)
 			const textContent = data.blobByPath.get(blob.path)
 			if (textContent != null) {
-				artifacts.push({ name: fileName, content: textContent, type: artType })
+				artifacts.push({ name: rel, content: textContent, type: artType })
 			} else {
 				const encodedFilePath = encodeURIComponent(blob.path)
 				const rawUrl = `https://${this.host}/api/v4/projects/${this.encodedProject}/repository/files/${encodedFilePath}/raw?ref=${encodeURIComponent(ref)}`
-				artifacts.push({ name: fileName, rawUrl, type: artType })
+				artifacts.push({ name: rel, rawUrl, type: artType })
 			}
 		}
 
@@ -683,8 +716,13 @@ export class GitLabProvider implements BrowseProvider {
 		// v4 intents have no state.json (deleted by the migrator); the
 		// dual-path falls through to per-unit derivation.
 		const stateBlob = data.blobByPath.get(`${stagePath}/state.json`)
-		const { phase: v3Phase, startedAt, completedAt, gateOutcome, stateStatus } =
-			parseStageStateJson(stateBlob)
+		const {
+			phase: v3Phase,
+			startedAt,
+			completedAt,
+			gateOutcome,
+			stateStatus,
+		} = parseStageStateJson(stateBlob)
 
 		// elaboration.md verification — load the file's frontmatter so the
 		// derivation can tell whether the elaborate gate has cleared. v4
@@ -701,6 +739,7 @@ export class GitLabProvider implements BrowseProvider {
 		//   3. v3 active_stage / stage-order fallback
 		let status: "pending" | "active" | "complete" = "pending"
 		let phase: HaikuStageState["phase"] = v3Phase
+		let milestones: HaikuStageState["milestones"]
 		if (stateStatus === "active") status = "active"
 		else if (stateStatus === "completed") status = "complete"
 		else if (units.length > 0 || stateBlob == null) {
@@ -708,23 +747,34 @@ export class GitLabProvider implements BrowseProvider {
 				stage: stageName,
 				intentMode,
 				elaborationVerified,
+				schemaIsV4,
 			})
 			status = derived.status
 			phase = derived.phase
+			milestones = derived.milestones
 		} else if (stageName === activeStage) status = "active"
 		else if (stageNames.indexOf(stageName) < stageNames.indexOf(activeStage))
 			status = "complete"
+
+		// Per-stage user-facing BRIEF + agent OBSERVATIONS.
+		const briefText = data.blobByPath.get(`${stagePath}/BRIEF.md`)
+		const observationsText = data.blobByPath.get(
+			`${stagePath}/observations.md`,
+		)
 
 		return {
 			name: stageName,
 			status,
 			phase,
+			milestones,
 			startedAt,
 			completedAt,
 			gateOutcome,
 			units,
 			artifacts: artifacts.length > 0 ? artifacts : undefined,
 			feedback: feedback.length > 0 ? feedback : undefined,
+			brief: briefText?.trim() || null,
+			observations: observationsText?.trim() || null,
 		}
 	}
 
@@ -958,6 +1008,7 @@ export class GitLabProvider implements BrowseProvider {
 		const stageNames = (frontmatter.stages as string[]) || []
 		const activeStage = (frontmatter.active_stage as string) || ""
 		const intentMode = (frontmatter.mode as string) || "continuous"
+		const schemaIsV4 = isV4Intent(frontmatter)
 
 		// Determine ordered stage list from frontmatter or directory listing
 		const fallbackDirNames = this.deriveStageDirNames(
@@ -990,6 +1041,7 @@ export class GitLabProvider implements BrowseProvider {
 					stageNames,
 					stageBranchRef.branch,
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -1004,6 +1056,7 @@ export class GitLabProvider implements BrowseProvider {
 					stageNames,
 					intentBranch,
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -1017,6 +1070,7 @@ export class GitLabProvider implements BrowseProvider {
 					stageNames,
 					"HEAD",
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -1050,13 +1104,19 @@ export class GitLabProvider implements BrowseProvider {
 		// here would always read empty — we'd fall back to the wrong
 		// stage in the UI. The per-stage status above is already derived
 		// from the stage-branch trust source.
-		const stageStatusByName: Record<
-			string,
-			"pending" | "active" | "complete"
-		> = {}
+		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
+			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
+		// Monotonic pipeline invariant: a later complete stage back-fills
+		// earlier ones, so the dots can't show an earlier stage active while a
+		// later is complete (see normalizeStageProgression).
+		const normalizedStatus = normalizeStageProgression(
+			orderedStages,
+			stageStatusByName,
+		)
+		for (const s of stages) s.status = normalizedStatus[s.name] ?? s.status
 		const refinedActiveStage =
-			deriveV4ActiveStage(orderedStages, stageStatusByName) || activeStage
+			deriveV4ActiveStage(orderedStages, normalizedStatus) || activeStage
 
 		// Re-parse intent.md off the current stage's branch when one is
 		// present. Engine invariant: every commit during a stage's work
@@ -1208,12 +1268,12 @@ export class GitLabProvider implements BrowseProvider {
 		const stageNames = (frontmatter.stages as string[]) || []
 		const activeStage = (frontmatter.active_stage as string) || ""
 		const intentMode = (frontmatter.mode as string) || "continuous"
+		const schemaIsV4 = isV4Intent(frontmatter)
 		const ref = this.branch || "HEAD"
 
 		const fallbackDirNames = this.deriveStageDirNames(slug, data)
 
-		const orderedStages =
-			stageNames.length > 0 ? stageNames : fallbackDirNames
+		const orderedStages = stageNames.length > 0 ? stageNames : fallbackDirNames
 		const stages: HaikuStageState[] = []
 		for (const stageName of orderedStages) {
 			const parsed = this.parseStageFromBlobs(
@@ -1224,19 +1284,26 @@ export class GitLabProvider implements BrowseProvider {
 				stageNames,
 				ref,
 				intentMode,
+				schemaIsV4,
 			)
 			if (parsed) stages.push(parsed)
 		}
 
 		// Cursor walk: pick the active stage from the per-stage status
 		// we just derived, mirroring engine getCurrentState.
-		const stageStatusByName: Record<
-			string,
-			"pending" | "active" | "complete"
-		> = {}
+		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
+			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
+		// Monotonic pipeline invariant: a later complete stage back-fills
+		// earlier ones, so the dots can't show an earlier stage active while a
+		// later is complete (see normalizeStageProgression).
+		const normalizedStatus = normalizeStageProgression(
+			orderedStages,
+			stageStatusByName,
+		)
+		for (const s of stages) s.status = normalizedStatus[s.name] ?? s.status
 		const refinedActiveStage =
-			deriveV4ActiveStage(orderedStages, stageStatusByName) || activeStage
+			deriveV4ActiveStage(orderedStages, normalizedStatus) || activeStage
 
 		const knowledge = this.parseKnowledgeFromBlobs(slug, data)
 		const operations = this.parseOperationsFromBlobs(slug, data)

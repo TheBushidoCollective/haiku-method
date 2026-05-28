@@ -1,22 +1,31 @@
 /**
- * FeedbackSheet — Completion-Criteria regression coverage per unit-10.
+ * FeedbackSheet — Completion-Criteria regression coverage per unit-10,
+ * reshaped to the NON-MODAL RIGHT-EDGE SLIDE-OUT drawer contract.
  *
- * Every unit spec assertion has a named test. See
- * stages/development/artifacts/unit-10-tactical-plan.md §F for the per-case
- * rationale + the jsdom `<dialog>` polyfill + matchMedia stub placement
- * inherited from unit-09.
+ * The drawer is a PLAIN CONTROLLED `<aside role="dialog">` — NOT a native
+ * `<dialog>`. It stays mounted in the DOM at all times; `open` drives the
+ * slide transform (`-translate-x-full` closed → `translate-x-0` open — the
+ * LEFT-edge drawer slides off-screen to the left) and the a11y visibility
+ * (`aria-hidden` + `pointer-events-none` when closed). The rest of the page
+ * — header, content, sticky GateDecisionBar — stays visible
+ * AND interactive while feedback is open (non-modal). The behavior contract:
+ * Escape closes (via onClose, controlled), the × button calls onClose, focus
+ * returns to the rail on close, the title renders. The MODAL-only pieces are
+ * GONE: no `aria-modal`, no focus-trap, no scroll-lock, no backdrop-click.
+ *
+ * CONTROLLED-CLOSE regression (the load-bearing bug this suite guards): the ×
+ * button and the Escape handler call `onClose()` ONLY — there is no imperative
+ * `dialog.close()` anymore. The old `<dialog>` code called `dialog.close();
+ * return` from the × handler, which hid the native dialog but left the parent's
+ * `open` at `true`, so the open/close effect immediately re-`show()`-ed it —
+ * net "× does nothing". The CC3 close-button test below proves `onClose` fires
+ * exactly once and the parent-driven close actually sticks.
  *
  * jsdom notes:
- *   - jsdom 25 ships `HTMLDialogElement` with `open` / `show()` / `close()`
- *     but not `showModal` + top-layer + background inert. The `beforeEach`
- *     below polyfills `showModal` and `close` to mirror the canonical shape:
- *     `showModal` sets the `open` attribute; `close` removes it and fires
- *     the native `close` event.
- *   - Focus-trap in jsdom is emulated by the reused `useFocusTrap` hook from
- *     `a11y/focus.ts`. That hook snapshots prior focus on enable, moves
- *     focus to the first tabbable on open, wraps Tab + Shift+Tab on the
- *     container, and restores focus on disable — giving us Tab-doesn't-
- *     escape + FAB-restore for free.
+ *   - The `<aside>` root needs no polyfill — it is a plain element. The closed
+ *     drawer carries `aria-hidden`, so `getByRole("dialog")` (which excludes
+ *     aria-hidden subtrees) only resolves while open, and `queryByRole` returns
+ *     null once closed.
  *   - The reduced-motion branch installs `installMatchMediaStub(...)` BEFORE
  *     render because `useReducedMotion()` reads matchMedia in its useState
  *     initializer on first render.
@@ -32,54 +41,10 @@ import {
 	within,
 } from "@testing-library/react"
 import { useRef, useState } from "react"
-import {
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { installMatchMediaStub } from "../../a11y/__tests__/matchMedia.stub"
-import { FeedbackFloatingButton } from "../FeedbackFloatingButton"
+import { FeedbackRail } from "../FeedbackRail"
 import { FeedbackSheet } from "../FeedbackSheet"
-
-// ── jsdom <dialog> polyfill ────────────────────────────────────────────────
-// jsdom 25 lacks showModal; close() exists but does not dispatch the native
-// `close` event in every version. Force-polyfill both to a canonical shape:
-// showModal sets the open attribute; close removes it and fires a `close`
-// event. Cleaner than per-test feature-detection inside each describe block.
-
-beforeAll(() => {
-	if (typeof HTMLDialogElement !== "undefined") {
-		type DialogWithInternals = HTMLDialogElement & {
-			__haikuTestShimInstalled?: boolean
-		}
-		const proto = HTMLDialogElement.prototype as DialogWithInternals
-		if (!proto.__haikuTestShimInstalled) {
-			HTMLDialogElement.prototype.showModal = function showModal(
-				this: HTMLDialogElement,
-			) {
-				this.setAttribute("open", "")
-			}
-			HTMLDialogElement.prototype.close = function close(
-				this: HTMLDialogElement,
-			) {
-				if (!this.hasAttribute("open")) return
-				this.removeAttribute("open")
-				this.dispatchEvent(new Event("close"))
-			}
-			// The `show()` method also needs a stable footprint.
-			HTMLDialogElement.prototype.show = function show(
-				this: HTMLDialogElement,
-			) {
-				this.setAttribute("open", "")
-			}
-			proto.__haikuTestShimInstalled = true
-		}
-	}
-})
 
 // ── Harness ────────────────────────────────────────────────────────────────
 // Controlled pair that mirrors the downstream review-page wiring.
@@ -94,25 +59,25 @@ function Harness({
 	onCloseSpy?: () => void
 }) {
 	const [open, setOpen] = useState(initialOpen)
-	const fabRef = useRef<HTMLButtonElement>(null)
+	const railRef = useRef<HTMLButtonElement>(null)
 	return (
 		<>
-			<FeedbackFloatingButton
-				ref={fabRef}
+			<FeedbackRail
+				ref={railRef}
 				open={open}
 				onToggle={() => setOpen((o) => !o)}
 				count={count}
 			/>
 			<FeedbackSheet
 				open={open}
-				triggerRef={fabRef}
+				triggerRef={railRef}
 				onClose={() => {
 					onCloseSpy?.()
 					setOpen(false)
 				}}
 			>
-				{/* Body contents — ordinary tabbable children the focus-trap and
-				    test assertions rely on. */}
+				{/* Body contents — ordinary tabbable children the test
+				    assertions rely on. */}
 				<button type="button" data-testid="body-dismiss">
 					Dismiss
 				</button>
@@ -129,7 +94,7 @@ afterEach(() => {
 	document.documentElement.style.overflow = ""
 })
 
-// ── CC1 — dialog semantics when open ───────────────────────────────────────
+// ── CC1 — dialog semantics when open (non-modal drawer) ────────────────────
 
 describe("FeedbackSheet — dialog semantics when open (CC1)", () => {
 	it("resolves screen.getByRole('dialog', { name: /feedback/i }) when open", () => {
@@ -138,13 +103,15 @@ describe("FeedbackSheet — dialog semantics when open (CC1)", () => {
 		expect(sheet).toBeTruthy()
 	})
 
-	it("has aria-modal='true' on the dialog root", () => {
+	it("is NON-modal — does NOT carry aria-modal on the dialog root", () => {
 		render(<Harness initialOpen />)
 		const sheet = screen.getByRole("dialog", { name: /feedback/i })
-		expect(sheet.getAttribute("aria-modal")).toBe("true")
+		// A non-modal drawer must not advertise itself as modal — the page
+		// behind it stays interactive.
+		expect(sheet.getAttribute("aria-modal")).toBeNull()
 	})
 
-	it("has role='dialog' on the dialog root (belt-and-suspenders)", () => {
+	it("has role='dialog' on the drawer root (belt-and-suspenders)", () => {
 		render(<Harness initialOpen />)
 		const sheet = screen.getByRole("dialog", { name: /feedback/i })
 		expect(sheet.getAttribute("role")).toBe("dialog")
@@ -160,123 +127,142 @@ describe("FeedbackSheet — dialog semantics when open (CC1)", () => {
 		expect(heading?.textContent).toBe("Feedback")
 	})
 
-	// FB-34 — CSS selector alignment regression guard.
+	// FB-34 — root-element alignment regression guard.
 	//
-	// `packages/haiku-ui/src/index.css` ships a full block of styling keyed on
-	// `dialog.feedback-sheet` (backdrop, ::backdrop blur, sheet-up animation,
-	// reduced-motion guards, dark-mode background override). If the rendered
-	// root is ever downgraded back to a `<div role="dialog">` the selector
-	// will silently stop matching and those styles become dead CSS. Pin the
-	// tagName + className here so that regression fails loudly.
-	it("renders as a native <dialog class='feedback-sheet'> root (FB-34 alignment)", () => {
+	// The drawer surface bg now lives in Tailwind classes on the element
+	// (`bg-white dark:bg-stone-900`), and the root is a class-matched
+	// `<aside role="dialog">`. There is no `dialog.feedback-sheet` CSS selector
+	// anymore. Pin the tagName (ASIDE) + the `feedback-sheet` class so a
+	// regression back to a `<div>` or to a native `<dialog>` fails loudly.
+	it("renders as an <aside class='feedback-sheet'> root (FB-34 alignment)", () => {
 		render(<Harness initialOpen />)
 		const sheet = screen.getByRole("dialog", { name: /feedback/i })
-		expect(sheet.tagName).toBe("DIALOG")
+		expect(sheet.tagName).toBe("ASIDE")
 		expect(sheet.classList.contains("feedback-sheet")).toBe(true)
 	})
-})
 
-// ── CC2a — focus lands on first focusable on open ──────────────────────────
-
-describe("FeedbackSheet — focus on open (CC2a)", () => {
-	it("focus lands on the first focusable child (close button, per DOM order)", () => {
-		render(<Harness initialOpen />)
-		const closeBtn = screen.getByTestId("feedback-sheet-close")
-		expect(document.activeElement).toBe(closeBtn)
-	})
-})
-
-// ── CC2b — Tab does not traverse outside the sheet (focus-trap) ────────────
-
-describe("FeedbackSheet — Tab wrap (CC2b focus-trap)", () => {
-	it("Tab wraps back to the first focusable instead of leaving the sheet", () => {
+	// Left-edge slide-out geometry — full-height panel anchored to the LEFT
+	// edge, transform-driven (`translate-x-0` when open). Pin the drawer-shape
+	// utilities so a regression back to a bottom drawer or a full-viewport
+	// modal fails loudly.
+	it("is a left-edge slide-out drawer in the band between header and gate bar (left-0 + top-[var(--review-header-h)] + bottom-[var(--review-gatebar-h)] + translate + border-r), not full-screen or bottom drawer", () => {
 		render(<Harness initialOpen />)
 		const sheet = screen.getByRole("dialog", { name: /feedback/i })
-		const closeBtn = screen.getByTestId("feedback-sheet-close")
-		const bodyDismiss = screen.getByTestId("body-dismiss")
-		const bodyVerify = screen.getByTestId("body-verify-close")
+		const cls = sheet.className
+		expect(cls).toMatch(/\bfixed\b/)
+		expect(cls).toMatch(/\bleft-0\b/)
+		// Top pinned to the header bottom, bottom pinned to the gate-bar top —
+		// slides out in the band between them, over neither. Not top-0/bottom-0.
+		expect(cls).toMatch(/top-\[var\(--review-header-h/)
+		// bottom anchors to the gate-bar var, wrapped in calc(... - 2px) so the
+		// drawer overlaps the gate bar by a hair (no hairline rounding gap below).
+		expect(cls).toMatch(/bottom-\[calc\(var\(--review-gatebar-h/)
+		expect(cls).not.toMatch(/\btop-0\b/)
+		expect(cls).not.toMatch(/\bbottom-0\b/)
+		expect(cls).toMatch(/w-\[min\(85vw,360px\)\]/)
+		// Open → slid into place.
+		expect(cls).toMatch(/\btranslate-x-0\b/)
+		// Left-edge drawer borders on its RIGHT side, not its left.
+		expect(cls).toMatch(/\bborder-r\b/)
+		expect(cls).not.toMatch(/\bborder-l\b/)
+		// Docked left, NOT right.
+		expect(cls).not.toMatch(/\bright-0\b/)
+		// Must NOT be a full-screen modal nor a bottom drawer.
+		expect(cls).not.toMatch(/\binset-0\b/)
+		expect(cls).not.toMatch(/\binset-x-0\b/)
+		expect(cls).not.toMatch(/\bbottom-44\b/)
+	})
 
-		// Initial focus is the close button (first tabbable).
-		expect(document.activeElement).toBe(closeBtn)
-
-		// Step through each tabbable via focus() + synthetic Tab to exercise
-		// the wrap handler. Using keydown dispatch on the container to drive
-		// the useFocusTrap handler directly.
-		function pressTab(shiftKey = false) {
-			fireEvent.keyDown(sheet, { key: "Tab", code: "Tab", shiftKey })
-		}
-
-		// After focus moves naturally through the three tabbables, pressing
-		// Tab from the last should wrap to the first.
-		bodyDismiss.focus()
-		expect(document.activeElement).toBe(bodyDismiss)
-		bodyVerify.focus()
-		expect(document.activeElement).toBe(bodyVerify)
-		// Now on the last tabbable; Tab should wrap to first.
-		pressTab()
-		expect(document.activeElement).toBe(closeBtn)
-
-		// Shift+Tab from the first should wrap to the last.
-		pressTab(true)
-		expect(document.activeElement).toBe(bodyVerify)
-
-		// And activeElement is always inside the sheet.
-		expect(sheet.contains(document.activeElement)).toBe(true)
+	it("slides off-screen to the LEFT (-translate-x-full + pointer-events-none + aria-hidden) when closed", () => {
+		render(<Harness initialOpen={false} />)
+		const sheet = screen.getByTestId("feedback-sheet")
+		expect(sheet.className).toMatch(/-translate-x-full/)
+		expect(sheet.className).not.toMatch(/\btranslate-x-0\b/)
+		// Closed → not interactive + removed from the a11y tree.
+		expect(sheet.className).toMatch(/\bpointer-events-none\b/)
+		expect(sheet.getAttribute("aria-hidden")).toBe("true")
 	})
 })
 
-// ── CC3 — close paths: Escape, backdrop, close button; focus returns to FAB ─
+// ── CC2 — focus is NOT trapped (non-modal drawer) ──────────────────────────
+
+describe("FeedbackSheet — focus is not trapped (non-modal CC2)", () => {
+	it("Tab does NOT wrap inside the drawer — focus can leave it freely", () => {
+		render(<Harness initialOpen />)
+		const sheet = screen.getByRole("dialog", { name: /feedback/i })
+		const bodyVerify = screen.getByTestId("body-verify-close")
+		// Focus the last tabbable in the drawer, then press Tab. A modal trap
+		// would preventDefault + wrap to the first child; the non-modal drawer
+		// installs no such handler, so focus stays put (jsdom does not advance
+		// focus on synthetic Tab) and is NOT force-wrapped to the close button.
+		const closeBtn = screen.getByTestId("feedback-sheet-close")
+		bodyVerify.focus()
+		expect(document.activeElement).toBe(bodyVerify)
+		fireEvent.keyDown(sheet, { key: "Tab", code: "Tab" })
+		// No trap → focus was not yanked back to the first tabbable.
+		expect(document.activeElement).not.toBe(closeBtn)
+		expect(document.activeElement).toBe(bodyVerify)
+	})
+})
+
+// ── CC3 — close paths: ×, Escape; controlled close; focus returns to rail ──
 
 describe("FeedbackSheet — close paths + focus restore (CC3)", () => {
-	it("close button closes the dialog and restores focus to the FAB", () => {
+	// THE controlled-close regression. Against the old `dialog.close(); return`
+	// × handler this FAILS: that handler hid the dialog without calling
+	// onClose, so the spy never fired AND the parent's `open` stayed true →
+	// the effect re-opened it.
+	it("× button calls onClose exactly once (controlled)", () => {
+		const onCloseSpy = vi.fn()
+		render(<Harness initialOpen onCloseSpy={onCloseSpy} />)
+		const closeBtn = screen.getByTestId("feedback-sheet-close")
+		fireEvent.click(closeBtn)
+		expect(onCloseSpy).toHaveBeenCalledTimes(1)
+	})
+
+	it("× button closes the drawer (parent-driven) and does NOT leave it open", () => {
 		render(<Harness initialOpen />)
 		const closeBtn = screen.getByTestId("feedback-sheet-close")
 		fireEvent.click(closeBtn)
-		// After close, the dialog element loses its `open` attribute.
+		// onClose flips the parent's `open` → false → the drawer slides out and
+		// goes aria-hidden, so the `role="dialog"` no longer resolves (getByRole
+		// excludes aria-hidden subtrees).
 		expect(screen.queryByRole("dialog")).toBeNull()
-		// Focus restored to the FAB by useFocusTrap's priorFocus snapshot.
-		const fab = screen.getByRole("button", { name: /open feedback panel/i })
-		expect(document.activeElement).toBe(fab)
+		// The aside is still mounted but hidden + slid off-screen to the LEFT.
+		const sheet = screen.getByTestId("feedback-sheet")
+		expect(sheet.getAttribute("aria-hidden")).toBe("true")
+		expect(sheet.className).toMatch(/-translate-x-full/)
 	})
 
-	it("backdrop click closes the dialog (click target === dialog)", () => {
+	it("× button restores focus to the rail", () => {
 		render(<Harness initialOpen />)
-		const sheet = screen.getByRole("dialog", { name: /feedback/i })
-		// Simulate a click whose target IS the dialog itself — the canonical
-		// "click on the backdrop pseudo-element" pattern from MDN.
-		fireEvent.click(sheet, { target: sheet })
-		expect(screen.queryByRole("dialog")).toBeNull()
+		const closeBtn = screen.getByTestId("feedback-sheet-close")
+		fireEvent.click(closeBtn)
+		// Focus restored to the rail by the open/close effect's cleanup.
+		const rail = screen.getByRole("button", { name: /open feedback panel/i })
+		expect(document.activeElement).toBe(rail)
 	})
 
-	it("Escape-driven close path dispatches close + restores focus", async () => {
+	it("Escape-driven close path calls onClose + restores focus", async () => {
 		const onCloseSpy = vi.fn()
 		render(<Harness initialOpen onCloseSpy={onCloseSpy} />)
-		const sheet = screen.getByRole("dialog", { name: /feedback/i })
-		// FB-60 — dispatch a REAL Escape keydown on the dialog root. This
-		// exercises the full input path the test name claims to cover:
-		//   keydown(Escape) → FeedbackSheet's keydown listener calls
-		//   dialog.close() → `close` event → parent onClose → FAB focus
+		// Dispatch a REAL Escape keydown on the document. This exercises the
+		// full input path:
+		//   keydown(Escape) → FeedbackSheet's document keydown listener calls
+		//   onClose() → parent flips open → false → drawer hides → rail focus
 		//   restore.
 		//
-		// Do NOT short-circuit by calling `dialog.close()` directly — that
-		// path would still pass even if the Escape key binding regressed
-		// (handler removed, wrong key, wrong target), leaving CC3's
-		// keyboard input path silently untested.
-		//
-		// jsdom caveat: jsdom 25 does not auto-fire `cancel` on keydown, so
-		// the component installs a belt-and-suspenders `keydown` handler
-		// that calls `dialog.close()` on Escape. In real browsers the
-		// native `cancel` → `close` pipeline handles this; in jsdom this
-		// handler IS the close path the test drives.
+		// CONTROLLED discipline: the handler calls onClose(), NOT any imperative
+		// close. The component's own document keydown handler IS the close path.
 		await act(async () => {
-			fireEvent.keyDown(sheet, { key: "Escape", code: "Escape" })
+			fireEvent.keyDown(document, { key: "Escape", code: "Escape" })
 		})
 		await waitFor(() => {
 			expect(onCloseSpy).toHaveBeenCalled()
 			expect(screen.queryByRole("dialog")).toBeNull()
 		})
-		const fab = screen.getByRole("button", { name: /open feedback panel/i })
-		expect(document.activeElement).toBe(fab)
+		const rail = screen.getByRole("button", { name: /open feedback panel/i })
+		expect(document.activeElement).toBe(rail)
 	})
 })
 
@@ -295,7 +281,7 @@ describe("FeedbackSheet — accessibility tree (CC4)", () => {
 	})
 })
 
-// ── CC5 — reduced-motion animation class swap ─────────────────────────────
+// ── CC5 — reduced-motion drops the slide transition ───────────────────────
 
 describe("FeedbackSheet — reduced-motion variant (CC5)", () => {
 	let stub: ReturnType<typeof installMatchMediaStub>
@@ -312,45 +298,73 @@ describe("FeedbackSheet — reduced-motion variant (CC5)", () => {
 		stub.restore()
 	})
 
-	it("dialog carries the sheet-enter--reduced sentinel class when open", () => {
+	it("drops the transition-transform class under reduced motion (snaps, no slide)", () => {
 		render(<Harness initialOpen />)
 		const sheet = screen.getByRole("dialog", { name: /feedback/i })
-		expect(sheet.className).toMatch(/\bsheet-enter--reduced\b/)
-	})
-
-	it("dialog does NOT carry the plain sheet-enter class under reduce", () => {
-		render(<Harness initialOpen />)
-		const sheet = screen.getByRole("dialog", { name: /feedback/i })
-		expect(sheet.className).not.toMatch(/\bsheet-enter(?!--reduced)\b/)
+		expect(sheet.className).not.toMatch(/\btransition-transform\b/)
+		// It still occupies its open position.
+		expect(sheet.className).toMatch(/\btranslate-x-0\b/)
 	})
 })
 
-// ── Ancillary — FAB aria-expanded flips on open/close ─────────────────────
+describe("FeedbackSheet — motion variant (no reduced-motion)", () => {
+	let stub: ReturnType<typeof installMatchMediaStub>
 
-describe("FeedbackSheet — FAB aria-expanded (ancillary)", () => {
-	it("FAB aria-expanded flips false → true → false across click + close", () => {
+	beforeEach(() => {
+		stub = installMatchMediaStub({
+			"(prefers-reduced-motion: reduce)": false,
+		})
+	})
+
+	afterEach(() => {
+		stub.restore()
+	})
+
+	it("carries the transition-transform slide class when motion is allowed", () => {
+		render(<Harness initialOpen />)
+		const sheet = screen.getByRole("dialog", { name: /feedback/i })
+		expect(sheet.className).toMatch(/\btransition-transform\b/)
+	})
+})
+
+// ── Ancillary — rail aria-expanded flips on open/close ────────────────────
+
+describe("FeedbackSheet — rail aria-expanded (ancillary)", () => {
+	it("rail aria-expanded flips false → true → false across click + close", () => {
 		render(<Harness />)
-		const fab = screen.getByRole("button", { name: /open feedback panel/i })
-		expect(fab.getAttribute("aria-expanded")).toBe("false")
+		const rail = screen.getByRole("button", { name: /open feedback panel/i })
+		expect(rail.getAttribute("aria-expanded")).toBe("false")
 		// Open
-		fireEvent.click(fab)
-		expect(fab.getAttribute("aria-expanded")).toBe("true")
+		fireEvent.click(rail)
+		expect(rail.getAttribute("aria-expanded")).toBe("true")
 		// Close via the close button
 		const closeBtn = screen.getByTestId("feedback-sheet-close")
 		fireEvent.click(closeBtn)
-		expect(fab.getAttribute("aria-expanded")).toBe("false")
+		expect(rail.getAttribute("aria-expanded")).toBe("false")
+	})
+
+	it("clicking the rail while open toggles the drawer closed", () => {
+		render(<Harness initialOpen />)
+		const rail = screen.getByRole("button", { name: /open feedback panel/i })
+		expect(rail.getAttribute("aria-expanded")).toBe("true")
+		expect(screen.queryByRole("dialog")).not.toBeNull()
+		// Re-clicking the rail is one of the documented close paths.
+		fireEvent.click(rail)
+		expect(rail.getAttribute("aria-expanded")).toBe("false")
+		expect(screen.queryByRole("dialog")).toBeNull()
 	})
 })
 
-// ── Ancillary — scroll lock during open ───────────────────────────────────
+// ── Ancillary — non-modal drawer does NOT lock page scroll ────────────────
 
-describe("FeedbackSheet — scroll lock on <html> while open (ancillary)", () => {
-	it("sets overflow:hidden on <html> on open and clears it on close", () => {
+describe("FeedbackSheet — no scroll lock (non-modal drawer)", () => {
+	it("never sets overflow:hidden on <html> while open", () => {
 		render(<Harness />)
-		const fab = screen.getByRole("button", { name: /open feedback panel/i })
+		const rail = screen.getByRole("button", { name: /open feedback panel/i })
 		expect(document.documentElement.style.overflow).toBe("")
-		fireEvent.click(fab)
-		expect(document.documentElement.style.overflow).toBe("hidden")
+		fireEvent.click(rail)
+		// Non-modal: the page behind the drawer must stay scrollable.
+		expect(document.documentElement.style.overflow).toBe("")
 		const closeBtn = screen.getByTestId("feedback-sheet-close")
 		fireEvent.click(closeBtn)
 		expect(document.documentElement.style.overflow).toBe("")

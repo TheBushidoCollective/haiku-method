@@ -88,7 +88,16 @@ export type StageArtifact = z.infer<typeof StageArtifactSchema>
 export const OutputArtifactSchema = z.object({
 	stage: z.string(),
 	name: z.string(),
-	type: z.enum(["markdown", "html", "image", "file"]),
+	type: z.enum(["markdown", "html", "image", "video", "code", "file"]),
+	/** For `type: "code"` — the highlight.js language id (`tsx`, `python`,
+	 *  …). Undefined when the text has no known grammar (renders as a plain
+	 *  `<pre>`). */
+	language: z.string().optional(),
+	/** For "other" files: the top-level subdirectory under
+	 *  `stages/<stage>/` the file lives in (e.g. `proofs`), which the SPA
+	 *  groups into a per-directory tab. Undefined for a stage-root loose
+	 *  file (those fall into the catch-all "Other" tab). */
+	directory: z.string().optional(),
 	content: z.string().optional(),
 	/** URL the SPA fetches via the `/stage-artifacts/:sessionId/*`
 	 *  route — already includes the route prefix and session id. */
@@ -168,6 +177,22 @@ export type PreviousReviewSnapshot = z.infer<
 	typeof PreviousReviewSnapshotSchema
 >
 
+/** One ordered milestone in a stage's (or the intent-completion tail's)
+ *  granular progress track — the same milestones the status line shows
+ *  (elaborate → each pre-execute review role → execute → each
+ *  post-execute approval role → observations; or per-role intent review
+ *  → quality gates → reflection → seal). `key` is stable
+ *  (`review:spec`, `execute`, `approve:quality_gates`); `label` is the
+ *  display word. */
+export const ProgressMilestoneSchema = z
+	.object({
+		key: z.string(),
+		label: z.string(),
+		status: z.enum(["done", "active", "pending"]),
+	})
+	.describe("One milestone in the granular per-stage progress track")
+export type ProgressMilestone = z.infer<typeof ProgressMilestoneSchema>
+
 export const IntentCurrentStateSchema = z
 	.object({
 		studio: z.string(),
@@ -214,9 +239,19 @@ export const IntentCurrentStateSchema = z
 		 *  `signals_unmet[]` so the SPA can show why the loop hasn't
 		 *  advanced. Empty / omitted on other phases. */
 		pending_signals: z.array(z.string()).optional(),
+		/** Granular per-stage milestone track — the same ordered
+		 *  milestones the status line renders, so the SPA can show a
+		 *  fine-grained stepper (each review/approval role as its own
+		 *  pip) instead of the coarse five-phase strip. Omitted when the
+		 *  track can't be derived; the SPA falls back to `phase`. */
+		milestones: z.array(ProgressMilestoneSchema).optional(),
+		/** Index of the active (first not-done) milestone, or
+		 *  `milestones.length` when every milestone is done. */
+		progress_index: z.number().int().nonnegative().optional(),
+		progress_total: z.number().int().nonnegative().optional(),
 	})
 	.describe(
-		"Unified current-state snapshot — derived fresh per request from per-stage state.json. The single source of truth for 'where is this intent right now?'.",
+		"Unified current-state snapshot — derived fresh per request from per-unit frontmatter and branch-merge state. The single source of truth for 'where is this intent right now?'.",
 	)
 export type IntentCurrentState = z.infer<typeof IntentCurrentStateSchema>
 
@@ -279,6 +314,43 @@ export const ReviewSessionPayloadSchema = z
 		intent_mockups: z.array(LooseRecord).optional(),
 		unit_mockups: z.record(z.array(LooseRecord)).optional(),
 		stage_states: z.record(StageStateInfoSchema).optional(),
+		/** Per-stage studio-definition summary keyed by stage name — the
+		 *  stage's STAGE.md `description` frontmatter. Surfaced in the
+		 *  SPA's Overview tab as "Stage Summary (from studio definition)".
+		 *  Built server-side so the SPA never reads the plugin tree. */
+		stage_summaries: z.record(z.string()).optional(),
+		/** Per-stage user-facing BRIEF (markdown) keyed by stage name — the
+		 *  plain-language summary the briefer subagent wrote before the
+		 *  review gate, describing the planned work for the human reviewer.
+		 *  The first thing shown at the gate and a website-browse stage
+		 *  surface. Built server-side (engine reads BRIEF.md); the focused
+		 *  work agents never read it. Absent when the stage has no brief. */
+		stage_briefs: z.record(z.string()).optional(),
+		/** Per-stage agent OBSERVATIONS (markdown) keyed by stage name — the
+		 *  free-form reflection the agent wrote at stage close (mandate
+		 *  ambiguity, engine friction, surprises, out-of-band churn that the
+		 *  FB stream / outputs / iterations don't already show). Read
+		 *  server-side from `stages/<stage>/observations.md`; absent for a
+		 *  stage that hasn't recorded any. */
+		stage_observations: z.record(z.string()).optional(),
+		/** Per-stage ELABORATION (markdown) keyed by stage name — the
+		 *  decompose-phase narrative the agent wrote while breaking the stage
+		 *  into units (`stages/<stage>/elaboration.md`). Surfaced in its own
+		 *  Elaboration tab (SPA + website). Read server-side; absent when the
+		 *  stage hasn't elaborated yet. */
+		stage_elaborations: z.record(z.string()).optional(),
+		/** Intent-scope synthesized REFLECTION (markdown) — the agent's
+		 *  end-of-intent `reflection.md`, written once at intent close: a
+		 *  synthesis across every stage's observations, feedback, and
+		 *  outputs. Read server-side; absent until the reflection phase runs. */
+		reflection: z.string().optional(),
+		/** Per-stage granular milestone track keyed by stage name, so the
+		 *  SPA renders the SAME fine-grained dot stepper on every stage —
+		 *  completed and upcoming — not only the engine-active stage (whose
+		 *  live track rides on `current_state.milestones`). On a completed
+		 *  stage the SPA forces every pip done from the stage status, so the
+		 *  per-step flags here only need the correct ordered LIST. */
+		stage_milestones: z.record(z.array(ProgressMilestoneSchema)).optional(),
 		current_state: IntentCurrentStateSchema.optional(),
 		knowledge_files: z.array(KnowledgeFileSchema).optional(),
 		stage_artifacts: z.array(StageArtifactSchema).optional(),
@@ -288,6 +360,13 @@ export const ReviewSessionPayloadSchema = z
 		 *  Same wire shape as outputs — surfaced in the SPA's "Other"
 		 *  tab. Reported 2026-05-13. */
 		other_files: z.array(OutputArtifactSchema).optional(),
+		/** Intent-ROOT "other" files — anything at `.haiku/intents/<slug>/`
+		 *  that isn't a known category dir, the intent spec, or a system
+		 *  journal (action-log/write-audit are excluded by design — they're
+		 *  never shown in the SPA). Surfaced in the intent-completion
+		 *  review's "Other" tab; each carries `stage: ""` (the intent-scope
+		 *  marker). Distinct from per-stage `other_files`. */
+		intent_other_files: z.array(OutputArtifactSchema).optional(),
 		/** Per-unit output preview entries keyed by unit slug. Built
 		 *  server-side at session creation so the SPA doesn't have to
 		 *  per-row-fetch each output's bytes. */
@@ -441,6 +520,9 @@ export const DirectionSessionPayloadSchema = z
 		status: SessionStatusSchema,
 		title: z.string().optional(),
 		intent_slug: z.string().optional(),
+		/** Optional markdown preamble shown above the archetype cards —
+		 *  mirrors `context` on the question payload. */
+		context: z.string().optional(),
 		archetypes: z.array(DesignArchetypeDataSchema).optional(),
 		selection: DirectionSelectionSchema.nullable().optional(),
 	})
@@ -467,9 +549,10 @@ export const PickerOptionSchema = z
 		id: z.string(),
 		label: z.string(),
 		description: z.string().optional(),
+		secondary: z.boolean().optional(),
 	})
 	.describe(
-		"One option in a picker session — id is the canonical value the wire echoes back, label/description are display-only",
+		"One option in a picker session — id is the canonical value the wire echoes back, label/description are display-only. `secondary` options are hidden behind a 'Show all…' expansion (studio picker shortlist).",
 	)
 export type PickerOption = z.infer<typeof PickerOptionSchema>
 
@@ -514,6 +597,35 @@ export const PickerSelectResponseSchema = z
 	.describe("Success response from POST /picker/:sessionId/select")
 export type PickerSelectResponse = z.infer<typeof PickerSelectResponseSchema>
 
+// ─── View session ────────────────────────────────────────────────────────
+// Non-blocking session opened by the `haiku_view` MCP tool. Scopes the
+// tunnelled artifact-browser to a single intent (optionally narrowed to
+// a stage or specific artifact). The SPA reads the payload at mount and
+// renders the artifact-browser UI; there is no decision flow, no
+// annotations, no heartbeat gating.
+
+export const ViewSessionPayloadSchema = z
+	.object({
+		session_id: z.string(),
+		session_type: z.literal("view"),
+		status: z.enum(["open", "closed"]),
+		intent_slug: z.string(),
+		studio: z.string().optional(),
+		stage: z.string().optional(),
+		artifact: z.string().optional(),
+		mode: z.enum(["viewer", "boot"]),
+		/** Boot mode only — present when the session spawned a project
+		 *  dev server. The SPA may surface this for debugging but does
+		 *  not need to route to it (haiku_view returns the boot URL
+		 *  directly to the caller). */
+		boot_port: z.number().int().positive().optional(),
+		boot_command: z.string().optional(),
+	})
+	.describe(
+		"View session payload (GET /api/session/:id, session_type=view). Opened by haiku_view, closed by haiku_view_close.",
+	)
+export type ViewSessionPayload = z.infer<typeof ViewSessionPayloadSchema>
+
 // ─── Discriminated-union session payload ─────────────────────────────────
 
 export const SessionPayloadSchema = z
@@ -522,6 +634,7 @@ export const SessionPayloadSchema = z
 		QuestionSessionPayloadSchema,
 		DirectionSessionPayloadSchema,
 		PickerSessionPayloadSchema,
+		ViewSessionPayloadSchema,
 	])
 	.describe(
 		"GET /api/session/:id response body — discriminated on session_type",

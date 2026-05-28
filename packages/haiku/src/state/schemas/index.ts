@@ -42,6 +42,7 @@ export {
 export type {
 	FeedbackFrontmatter,
 	FeedbackOrigin,
+	FeedbackSeverity,
 	HaikuFeedbackInput,
 } from "./feedback.js"
 export {
@@ -49,8 +50,12 @@ export {
 	FB_ID_PATTERN,
 	FEEDBACK_FRONTMATTER_SCHEMA,
 	FEEDBACK_ORIGINS,
+	FEEDBACK_SEVERITIES,
 	FSM_DRIVEN_FB_FIELDS,
+	feedbackSeverityRank,
+	fixSeverityThresholdRank,
 	HAIKU_FEEDBACK_INPUT_SCHEMA,
+	isFixBlockingSeverity,
 	validateHaikuFeedbackInputSchema,
 } from "./feedback.js"
 export type {
@@ -95,6 +100,7 @@ export {
 	HAIKU_FEEDBACK_READ_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_REJECT_HAT_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_REJECT_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_SET_SEVERITY_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_SET_TARGETS_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_WRITE_INPUT_SCHEMA,
 	validateHaikuFeedbackAdvanceHatInputSchema,
@@ -104,15 +110,18 @@ export {
 	validateHaikuFeedbackReadInputSchema,
 	validateHaikuFeedbackRejectHatInputSchema,
 	validateHaikuFeedbackRejectInputSchema,
+	validateHaikuFeedbackSetSeverityInputSchema,
 	validateHaikuFeedbackSetTargetsInputSchema,
 	validateHaikuFeedbackWriteInputSchema,
 } from "./inputs/feedback-variants.js"
 export type {
+	HaikuIntentCreateInput,
 	HaikuIntentGetInput,
 	HaikuIntentListInput,
 	HaikuIntentSetInput,
 } from "./inputs/intents.js"
 export {
+	HAIKU_INTENT_CREATE_INPUT_SCHEMA,
 	HAIKU_INTENT_GET_INPUT_SCHEMA,
 	HAIKU_INTENT_LIST_INPUT_SCHEMA,
 	HAIKU_INTENT_SET_INPUT_SCHEMA,
@@ -128,7 +137,6 @@ export type {
 	HaikuKnowledgeListInput,
 	HaikuKnowledgeReadInput,
 	HaikuReconciliationAcknowledgeInput,
-	HaikuReflectInput,
 	HaikuReleaseNotesInput,
 	HaikuRepairInput,
 	HaikuReviewInput,
@@ -139,6 +147,9 @@ export type {
 	HaikuStageResetInput,
 	HaikuStudioGetInput,
 	HaikuStudioStageGetInput,
+	HaikuViewCloseInput,
+	HaikuViewInput,
+	HaikuZapInput,
 } from "./inputs/long-tail.js"
 export {
 	HAIKU_BACKLOG_INPUT_SCHEMA,
@@ -148,7 +159,6 @@ export {
 	HAIKU_KNOWLEDGE_LIST_INPUT_SCHEMA,
 	HAIKU_KNOWLEDGE_READ_INPUT_SCHEMA,
 	HAIKU_RECONCILIATION_ACKNOWLEDGE_INPUT_SCHEMA,
-	HAIKU_REFLECT_INPUT_SCHEMA,
 	HAIKU_RELEASE_NOTES_INPUT_SCHEMA,
 	HAIKU_REPAIR_INPUT_SCHEMA,
 	HAIKU_REVIEW_INPUT_SCHEMA,
@@ -159,6 +169,9 @@ export {
 	HAIKU_STAGE_RESET_INPUT_SCHEMA,
 	HAIKU_STUDIO_GET_INPUT_SCHEMA,
 	HAIKU_STUDIO_STAGE_GET_INPUT_SCHEMA,
+	HAIKU_VIEW_CLOSE_INPUT_SCHEMA,
+	HAIKU_VIEW_INPUT_SCHEMA,
+	HAIKU_ZAP_INPUT_SCHEMA,
 	validateHaikuBacklogInputSchema,
 	validateHaikuCapacityInputSchema,
 	validateHaikuDecisionRecordInputSchema,
@@ -166,7 +179,6 @@ export {
 	validateHaikuKnowledgeListInputSchema,
 	validateHaikuKnowledgeReadInputSchema,
 	validateHaikuReconciliationAcknowledgeInputSchema,
-	validateHaikuReflectInputSchema,
 	validateHaikuReleaseNotesInputSchema,
 	validateHaikuRepairInputSchema,
 	validateHaikuReviewInputSchema,
@@ -177,16 +189,27 @@ export {
 	validateHaikuStageResetInputSchema,
 	validateHaikuStudioGetInputSchema,
 	validateHaikuStudioStageGetInputSchema,
+	validateHaikuViewCloseInputSchema,
+	validateHaikuViewInputSchema,
+	validateHaikuZapInputSchema,
 } from "./inputs/long-tail.js"
+export type { HaikuReviewStampInput } from "./inputs/review-stamp.js"
+export {
+	HAIKU_REVIEW_STAMP_INPUT_SCHEMA,
+	validateHaikuReviewStampInputSchema,
+} from "./inputs/review-stamp.js"
 export type {
+	HaikuDropStageInput,
 	HaikuSelectModeInput,
 	HaikuSelectStageInput,
 	HaikuSelectStudioInput,
 } from "./inputs/selection-tools.js"
 export {
+	HAIKU_DROP_STAGE_INPUT_SCHEMA,
 	HAIKU_SELECT_MODE_INPUT_SCHEMA,
 	HAIKU_SELECT_STAGE_INPUT_SCHEMA,
 	HAIKU_SELECT_STUDIO_INPUT_SCHEMA,
+	validateHaikuDropStageInputSchema,
 	validateHaikuSelectModeInputSchema,
 	validateHaikuSelectStageInputSchema,
 	validateHaikuSelectStudioInputSchema,
@@ -214,11 +237,37 @@ export {
 	validateHaikuStageSetInputSchema,
 } from "./inputs/stages.js"
 export type {
+	HaikuReadDiscoveryInput,
+	HaikuReadHatInput,
+	HaikuReadIntentInput,
+	HaikuReadOutputInput,
+	HaikuReadPhaseInput,
+	HaikuReadReviewAgentInput,
+	HaikuReadStageInput,
+} from "./inputs/studio-reads.js"
+export {
+	HAIKU_READ_DISCOVERY_INPUT_SCHEMA,
+	HAIKU_READ_HAT_INPUT_SCHEMA,
+	HAIKU_READ_INTENT_INPUT_SCHEMA,
+	HAIKU_READ_OUTPUT_INPUT_SCHEMA,
+	HAIKU_READ_PHASE_INPUT_SCHEMA,
+	HAIKU_READ_REVIEW_AGENT_INPUT_SCHEMA,
+	HAIKU_READ_STAGE_INPUT_SCHEMA,
+	validateHaikuReadDiscoveryInputSchema,
+	validateHaikuReadHatInputSchema,
+	validateHaikuReadIntentInputSchema,
+	validateHaikuReadOutputInputSchema,
+	validateHaikuReadPhaseInputSchema,
+	validateHaikuReadReviewAgentInputSchema,
+	validateHaikuReadStageInputSchema,
+} from "./inputs/studio-reads.js"
+export type {
 	HaikuUnitAdvanceHatInput,
 	HaikuUnitDeleteInput,
 	HaikuUnitListInput,
 	HaikuUnitReadInput,
 	HaikuUnitRejectHatInput,
+	HaikuUnitResetInput,
 	HaikuUnitSetInput,
 	HaikuUnitStartInput,
 	HaikuUnitWriteInput,
@@ -226,17 +275,21 @@ export type {
 export {
 	HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA,
 	HAIKU_UNIT_DELETE_INPUT_SCHEMA,
+	HAIKU_UNIT_GET_INPUT_SCHEMA,
 	HAIKU_UNIT_LIST_INPUT_SCHEMA,
 	HAIKU_UNIT_READ_INPUT_SCHEMA,
 	HAIKU_UNIT_REJECT_HAT_INPUT_SCHEMA,
+	HAIKU_UNIT_RESET_INPUT_SCHEMA,
 	HAIKU_UNIT_SET_INPUT_SCHEMA,
 	HAIKU_UNIT_START_INPUT_SCHEMA,
 	HAIKU_UNIT_WRITE_INPUT_SCHEMA,
 	validateHaikuUnitAdvanceHatInputSchema,
 	validateHaikuUnitDeleteInputSchema,
+	validateHaikuUnitGetInputSchema,
 	validateHaikuUnitListInputSchema,
 	validateHaikuUnitReadInputSchema,
 	validateHaikuUnitRejectHatInputSchema,
+	validateHaikuUnitResetInputSchema,
 	validateHaikuUnitSetInputSchema,
 	validateHaikuUnitStartInputSchema,
 	validateHaikuUnitWriteInputSchema,

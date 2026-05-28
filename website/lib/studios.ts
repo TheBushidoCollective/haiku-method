@@ -18,16 +18,39 @@ export interface ReviewAgentDefinition {
 	content: string
 }
 
+/**
+ * Generic markdown artifact (discovery template, output template, phase
+ * override, fix-hat, reflection dimension, operation, intent template, etc.).
+ * Carries the raw frontmatter so callers can surface a name/description without
+ * a bespoke parser per file type.
+ */
+export interface ArtifactDef {
+	name: string
+	content: string
+	data: Record<string, unknown>
+}
+
 export interface StageDefinition {
 	name: string
 	description: string
 	hats: string[]
+	fixHats: string[]
 	review: string
+	elaboration: string
 	inputs: Array<{ stage: string; output: string; kind: "discovery" | "output" }>
 	reviewAgentsInclude: Array<{ stage: string; agents: string[] }>
 	content: string
 	hatDefinitions: HatDefinition[]
 	reviewAgentDefinitions: ReviewAgentDefinition[]
+	// Elaborate-phase artifacts
+	discoveryDefinitions: ArtifactDef[]
+	outputDefinitions: ArtifactDef[]
+	phaseDefinitions: ArtifactDef[]
+	// Fix-loop hats, resolved from `fix_hats` in declared order. Each name is
+	// resolved through the same precedence the engine uses (`resolveFixHatPath`):
+	// stage fix-hat override → stage hat → studio hat → global hat. A name with
+	// no resolvable mandate still appears (body empty) so the chain stays whole.
+	fixHatChain: ArtifactDef[]
 }
 
 export interface StudioDefinition {
@@ -38,6 +61,10 @@ export interface StudioDefinition {
 	content: string
 	stageDefinitions: StageDefinition[]
 	category: string
+	// Intent-level lifecycle artifacts (studio scope, not per-stage)
+	intentReviewAgentDefinitions: ArtifactDef[]
+	studioFixHatDefinitions: ArtifactDef[]
+	reflectionDefinitions: ArtifactDef[]
 }
 
 // Categorize studios by domain
@@ -76,6 +103,84 @@ function categorizeStudio(slug: string, rawCategory?: string): string {
 	if (gtm.includes(slug)) return "Go-to-Market"
 	if (ops.includes(slug)) return "Operations"
 	return "General Purpose"
+}
+
+/** Load a single `*.md` file as a generic artifact, or null if absent. */
+function loadArtifactFile(filePath: string): ArtifactDef | null {
+	if (!fs.existsSync(filePath)) return null
+	const raw = fs.readFileSync(filePath, "utf8")
+	const { data, content } = matter(raw)
+	return {
+		name: (data.name as string) || path.basename(filePath, ".md"),
+		content: content.trim(),
+		data: data as Record<string, unknown>,
+	}
+}
+
+/** Merge artifact lists by name; later lists override earlier ones (more
+ *  specific tier wins). Result is sorted by name. */
+function mergeByName(...lists: ArtifactDef[][]): ArtifactDef[] {
+	const byName = new Map<string, ArtifactDef>()
+	for (const list of lists) for (const def of list) byName.set(def.name, def)
+	return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** Load every `*.md` in a directory as a generic artifact, sorted by filename. */
+function loadArtifactDir(dir: string): ArtifactDef[] {
+	if (!fs.existsSync(dir)) return []
+	return fs
+		.readdirSync(dir)
+		.filter((f) => f.endsWith(".md"))
+		.sort()
+		.map((f) => loadArtifactFile(path.join(dir, f)))
+		.filter((d): d is ArtifactDef => d !== null)
+}
+
+/**
+ * Resolve one fix-hat name to its mandate, mirroring the engine's
+ * `resolveFixHatPath`: a stage-scoped `fix-hats/` override wins, else the
+ * production hat at the most-specific tier (stage → studio → global). Returns
+ * a body-less stub if nothing resolves so the chain still lists the step.
+ */
+function resolveFixHat(stageDir: string, name: string): ArtifactDef {
+	const studioDir = path.join(stageDir, "..", "..")
+	const globalHatsDir = path.join(pluginStudiosDir, "..", "hats")
+	const candidates = [
+		path.join(stageDir, "fix-hats", `${name}.md`),
+		path.join(stageDir, "hats", `${name}.md`),
+		path.join(studioDir, "hats", `${name}.md`),
+		path.join(globalHatsDir, `${name}.md`),
+	]
+	for (const candidate of candidates) {
+		const def = loadArtifactFile(candidate)
+		if (def) return { ...def, name }
+	}
+	return { name, content: "", data: {} }
+}
+
+/**
+ * Best-effort one-line summary for an artifact: the first labelled lead-in
+ * (Focus / Mandate / Purpose / Analyze), else the frontmatter description,
+ * else the first prose line. Used to keep the browser scannable.
+ */
+export function artifactSummary(def: {
+	content: string
+	data?: Record<string, unknown>
+}): string {
+	const labels = ["Focus", "Mandate", "Purpose", "Analyze", "Goal"]
+	for (const label of labels) {
+		const m = def.content.match(
+			new RegExp(`\\*\\*${label}:\\*\\*\\s*(.+?)(?:\\n|$)`),
+		)
+		if (m) return m[1].trim()
+	}
+	const desc = def.data?.description
+	if (typeof desc === "string" && desc.trim()) return desc.trim()
+	const firstProse = def.content
+		.split("\n")
+		.map((l) => l.trim())
+		.find((l) => l && !l.startsWith("#") && !l.startsWith("---"))
+	return firstProse || ""
 }
 
 function parseHat(hatPath: string): HatDefinition | null {
@@ -140,9 +245,11 @@ function parseStage(stageDir: string): StageDefinition | null {
 		name: data.name || path.basename(stageDir),
 		description: data.description || "",
 		hats: data.hats || [],
+		fixHats: data.fix_hats || [],
 		review: Array.isArray(data.review)
 			? data.review.join(", ")
 			: data.review || "ask",
+		elaboration: data.elaboration || "",
 		inputs: (data.inputs || []).map(
 			(i: { stage: string; output?: string; discovery?: string }) => ({
 				stage: i.stage,
@@ -159,6 +266,12 @@ function parseStage(stageDir: string): StageDefinition | null {
 		content: content.trim(),
 		hatDefinitions,
 		reviewAgentDefinitions,
+		discoveryDefinitions: loadArtifactDir(path.join(stageDir, "discovery")),
+		outputDefinitions: loadArtifactDir(path.join(stageDir, "outputs")),
+		phaseDefinitions: loadArtifactDir(path.join(stageDir, "phases")),
+		fixHatChain: (data.fix_hats || []).map((name: string) =>
+			resolveFixHat(stageDir, name),
+		),
 	}
 }
 
@@ -186,6 +299,15 @@ function parseStudio(studioDir: string): StudioDefinition | null {
 		content: content.trim(),
 		stageDefinitions,
 		category: categorizeStudio(slug, data.category as string | undefined),
+		// Global tier (sibling of studios/) applies to every studio; the
+		// per-studio dir overrides by agent name. Mirrors the engine's
+		// readStudioReviewAgentPaths cascade.
+		intentReviewAgentDefinitions: mergeByName(
+			loadArtifactDir(path.join(pluginStudiosDir, "..", "intent-review-agents")),
+			loadArtifactDir(path.join(studioDir, "intent-review-agents")),
+		),
+		studioFixHatDefinitions: loadArtifactDir(path.join(studioDir, "fix-hats")),
+		reflectionDefinitions: loadArtifactDir(path.join(studioDir, "reflections")),
 	}
 }
 

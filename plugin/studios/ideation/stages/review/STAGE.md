@@ -1,6 +1,7 @@
 ---
 name: review
 description: Adversarial quality review of the deliverable
+optional: true
 hats: [review-planner, synthesizer, reviewer, critic, fact-checker]
 fix_hats: [classifier, synthesizer, feedback-assessor]
 review: ask
@@ -12,28 +13,22 @@ inputs:
 
 # Review
 
-Adversarial quality review of the deliverable. The draft from `create` goes in; a structured review report with severity-graded findings comes out. This stage uses the plan-do-verify front loop (per architecture §3.5) followed by an adversarial pair — `critic` finds weaknesses, `fact-checker` verifies claims.
+Adversarially stress-test the deliverable before it's finalized. The draft from create goes in; a structured report with severity-graded findings comes out. This stage exists to surface the weaknesses, unsupported claims, and gaps the author couldn't see in their own work.
 
-## What a unit IS for this stage
+## Scope
 
-Each unit is a **review surface** — a named, observable property of the draft that gets reviewed against named criteria. Typical surfaces: clarity, evidence strength, novelty, structural integrity, scope fit, audience fit, internal coherence, terminology consistency. The review-planner decides the unit set during decompose.
+Quality review of the draft against named criteria: each review surface — clarity, evidence strength, novelty, structural integrity, scope fit, audience fit, coherence — examined and graded. Review decides *whether the deliverable holds up and where it doesn't* — not what it says (create) and not how it's packaged (deliver). It produces findings; it doesn't rewrite the artifact.
 
-## Per-unit baton
+## What to do
 
-Five hats run in order:
+- Name each review surface and its criteria, then review against them with cited observations.
+- Trace every claim in the draft to its source and flag anything that doesn't trace.
+- Hunt for weaknesses, logical gaps, and missing perspectives the author wouldn't catch on their own work.
+- Grade findings by severity (critical, major, minor) so the next stage knows what must be addressed.
 
-- **`review-planner`** (plan) names the surfaces and criteria for THIS unit
-- **`synthesizer`** (do) performs the review per the plan; produces structured observations with citations
-- **`reviewer`** (verify) validates the synthesizer's body for coverage, citation rigor, and severity discipline — closes the front loop before adversarial hats run
-- **`critic`** (adversarial) identifies weaknesses, logical gaps, and missing perspectives the front loop didn't surface
-- **`fact-checker`** (adversarial verify) traces every claim to its source; flags anything that doesn't trace
+## What NOT to do
 
-The first three are the rally-race front loop (architecture §3.5); the last two are the adversarial loop. Front loop must close before adversarial runs.
-
-## Inputs and outputs
-
-Inputs: `create/draft-deliverable`. Output: per-unit observations composing into `REVIEW-FINDINGS.md` at intent scope, ordered by severity (critical → major → minor).
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, synthesizer, feedback-assessor]` dispatches per finding — `synthesizer` is the implementer because review-stage defects are usually missed observations, not missed plans. Gate is `ask` because a human typically arbitrates which findings the deliverable actually addresses before `deliver` runs.
+- Don't rewrite the deliverable or fix the findings yourself — record them; addressing them is a revisit to create.
+- Don't re-run research or generate new content.
+- Don't soften a finding because the draft is otherwise good; severity discipline is the point.
+- Don't decide unilaterally which findings get addressed — a human arbitrates that before deliver.

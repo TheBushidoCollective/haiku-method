@@ -1,0 +1,77 @@
+---
+title: "The Workshop Has Two Editors"
+description: "H·AI·K·U used to assume the agent owned every file in the intent dir. Drift detection, audit logs, and a human-write MCP tool make the workshop honest."
+date: "2026-05-04T15:19:45Z"
+---
+
+A designer drops fourteen PNGs from Figma into `stages/design/artifacts/`. A PM hand-edits the success criteria on `unit-03-billing-policy.md` and types into chat: "I tightened the criteria, take it from here." An operator runs `vim` on `knowledge/runbook.md` to fix a typo before standup.
+
+None of those writes goes through the agent. Until this intent shipped, none of them was visible to the workflow either. The next `haiku_run_next` tick would steamroll the designer's PNGs by re-generating from the design brief. It would fight the PM's hand-tuned criteria with a different draft on the next iteration. It would silently accept the operator's `vim` patch and lose the audit trail entirely.
+
+You're the PM. You spent twenty minutes tightening the criteria. You committed nothing — you just edited the file in your local checkout and asked the agent to keep going. What happens? Until last week the answer was "we don't know." The agent might pick up your edit. It might not. The next adversarial reviewer might flag it as "unexpected change." There was no deterministic story for the most basic collaboration move on the team.
+
+That's the failure we shipped against. The intent dir was modeled as the agent's workspace alone. Real teams don't work that way.
+
+<Callout tone="warn" title="The unsafe path">
+A human edits a tracked file out of band. Until last week the next tick had two ways to react: silently absorb the change with no audit trail, or steamroll it on the way to regenerating from upstream. Neither is acceptable.
+</Callout>
+
+## The factory and the workshop
+
+<Compare verdict="diverge" title="Two mental models for a shared work area">
+  <Side label="The factory">
+    One machine. Materials go in, products come out, the machine writes every step. The pipeline is closed. Anything that didn't come from the machine is contamination.
+  </Side>
+  <Side label="The workshop">
+    Many craftspeople. The agent has the keyboard most of the time, but a designer can grab it to drop a hero image, a PM can grab it to tighten a spec, an operator can grab it to patch a runbook. The work is shared. The pipeline is open.
+  </Side>
+</Compare>
+
+H·AI·K·U was modeled as a factory. The intent-completion gate confirmed it: by the time the workflow ran adversarial reviews, only commits the agent authored were in scope. Anything dropped by a human into the same directory got tagged "untracked" and either ignored or overwritten on the next tick. The PM's tightened criteria? Either silently accepted (no audit) or silently lost (no diff). Neither is acceptable.
+
+Last week we landed three engine pieces that flip the model.
+
+## What it takes to be honest about that
+
+Three engine pieces, each addressing a different part of the same problem.
+
+<KeyPoints title="Detection · Attribution · Discipline">
+1. **Detection.** Every tick, before any handler runs, the workflow fingerprints every file in the tracked surface and compares it to the baseline. Any mismatch fires a structured assessment with a unified diff per changed path. The agent classifies each finding — accept it as canonical, fold it into the current bolt, open a finding for next iteration, or rewind to the stage the change invalidated.
+2. **Attribution.** Changes aren't just found, they're labeled. Human edits routed through the engine arrive tagged as human edits. Uploads through the browser arrive tagged as uploads. Anything else gets labeled ambiguous, because the system can't prove who wrote it — and the workflow records that ambiguity instead of papering over it.
+3. **Discipline.** The drift gate doesn't run the moment a human touches a file. It runs the next time the agent ticks. The workshop has no locks because real editors don't honor them. The compensating control is observation: every tick re-hashes, sees what happened since last tick, and reconciles. Writes can race. The reconciler doesn't.
+</KeyPoints>
+
+That third one is the discipline that makes the other two work. Without it, the system either has to enforce locks it can't actually enforce, or it has to pretend nothing happened between ticks. Neither survives contact with a designer using Finder.
+
+## The PM's edit, end-to-end
+
+The PM hand-edits `unit-03-billing-policy.md` and types into the chat: "I tightened the criteria. Take it from here."
+
+What used to happen and what happens now sit on the same scenario.
+
+<Compare verdict="win" title="The PM's edit, before and after">
+  <Side label="Before">
+    The agent might pick up the edit on the next iteration. It might not. If a reviewer noticed the diff, it landed as "unexpected change" with no provenance. No record of who edited, no diff in the log, no place to push back.
+  </Side>
+  <Side label="After">
+    The next tick re-hashes, finds the mismatch, hands the agent the unified diff with a unique tick ID. The agent classifies the change as canonical. The baseline updates. The unit's next hat reads the tightened spec.
+  </Side>
+</Compare>
+
+No regeneration. No fight. The action log records the PM edited the file, the agent classified it, the baseline updated. Everything's on the record.
+
+A different scenario: the designer drops fourteen PNGs into the design stage's artifacts directory. The drift gate notices fourteen new files and fires the assessment. Text files come with a unified diff. Opaque binaries — fonts, archives, PDFs — get the hash pair as the receipt and nothing else, because there's nothing else to render. Images sit between the two. The hash pair tells the engine what happened, but the *useful* diff for an image is visual: before-and-after thumbnails, side-by-side, on the assessment screen. Designs land as PNGs more often than they land as Markdown, and "look at this" is the diff that matters. The engine today treats every binary the same — image-aware drift is the next iteration. The agent classifies the additions as canonical, designer-provided artifacts. Next time `/haiku:revisit design` runs, the elaborate phase sees the PNGs as inputs, not as work to redo.
+
+The intent dir is a workshop. The drift gate is the receipt every craftsperson hands in at the end of their shift. The action log is the ledger. The compensating control is observation, not permission.
+
+## What the user actually does
+
+Nothing different. You drop files. You edit specs. You uploaded a brand kit through the SPA. You typed into the chat. You ran `vim`.
+
+The workflow notices. It asks the agent to triage. The triage takes two seconds. Your edits stay. The pipeline integrates. The audit log records who did what.
+
+<Callout tone="good" title="What changed for you">
+The file you just edited is no longer either a black hole or a footgun. It's a write the system saw, classified, and absorbed. Try it on a stage where you've been hand-tuning specs and watch the next `haiku_run_next` ask "this changed; is it canonical?" and accept your one-word answer.
+</Callout>
+
+The intent dir was a sandbox. Now it's a workshop.

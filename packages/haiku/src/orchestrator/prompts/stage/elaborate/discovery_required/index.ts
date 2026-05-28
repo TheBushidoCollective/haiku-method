@@ -1,117 +1,144 @@
-// orchestrator/prompts/discovery_required/index.ts — Per-stage,
-// per-agent discovery dispatch.
+// orchestrator/prompts/discovery_required/index.ts — Per-stage discovery
+// dispatch (batched).
 //
-// Cursor returns `discovery_required { stage, agent, units: [name] }`
-// when a required discovery agent's artifact is not yet on disk at
-// the location declared by its template. The agent dispatches a
-// single subagent against the named template; the subagent writes
-// its artifact and the next tick re-walks. The artifact existence
-// IS the signal — no FM stamp, no record-call.
+// Cursor returns one discovery signal per missing template inside
+// `elaborate_loop.signals_unmet[]`. The elaborate_loop builder groups those
+// signals together and calls THIS builder ONCE with `dispatches[]` carrying
+// every missing template — so the prompt renders ONE "Discovery" section
+// with N subagent blocks (or N tool-call instructions for tool-driven
+// templates), matching the parallel-batched shape of `dispatch_review`.
+// Single-template callers pass a one-element `dispatches[]`; the template
+// loops uniformly either way.
 //
-// Two paths inside the prompt:
+// Two paths per dispatch entry:
 //   - tool-driven (template declares `tool: <mcp_tool_name>`) — the
 //     agent calls the named MCP tool, which writes the artifact at
-//     `location:` as a side effect.
+//     `location:` as a side effect. No subagent block.
 //   - subagent-driven (template has no `tool:`) — spawn one subagent
 //     against the discovery template's body.
 
-import { join } from "node:path"
 import { Eta } from "eta"
-import { resolvePluginRoot } from "../../../../../config.js"
-import { readStageArtifactDefs } from "../../../../../studio-reader.js"
+import {
+	readDiscoveryBody,
+	readStageArtifactDefs,
+	resolveDiscoveryTemplatePath,
+} from "../../../../../studio-reader.js"
 import {
 	buildConcurrentElaborateLoopBlock,
 	emitSubagentDispatchBlock,
-	inlineFile,
 	resolveStudioMandateModel,
+	studioReadRef,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
+const SUBAGENT_TEMPLATE = loadTemplate(import.meta.url, "subagent.eta.md")
+
+interface DiscoveryDispatchEntry {
+	agent: string
+	units: string[]
+}
+
+interface RenderedDispatch {
+	agent: string
+	unit: string
+	unitLabel: string
+	def: ReturnType<typeof readStageArtifactDefs>[number] | undefined
+	resolvedLocation: string
+	dispatchBlock: string
+}
 
 export default definePromptBuilder((ctx) => {
 	const { slug, studio, action } = ctx
 	const stage = (action.stage as string) || ""
-	const agent = (action.agent as string) || ""
-	const units = (action.units as string[]) || []
-	const unit = units[0] || ""
+
+	// Batched dispatches: iterate `dispatches[]` to render one entry per
+	// missing discovery template. Fall back to the legacy single-agent shape
+	// for callers that pass `agent`/`units` directly.
+	const dispatches: DiscoveryDispatchEntry[] = Array.isArray(action.dispatches)
+		? (action.dispatches as DiscoveryDispatchEntry[])
+		: [
+				{
+					agent: (action.agent as string) || "",
+					units: (action.units as string[]) || [],
+				},
+			]
 
 	const defs = readStageArtifactDefs(studio, stage).filter(
 		(d) => d.kind === "discovery",
 	)
-	const def = defs.find((d) => d.name === agent)
-	const resolvedLocation = def
-		? def.location.replace(/\{intent-slug\}/g, slug)
-		: ""
-	const unitLabel = unit ? ` on \`${unit}\`` : ""
+
+	const rendered: RenderedDispatch[] = dispatches.map((d) => {
+		const agent = d.agent
+		const units = d.units ?? []
+		const unit = units[0] || ""
+		const def = defs.find((dd) => dd.name === agent)
+		const resolvedLocation = def
+			? def.location.replace(/\{intent-slug\}/g, slug)
+			: ""
+		const unitLabel = unit ? ` on \`${unit}\`` : ""
+
+		let dispatchBlock = ""
+		if (def && !def.tool) {
+			const templateRef = studioReadRef({
+				resolveBody: () => readDiscoveryBody(studio, stage, agent),
+				toolName: "haiku_read_discovery",
+				toolArgs: { studio, stage, template: agent },
+				intent: slug,
+				stage,
+				kind: "discovery-template",
+				name: agent,
+			})
+			const promptBody = eta.renderString(SUBAGENT_TEMPLATE, {
+				agent,
+				stage,
+				slug,
+				unit,
+				resolvedLocation,
+				templateRef,
+			})
+			const discoveryModel = resolveStudioMandateModel({
+				mandatePath:
+					resolveDiscoveryTemplatePath(studio, stage, agent) ?? undefined,
+				studio,
+				stage,
+			})
+			dispatchBlock = emitSubagentDispatchBlock({
+				unit: "discovery",
+				hat: agent,
+				bolt: 1,
+				intent: slug,
+				stage,
+				agentType: "general-purpose",
+				model: discoveryModel,
+				promptBody,
+				heading: `### Subagent: \`${agent}\``,
+				omitBolt: true,
+			})
+		}
+
+		return { agent, unit, unitLabel, def, resolvedLocation, dispatchBlock }
+	})
+
 	const concurrentLoopBlock = buildConcurrentElaborateLoopBlock("discovery", {
 		slug,
 		stage,
 	})
 
-	let dispatchBlock = ""
-	if (def && !def.tool) {
-		const templatePath = `plugin/studios/${studio}/stages/${stage}/discovery/${agent}.md`
-		const promptBody = [
-			`You are the **${agent}** discovery agent for stage \`${stage}\` of intent "${slug}". Unit \`${unit}\` is provided as representative context — the artifact you produce serves every unit in the stage.`,
-			"",
-			"## Required context (inlined below)",
-			`Your discovery template is embedded in this prompt. The artifact you produce becomes a knowledge input for every execute hat that runs in this stage.`,
-			"",
-			inlineFile(templatePath, `Template: ${agent}`),
-			"",
-			"## Output target",
-			`Write your artifact to \`${resolvedLocation}\`. The cursor reads this path on the next tick — file existence IS the signal that discovery ran. No record-call, no FM stamp.`,
-			"",
-			"## Write scope",
-			`The discovery artifact is your primary write. Do NOT touch unit specs or stage state.`,
-			"",
-			"## Surfacing decisions to the user (GOALS.md)",
-			`If your discovery surfaces a decision the user must make — a fork, a constraint, a preference that the artifact alone cannot resolve — file feedback rather than guessing. Call \`haiku_feedback\` with:`,
-			`- \`origin: "discovery"\``,
-			`- \`resolution: "question"\``,
-			`- \`stage: "${stage}"\` (so the FB lives at stage scope alongside the elaboration artifact)`,
-			`- \`source_ref: "${agent}"\``,
-			`- body: a clear question describing the decision and what's at stake`,
-			"",
-			`The next tick's feedback flow routes \`resolution: question\` FBs as \`feedback_question\` — the main agent picks up the question, asks the user inline via \`ask_user_chat\`, writes the answer back on the FB body, and closes it. Until the FB closes, the elaborate-loop's 2nd completion signal (no open \`origin: discovery, resolution: question\` FBs) stays unmet and the cursor won't leave elaborate.`,
-		].join("\n")
-		const discoveryMandatePath = join(
-			resolvePluginRoot(),
-			"studios",
-			studio,
-			"stages",
-			stage,
-			"discovery",
-			`${agent}.md`,
-		)
-		const discoveryModel = resolveStudioMandateModel({
-			mandatePath: discoveryMandatePath,
-			studio,
-			stage,
-		})
-		dispatchBlock = emitSubagentDispatchBlock({
-			unit,
-			hat: agent,
-			bolt: 1,
-			agentType: "general-purpose",
-			model: discoveryModel,
-			promptBody,
-			heading: `### Subagent: \`${agent}\``,
-		})
-	}
-
 	return eta.renderString(TEMPLATE, {
 		slug,
 		stage,
-		agent,
-		unit,
-		unitLabel,
-		def,
-		resolvedLocation,
-		dispatchBlock,
+		dispatches: rendered,
+		dispatchCount: rendered.length,
+		// Backward-compat aliases for the single-agent shape.
+		agent: rendered[0]?.agent ?? "",
+		unit: rendered[0]?.unit ?? "",
+		unitLabel: rendered[0]?.unitLabel ?? "",
+		def: rendered[0]?.def,
+		resolvedLocation: rendered[0]?.resolvedLocation ?? "",
+		dispatchBlock: rendered[0]?.dispatchBlock ?? "",
 		concurrentLoopBlock,
 		composedMode: ctx.composedMode === true,
 	})

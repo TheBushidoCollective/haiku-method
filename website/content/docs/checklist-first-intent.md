@@ -13,7 +13,7 @@ Complete these steps before beginning your first intent:
 ### Environment Setup
 - [ ] Claude Code or Cowork installed and working
 - [ ] H·AI·K·U plugin installed (`/plugin marketplace add gigsmart/haiku-method` then `/plugin install haiku@gigsmart-haiku-method --scope project`)
-- [ ] Verified plugin is active (commands like `/haiku:start` are recognized)
+- [ ] Verified plugin is active (commands like `/haiku:haiku-start` are recognized)
 
 ### Project Selection
 - [ ] Chosen a real project (not a toy project)
@@ -30,10 +30,10 @@ Complete these steps before beginning your first intent:
 
 ## Phase 1: Elaboration
 
-Use `/haiku:start` to create your intent, then `/haiku:pickup` to elaborate it collaboratively with Claude.
+Use `/haiku:haiku-start` to create your intent, then `/haiku:haiku-pickup` to elaborate it collaboratively with Claude.
 
 ### Start Elaboration
-- [ ] Run `/haiku:start` then `/haiku:pickup`
+- [ ] Run `/haiku:haiku-start` then `/haiku:haiku-pickup`
 - [ ] Describe what you want to build in 2-3 sentences
 
 ### Define the Intent
@@ -76,10 +76,10 @@ Use `/haiku:start` to create your intent, then `/haiku:pickup` to elaborate it c
 
 ## Phase 2: First Unit
 
-Work through your first unit using `/haiku:pickup`.
+Work through your first unit using `/haiku:haiku-pickup`.
 
 ### Start Execution
-- [ ] Run `/haiku:pickup`
+- [ ] Run `/haiku:haiku-pickup`
 - [ ] Verify Claude loaded the correct unit
 
 ### Planner Hat
@@ -137,7 +137,7 @@ Continue with remaining units.
 
 ### For Each Remaining Unit
 
-- [ ] Run `/haiku:pickup` to load next unit
+- [ ] Run `/haiku:haiku-pickup` to load next unit
 - [ ] Review any dependencies are satisfied
 - [ ] Complete Planner → Builder → Reviewer cycle
 - [ ] Commit with unit reference
@@ -146,7 +146,7 @@ Continue with remaining units.
 ### Between Units
 
 - [ ] Check if context is getting heavy
-- [ ] `/clear` if needed, then `/haiku:pickup` to continue
+- [ ] `/clear` if needed, then `/haiku:haiku-pickup` to continue
 - [ ] Verify committed artifacts reflect current state
 
 ### Handling Blockers
@@ -214,7 +214,7 @@ Answer these questions honestly:
 
 **Tooling:**
 - [ ] Any friction with the commands?
-- [ ] Did `/clear` + `/haiku:pickup` work smoothly?
+- [ ] Did `/clear` + `/haiku:haiku-pickup` work smoothly?
 - [ ] Were artifacts helpful?
 
 ### Metrics to Note
@@ -239,8 +239,8 @@ Based on this experience:
 ### Commands
 | Command | When to Use |
 |---------|-------------|
-| `/haiku:start` | Start new intent |
-| `/haiku:pickup` | Continue/start unit work |
+| `/haiku:haiku-start` | Start new intent |
+| `/haiku:haiku-pickup` | Continue/start unit work |
 | `/researcher` | Need more understanding |
 | `/planner` | Need to redesign approach |
 | `/builder` | Ready to implement |

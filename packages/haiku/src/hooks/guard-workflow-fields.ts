@@ -27,6 +27,7 @@
 import { execFileSync } from "node:child_process"
 import { existsSync } from "node:fs"
 import { join, resolve } from "node:path"
+import { isHaikuProject } from "./utils.js"
 
 function out(s: string): void {
 	process.stderr.write(s)
@@ -79,6 +80,7 @@ interface WorkflowPathClassification {
 		| "settings"
 		| "baseline_ack"
 		| "baseline_thrash"
+		| "brief"
 		| null
 	intent?: string
 	stage?: string
@@ -118,8 +120,15 @@ function classifyPath(absPath: string): WorkflowPathClassification {
 	if (/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/state\.json$/.test(absPath)) {
 		return { kind: "stage_state" }
 	}
+	// The per-stage user-facing BRIEF. Read-blocked for the focused work
+	// agents (it's authored by the briefer, surfaced to the human at the
+	// gate, and served to the website/SPA server-side — never read by an
+	// agent). Writes stay open so the briefer can author it.
+	if (/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/BRIEF\.md$/.test(absPath)) {
+		return { kind: "brief" }
+	}
 	// V-11: operator-only baseline-corrupt acknowledgement marker. Only
-	// /haiku:repair --confirm-baseline-reset (operator-driven) may
+	// /haiku:haiku-repair --confirm-baseline-reset (operator-driven) may
 	// place this; the agent has no path. Block both reads and writes
 	// — a reader could leak the diff hash to an attacker chain.
 	if (/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/\.baseline-ack$/.test(absPath)) {
@@ -197,7 +206,7 @@ function redirectMessage(
 		return (
 			`BLOCKED: Cannot ${op} intent.md via generic ${toolName}. Intent files ` +
 			`are workflow-managed — use haiku_intent_get to read fields, haiku_run_next ` +
-			`to drive the lifecycle, or call /haiku:repair if state is genuinely corrupted. ` +
+			`to drive the lifecycle, or call /haiku:haiku-repair if state is genuinely corrupted. ` +
 			`Direct edits skip the integrity checksum and the workflow engine's invariants.`
 		)
 	}
@@ -209,11 +218,19 @@ function redirectMessage(
 			`forward-only lifecycle invariants.`
 		)
 	}
+	if (cls.kind === "brief") {
+		return (
+			`BLOCKED: Cannot ${op} BRIEF.md. The stage brief is USER-FACING only — ` +
+			`it's written by the briefer subagent for the human reviewing the plan at ` +
+			`the gate, and you should never read it. Stay focused on your own mandate ` +
+			`(your unit spec, your hat's job); the brief is not an input to your work.`
+		)
+	}
 	if (cls.kind === "baseline_ack") {
 		return (
 			`BLOCKED: Cannot ${op} .baseline-ack via generic ${toolName}. This is the V-11 ` +
 			`operator-only baseline-corrupt acknowledgement marker. Only ` +
-			`/haiku:repair --confirm-baseline-reset --diff-shown --confirm-diff-hash <sha> ` +
+			`/haiku:haiku-repair --confirm-baseline-reset --diff-shown --confirm-diff-hash <sha> ` +
 			`(operator-driven) may write it; the agent has no path here. Reads are also ` +
 			`blocked because the diff hash leaking to an attacker chain would let them ` +
 			`forge a valid-looking ack.`
@@ -246,6 +263,9 @@ function redirectMessage(
 export async function guardWorkflowFields(
 	input: Record<string, unknown>,
 ): Promise<void> {
+	// Project-scope gate: no .haiku/ → not a haiku project, nothing to guard.
+	if (!isHaikuProject()) return
+
 	const toolName = (input.tool_name as string) || ""
 	if (
 		toolName !== "Read" &&
@@ -262,6 +282,12 @@ export async function guardWorkflowFields(
 	const absPath = resolve(process.cwd(), filePath)
 	const cls = classifyPath(absPath)
 	if (cls.kind === null) return
+
+	// BRIEF.md is user-facing only: deny READ to the focused work agents
+	// (the briefer authors it; the human reads it at the gate; the
+	// website/SPA serve it server-side). Writes/edits stay open so the
+	// briefer can author or refresh it.
+	if (cls.kind === "brief" && toolName !== "Read") return
 
 	// Merge-conflict short-circuit: when the repo is mid-merge / rebase /
 	// cherry-pick, the workflow-managed file on disk likely contains

@@ -76,7 +76,7 @@ Each harness has its own configuration location and format. In all cases, update
 ```
 
 **Notes:**
-- MCP prompts surface as slash commands (`/haiku:start`, `/haiku:pickup`).
+- MCP prompts surface as slash commands (`/haiku:haiku-start`, `/haiku:haiku-pickup`).
 - Experimental subagent support via `@subagent` with parallel spawning, but no isolation.
 - Model tiers map differently: H·AI·K·U's `haiku` tier maps to `flash`, and both `sonnet` and `opus` map to `pro`.
 

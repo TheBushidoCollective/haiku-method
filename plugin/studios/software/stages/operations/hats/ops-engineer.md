@@ -87,13 +87,8 @@ Call `haiku_unit_advance_hat`. The `sre` hat adds SLOs, alerts, runbooks. The `v
 
 ## Anti-patterns (RFC 2119)
 
-- The agent **MUST NOT** use manual deployment steps that require human-typed values at runtime — every value comes from config, env, or secret store
 - The agent **MUST NOT** hardcode secrets or environment-specific values in code or in artifacts checked into VCS
 - The agent **MUST NOT** omit rollback strategy — every deployment must be reversible OR explicitly declare "no rollback — forward-fix only" with rationale
-- The agent **MUST NOT** skip health checks — the system must verify its own readiness before the action is considered successful
-- The agent **MUST NOT** create deployment config without testing it via plan / dry-run / build before claiming the unit done
-- The agent **MUST NOT** mix infrastructure concerns with application code — IaC lives in its own directory tree, separate from product source
 - The agent **MUST NOT** tag images / artifacts with mutable references (`latest`, `main`) — pin to immutable identifiers (content hash, SHA, semver)
 - The agent **MUST NOT** make changes to shared resources without explicit cross-environment sequencing
-- The agent **MUST NOT** propose tools / vendors that contradict the intent's recorded decisions
 - The agent **MUST** flag destructive changes (in-place resource replacement, irreversible migrations) so the verifier and the gate can require additional approval

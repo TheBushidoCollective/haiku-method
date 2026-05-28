@@ -290,7 +290,16 @@ test("cursor: explicit empty inputs: [] on non-first stage is a valid declaratio
 				inputs: [], // explicit "no inputs" — valid
 				started_at: null,
 				iterations: [],
-				reviews: {},
+				// Pre-execute reviews signed so the cursor walks past the
+				// PRE-execute review track and reaches start_unit_hat
+				// (2026-05-17 split).
+				reviews: {
+					spec: { at: "t" },
+					continuity: { at: "t" },
+					"cross-stage-consistency": { at: "t" },
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})
@@ -324,7 +333,15 @@ test("cursor: first stage exempted — missing inputs: does NOT trigger the gate
 				// inputs: <-- absent, but design is the first stage
 				started_at: null,
 				iterations: [],
-				reviews: {},
+				// Pre-execute reviews signed so the cursor walks past the
+				// PRE-execute review track (2026-05-17 split).
+				reviews: {
+					spec: { at: "t" },
+					continuity: { at: "t" },
+					"cross-stage-consistency": { at: "t" },
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})

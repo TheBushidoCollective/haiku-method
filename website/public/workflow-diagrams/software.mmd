@@ -9,13 +9,9 @@ stateDiagram-v2
   product --> development
   development --> operations
   operations --> security
-  security --> intent_completion_review
-  intent_completion_review --> intent_completion_gate : review.clean
-  intent_completion_review --> intent_completion_fix : review.findings
-  intent_completion_fix --> intent_completion_gate : feedback.closed
-  intent_completion_fix --> intent_completion_fix : feedback.open
-  intent_completion_gate --> complete : gate.approved
-  intent_completion_gate --> security : gate.changes_requested
+  security --> intent_review
+  intent_review --> seal_intent : approvals.signed
+  seal_intent --> complete
 
   state inception {
     [*] --> inception_start_stage
@@ -151,7 +147,8 @@ stateDiagram-v2
       state product_review_fix_bolt_1 {
         [*] --> product_review_fix_bolt_1_classifier
         product_review_fix_bolt_1_classifier --> product_review_fix_bolt_1_product : fix.advance
-        product_review_fix_bolt_1_product --> product_review_fix_bolt_1_feedback_assessor : fix.advance
+        product_review_fix_bolt_1_product --> product_review_fix_bolt_1_specification : fix.advance
+        product_review_fix_bolt_1_specification --> product_review_fix_bolt_1_feedback_assessor : fix.advance
         product_review_fix_bolt_1_feedback_assessor --> product_review_fix_bolt_1_validated : fix.advance
         product_review_fix_bolt_1_validated --> [*]
       }
@@ -160,7 +157,8 @@ stateDiagram-v2
       state product_review_fix_bolt_2 {
         [*] --> product_review_fix_bolt_2_classifier
         product_review_fix_bolt_2_classifier --> product_review_fix_bolt_2_product : fix.advance
-        product_review_fix_bolt_2_product --> product_review_fix_bolt_2_feedback_assessor : fix.advance
+        product_review_fix_bolt_2_product --> product_review_fix_bolt_2_specification : fix.advance
+        product_review_fix_bolt_2_specification --> product_review_fix_bolt_2_feedback_assessor : fix.advance
         product_review_fix_bolt_2_feedback_assessor --> product_review_fix_bolt_2_validated : fix.advance
         product_review_fix_bolt_2_validated --> [*]
       }
@@ -169,7 +167,8 @@ stateDiagram-v2
       state product_review_fix_bolt_3 {
         [*] --> product_review_fix_bolt_3_classifier
         product_review_fix_bolt_3_classifier --> product_review_fix_bolt_3_product : fix.advance
-        product_review_fix_bolt_3_product --> product_review_fix_bolt_3_feedback_assessor : fix.advance
+        product_review_fix_bolt_3_product --> product_review_fix_bolt_3_specification : fix.advance
+        product_review_fix_bolt_3_specification --> product_review_fix_bolt_3_feedback_assessor : fix.advance
         product_review_fix_bolt_3_feedback_assessor --> product_review_fix_bolt_3_validated : fix.advance
         product_review_fix_bolt_3_validated --> [*]
       }
@@ -304,12 +303,8 @@ stateDiagram-v2
       security_execute_threat_modeler --> security_execute_security_engineer : hat.advance
       security_execute_security_engineer --> security_execute_security_reviewer : hat.advance
       security_execute_security_engineer --> security_execute_threat_modeler : hat.reject
-      security_execute_security_reviewer --> security_execute_red_team : hat.advance
+      security_execute_security_reviewer --> security_execute_done : hat.advance
       security_execute_security_reviewer --> security_execute_security_engineer : hat.reject
-      security_execute_red_team --> security_execute_blue_team : hat.advance
-      security_execute_red_team --> security_execute_security_reviewer : hat.reject
-      security_execute_blue_team --> security_execute_done : hat.advance
-      security_execute_blue_team --> security_execute_red_team : hat.reject
       security_execute_done --> [*]
     }
     security_execute --> security_review

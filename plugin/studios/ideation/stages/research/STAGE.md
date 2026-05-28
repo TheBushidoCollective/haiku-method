@@ -10,26 +10,22 @@ inputs: []
 
 # Research
 
-Gather context, explore prior art, and understand the problem space. This stage produces the evidence base the rest of the lifecycle stands on — a synthesized research brief organized by theme, with sourced claims, competing approaches, pattern analysis, and named knowledge gaps.
+The head of the ideation pipeline: gather context, explore prior art, and understand the problem space. This stage produces the evidence base the rest of the lifecycle stands on — a synthesized brief organized by theme, with sourced claims, competing approaches, and named knowledge gaps.
 
-## What a unit IS for this stage
+## Scope
 
-Each unit is a **knowledge topic** — one investigable question or surface (competitive landscape, user persona, technical feasibility, prior-art comparison, domain glossary). Units are NOT execution work; they are knowledge artifacts downstream stages consume.
+Understanding the problem space: prior art, competing approaches, patterns, and the gaps in what's known. Research decides *what we know and where the open questions are* — not what to make from it (create), whether the result holds up (review), or how it's packaged (deliver). Its units are knowledge artifacts, not execution work.
 
-## Per-unit baton
+## What to do
 
-Units walk three hats in `plan → do → verify` order:
+- Frame each topic as one investigable question or surface, then gather sourced findings against it.
+- Cite claims to their sources so a downstream stage can trust and trace them.
+- Surface patterns and competing approaches; narrow raw notes into actionable takeaways, not a dump of links.
+- Name the knowledge gaps explicitly rather than smoothing over them.
 
-- **`researcher`** (plan + do) explores sources, gathers data, and produces sourced findings for THIS topic
-- **`analyst`** (do) evaluates findings, surfaces patterns, narrows raw notes into actionable takeaways
-- **`verifier`** (verify) validates the body for substance, citation, and consistency
+## What NOT to do
 
-Detailed per-hat process lives in each hat's md file. This stage's job is to enforce the chain, not repeat it.
-
-## Inputs and outputs
-
-The frontmatter declares the canonical I/O contract. Research has no upstream `inputs:` — it is the head of the pipeline. The stage produces one intent-scope `RESEARCH-BRIEF.md` that downstream stages (`create`, `review`, `deliver`) all consume.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, researcher, feedback-assessor]` dispatches per finding — the classifier routes the FB to the right unit, `researcher` is the implementer, and the assessor independently decides closure. Gate is `auto` because research correctness is verified by downstream consumption; if a research gap is real, it surfaces in `create` or `review` and routes back via cross-stage feedback.
+- Don't produce the deliverable or generate concepts — that's the create stage.
+- Don't critique or fact-check a draft; there's nothing built yet to review.
+- Don't assert a finding you can't cite.
+- Don't bury an open question to make the brief look complete.

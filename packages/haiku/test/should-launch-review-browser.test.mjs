@@ -22,9 +22,14 @@ const _origCwd = process.cwd()
 process.env.CLAUDE_PLUGIN_ROOT = `${_origCwd}/../../plugin`
 
 const { shouldLaunchReviewBrowser } = await import("../src/server/tool-call.ts")
-const { createSession, deleteSession, recordHeartbeat } = await import(
-	"../src/sessions.ts"
-)
+const {
+	createSession,
+	deleteSession,
+	recordHeartbeat,
+	beginPresenceWatch,
+	hasPresenceLost,
+	_runPresenceSweepForTests,
+} = await import("../src/sessions.ts")
 
 let passed = 0
 let failed = 0
@@ -211,6 +216,112 @@ test("intent_slug arg: no live session for intent → launch", () => {
 		true,
 		"intent slug present but no live session: launch as normal",
 	)
+})
+
+// The reported bug (2026-05-26 CRITICAL): at a gate the SPA never opened,
+// so the session never heartbeated. `shouldLaunchReviewBrowser` suppressed
+// the launch on mere session EXISTENCE (findLiveReviewSessionForIntent),
+// so the never-attached session record made the engine think "a tab's
+// already open, just refresh it" — and NOTHING opened. The fix: suppress
+// only when a browser is GENUINELY attached (fresh heartbeat). A stale /
+// never-attached session must NOT suppress — the gate always (re)launches.
+test("a never-attached session for the intent does NOT suppress the launch (the bug)", () => {
+	// ONE stale never-attached session for the intent. A new gate fires; the
+	// stale record must NOT block the launch, since no browser is attached.
+	const stale = createSession({
+		intent_dir: "/tmp/no-such-dir",
+		intent_slug: "never-attached-intent",
+		target: "test",
+	})
+	try {
+		// `stale` exists but never heartbeated → not genuinely attached.
+		beginPresenceWatch(stale.session_id, { startedAt: Date.now() - 61_000 })
+		assert.strictEqual(
+			shouldLaunchReviewBrowser(
+				true,
+				"https://example.test",
+				"new-gate-session",
+				"never-attached-intent",
+			),
+			true,
+			"a stale never-attached session must NOT suppress the launch — the gate opens",
+		)
+		// And the 60s never-attached sweep still marks it presence-lost (so
+		// the await fails-fast with a recovery path rather than hanging).
+		_runPresenceSweepForTests()
+		assert.ok(
+			hasPresenceLost(stale.session_id),
+			"never-attached session is also marked presence-lost after 60s",
+		)
+	} finally {
+		deleteSession(stale.session_id)
+	}
+})
+
+test("an ATTACHED session for the intent DOES suppress a duplicate launch", () => {
+	// The dedupe that must still hold: a genuinely-attached tab (fresh
+	// heartbeat) for the intent means a second window would be a duplicate.
+	const attached = createSession({
+		intent_dir: "/tmp/no-such-dir",
+		intent_slug: "attached-dedupe-intent",
+		target: "test",
+	})
+	try {
+		recordHeartbeat(attached.session_id) // a live tab is attached now
+		assert.strictEqual(
+			shouldLaunchReviewBrowser(
+				true,
+				"https://example.test",
+				"new-gate-session",
+				"attached-dedupe-intent",
+			),
+			false,
+			"an attached tab for the intent suppresses the duplicate launch",
+		)
+	} finally {
+		deleteSession(attached.session_id)
+	}
+})
+
+test("EVERY gate's never-attached watch is swept (uniform — no exemption) so the URL is surfaced", () => {
+	// There is no longer a "hold silently" exemption: every gate, including
+	// the final intent gate, is marked presence-lost when no client connects
+	// — that's what triggers the await to return the URL for the user to
+	// (re)open while it keeps holding (haiku_await_gate `lost presence`).
+	const s = createSession({
+		intent_dir: "/tmp/no-such-dir",
+		intent_slug: "final-gate-intent",
+		target: "test",
+	})
+	try {
+		beginPresenceWatch(s.session_id, { startedAt: Date.now() - 120_000 })
+		_runPresenceSweepForTests()
+		assert.ok(
+			hasPresenceLost(s.session_id),
+			"a never-attached gate MUST be marked presence-lost so the URL is surfaced",
+		)
+	} finally {
+		deleteSession(s.session_id)
+	}
+})
+
+test("a session that heartbeated once is NOT treated as never-attached", () => {
+	const s = createSession({
+		intent_dir: "/tmp/no-such-dir",
+		intent_slug: "attached-intent",
+		target: "test",
+	})
+	try {
+		beginPresenceWatch(s.session_id, { startedAt: Date.now() - 120_000 })
+		recordHeartbeat(s.session_id) // first heartbeat clears the never-attached watch
+		_runPresenceSweepForTests()
+		assert.ok(
+			!hasPresenceLost(s.session_id),
+			"an attached session isn't never-attached; the fresh heartbeat keeps it live",
+		)
+	} finally {
+		deleteSession(s.session_id)
+	}
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)

@@ -9,8 +9,8 @@ Inventory of code paths that violate v4 architecture invariants. Goal: drive eac
 | 1. Outputs are the signal, not FM state | **Closed**. Every authoritative read derives from disk. Every write of `status`/`bolt`/`hat`/`hat_started_at`/`active_stage`/`phase`/`completed_at` removed from packages/haiku/src/. |
 | 2. Skills don't reference dead actions | Closed. `revisited` removed. `close_feedback` vocab fixed. |
 | 3. Engine internals stay engine internals | Per user direction 2026-05-12: keep loops, fix re-emit paths. Closed. |
-| 4. `/haiku:repair` narrow under v4 | Closed. Docs rewritten. |
-| 5. Per-stage `/haiku:reset` | Closed 2026-05-13. Split into `/haiku:reset-intent` + `/haiku:reset-stage`. |
+| 4. `/haiku:haiku-repair` narrow under v4 | Closed. Docs rewritten. |
+| 5. Per-stage `/haiku:reset` | Closed 2026-05-13. Split into `/haiku:haiku-reset-intent` + `/haiku:haiku-reset-stage`. |
 | 6. Hats produce meaningful output | Closed. Every non-template hat is now ≥24 lines; feedback-assessor and classifier templates are intentionally minimal. |
 | 7. SPA renderer surfaces every artifact correctly | Closed. `inferKind` no longer defaults to "discovery"; text-shaped extensions render. |
 
@@ -71,7 +71,7 @@ The `merge_stage`, `close_feedback`, `select_*`, `gate_review` actions are engin
 
 User direction 2026-05-12: loops are OK when each iteration makes real progress; the guard exists to catch inescapable loops where the same signature repeats. Don't convert to `if`. Keep the loops, keep the guard, fix the underlying re-emit paths if they manifest.
 
-## Invariant 4 — `/haiku:repair` is narrow under v4
+## Invariant 4 — `/haiku:haiku-repair` is narrow under v4
 
 Skill docs rewritten 2026-05-12. Repair now narrowly covers:
 - Drift baseline rebuild
@@ -84,14 +84,14 @@ The v3-era cleanup behavior (state.json synthesis, active_stage validation, stat
 
 Closed 2026-05-13. Two distinct skills now ship:
 
-- `/haiku:reset-intent` → `haiku_intent_reset` — wipes the entire intent, preserves title/description for recreate.
-- `/haiku:reset-stage` → `haiku_stage_reset` — wipes one stage (units, outputs, artifacts, elaboration, feedback, branch). Intent main's commits stay; new work supersedes via merge.
+- `/haiku:haiku-reset-intent` → `haiku_intent_reset` — wipes the entire intent, preserves title/description for recreate.
+- `/haiku:haiku-reset-stage` → `haiku_stage_reset` — wipes one stage (units, outputs, artifacts, elaboration, feedback, branch). Intent main's commits stay; new work supersedes via merge.
 
 The previous combined `/haiku:reset` skill was split because users couldn't tell which scope they were invoking until the picker appeared. Two skill files = two slash-command entries = the scope choice happens at invocation time.
 
 ## Active fixes in flight
 
-- `PR #347` (this branch): tree-equality merge wedge, mid-merge detector, loop-guard diagnostic surface, post-migration sentinel narrow, await_gate session lookup, /haiku:repair + /haiku:revisit docs, this audit file
+- `PR #347` (this branch): tree-equality merge wedge, mid-merge detector, loop-guard diagnostic surface, post-migration sentinel narrow, await_gate session lookup, /haiku:haiku-repair + /haiku:revisit docs, this audit file
 
 ## Invariant 6 — Studio hats produce meaningful output
 

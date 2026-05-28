@@ -325,8 +325,8 @@ export function subagentInstruction(opts: {
 
 /**
  * Return the correct phrasing for referencing a skill/prompt.
- * Claude Code: /haiku:start  (slash command)
- * Gemini CLI: /haiku:start   (MCP prompts are slash commands)
+ * Claude Code: /haiku:haiku-start  (slash command)
+ * Gemini CLI: /haiku:haiku-start   (MCP prompts are slash commands)
  * Others: "use the haiku:start prompt" or "call the haiku_start tool"
  */
 export function skillReference(skillName: string): string {

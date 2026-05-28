@@ -8,7 +8,11 @@
  * blocking tool returns.
  *
  * Layout per kind:
- *   - studio:   card grid + stage chain previewed under each card
+ *   - studio:   card grid + stage chain previewed under each card.
+ *               Options flagged `secondary` (everything outside the
+ *               agent's shortlist) stay hidden behind a "Show all
+ *               studios…" toggle so the user isn't scrolling the whole
+ *               registry on every intent.
  *   - mode:     cards with mini-timeline showing where pauses happen
  *   - stage:    simple list (single-stage select for quick mode)
  *   - confirm:  two-button decision (destructive vs cancel)
@@ -186,6 +190,7 @@ export function PickerPage({ session, sessionId }: Props): React.ReactElement {
 		session.selection?.id ?? null,
 	)
 	const [urlInput, setUrlInput] = useState<string>(session.selection?.id ?? "")
+	const [showAll, setShowAll] = useState(false)
 	const [submitting, setSubmitting] = useState(false)
 	const [submitted, setSubmitted] = useState(session.status === "answered")
 	const [error, setError] = useState<string | null>(null)
@@ -240,6 +245,19 @@ export function PickerPage({ session, sessionId }: Props): React.ReactElement {
 
 	const isUrlInput = session.kind === "url_input"
 
+	// Shortlist support: options flagged `secondary` are hidden behind a
+	// "Show all…" expansion until the user asks for them. The studio
+	// picker uses this to surface the agent's 2–4 candidates first while
+	// keeping the full registry one click away. No secondary options →
+	// nothing hidden, no toggle.
+	const hasSecondary = session.options.some((o) => o.secondary)
+	const visibleOptions =
+		hasSecondary && !showAll
+			? session.options.filter((o) => !o.secondary)
+			: session.options
+	const showAllLabel =
+		session.kind === "studio" ? "Show all studios…" : "Show all options…"
+
 	return (
 		<div className="mx-auto max-w-3xl p-4 sm:p-6">
 			<Card>
@@ -292,17 +310,31 @@ export function PickerPage({ session, sessionId }: Props): React.ReactElement {
 							</p>
 						</div>
 					) : (
-						<div className={gridClass}>
-							{session.options.map((opt) => (
-								<OptionCard
-									key={opt.id}
-									option={opt}
-									kind={session.kind}
-									selected={selectedId === opt.id}
-									disabled={submitting}
-									onSelect={() => handleSelect(opt.id)}
-								/>
-							))}
+						<div className="space-y-3">
+							<div className={gridClass}>
+								{visibleOptions.map((opt) => (
+									<OptionCard
+										key={opt.id}
+										option={opt}
+										kind={session.kind}
+										selected={selectedId === opt.id}
+										disabled={submitting}
+										onSelect={() => handleSelect(opt.id)}
+									/>
+								))}
+							</div>
+							{hasSecondary && !showAll && (
+								<button
+									type="button"
+									onClick={() => setShowAll(true)}
+									className={[
+										"text-sm font-medium text-teal-700 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300",
+										focusRingClass,
+									].join(" ")}
+								>
+									{showAllLabel}
+								</button>
+							)}
 						</div>
 					)}
 

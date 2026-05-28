@@ -1,6 +1,7 @@
 ---
 name: evaluate
 description: Measure training effectiveness and analyze feedback
+optional: true
 hats: [evaluator, analyst, verifier]
 fix_hats: [classifier, evaluator, feedback-assessor]
 review: ask
@@ -16,22 +17,22 @@ inputs:
 
 # Evaluate
 
-Measure whether the training actually moved the needle on the gap that needs-analysis identified. Cover multiple Kirkpatrick levels (reaction, learning, behavior, results), produce statistically defensible findings, and generate improvement recommendations the next program iteration consumes.
+The closing stage of the training lifecycle: measure whether the program actually moved the needle on the gap needs-analysis identified. Work across Kirkpatrick levels (reaction, learning, behavior, results), produce statistically defensible findings, and generate the improvement recommendations the next iteration consumes.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the three hats in `plan → do → verify` order:
+Effectiveness measurement and analysis: choosing the right Kirkpatrick levels, designing instruments (pre/post assessments, surveys, observation rubrics, on-the-job measures), collecting and analyzing the data, and mapping outcomes back to the original gap. Evaluate decides *whether the program worked and what to change* — not how it ran (deliver) or what was built (develop).
 
-- **`evaluator`** (plan / do) designs the evaluation for one outcome area — chooses the Kirkpatrick levels appropriate to the question, designs the instruments (pre/post assessments, surveys, observation rubrics, behavior-on-the-job measures), collects the data
-- **`analyst`** (do — interpretation) validates data quality, runs the analysis (significance, effect size, cohort comparisons), checks confounders, maps outcomes back to the original needs-analysis gap, drafts improvement recommendations
-- **`verifier`** (verify) validates the finding artifact for substance, citation, and internal consistency — advances or rejects to the responsible hat
+## What to do
 
-The detailed process for each role lives in the hat's md file. This stage's job is to enforce the chain.
+- Pick the Kirkpatrick levels that actually answer the outcome question, not just the easy-to-measure ones.
+- Design instruments and collect data rigorously enough that the findings are defensible.
+- Run the analysis honestly — significance, effect size, cohort comparison, confounders — and tie outcomes back to the needs-analysis gap.
+- Turn findings into prioritized recommendations the next iteration can act on.
 
-## Inputs and outputs
+## What NOT to do
 
-Reads `deliver/delivery-log`, `needs-analysis/needs-assessment`, and `design/curriculum-plan` for every unit. Output is `EFFECTIVENESS-REPORT.md` per unit — findings on one outcome area with evidence, analysis, and prioritized recommendations.
-
-## Fix loop and gate
-
-Review feedback dispatches the `fix_hats: [classifier, evaluator, feedback-assessor]` chain. Gate is `ask` — the user approves the evaluation findings locally before they feed back into the next program iteration, because incorrect causal claims here distort every downstream decision. Project overlays at `.haiku/studios/training/stages/evaluate/` may add house conventions (organization-specific KPI taxonomy, named survey platform, statistical-significance threshold, ROI calculation method) without modifying the plugin defaults.
+- Don't fix materials or re-run delivery — improvements land as recommendations for the next iteration.
+- Don't claim causation the data doesn't support; a wrong causal claim distorts every downstream decision.
+- Don't measure reaction alone and call the program effective.
+- Don't ship findings without the evidence and analysis that back them.

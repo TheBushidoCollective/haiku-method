@@ -139,6 +139,7 @@ function setupMigratedRepo(slug) {
 			title: "test migrated",
 			studio: "software",
 			mode: "continuous",
+			autotune: false,
 			plugin_version: "4.0.0",
 		}),
 	)

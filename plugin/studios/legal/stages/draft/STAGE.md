@@ -1,6 +1,7 @@
 ---
 name: draft
 description: Create legal documents and contracts
+optional: true
 hats: [drafter, editor, verifier]
 fix_hats: [classifier, drafter, feedback-assessor]
 review: ask
@@ -17,22 +18,22 @@ outputs:
 
 # Draft
 
-Translate the intake brief and the research memo into a concrete document — contract, agreement, policy, exhibit, or filing. Draft is a design-class stage: each unit corresponds to one drafted document or a discrete section of a larger document. The output is a `DRAFT-DOCUMENT.md` per unit that the review stage and the licensed attorney evaluate.
+Translate the intake brief and the research memo into a concrete legal document — a contract, agreement, policy, exhibit, or filing. This is where the matter takes the form a counterparty will actually sign. The agent drafts; the licensed attorney owns the legal judgment, and every tactical choice is flagged for the attorney rather than decided here.
 
-The agent is a drafting assistant; the licensed attorney owns the legal judgment. Anything that looks like a tactical choice (whether to accept a one-sided indemnification, what cap to put on a limitation of liability, which jurisdiction's law to choose for governing law) is **flagged for the attorney**, not decided by the agent.
+## Scope
 
-## Per-unit baton
+Authoring the document's operative language: clauses, defined terms, cross-references, and exhibits that execute the brief and reflect the research. Draft decides *what the document says* — not whether the underlying analysis is sound (research), and not whether the finished document holds up (review). Tactical legal calls (an indemnity stance, a liability cap, choice of governing law) are surfaced to the attorney, not chosen.
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`drafter`** (plan / do for clauses) — reads the brief and memo for this unit's scope, drafts the operative clauses with defined terms, and maps each protective clause back to the risk it addresses
-- **`editor`** (do for consistency) — checks defined-term usage, cross-references, exhibit completeness, and house-style conventions across the draft
-- **`verifier`** (verify) — confirms the draft is substantive (no TODO markers, no placeholders), traces back to inputs, and is internally consistent
+- Draft the operative clauses for the unit's scope, with defined terms and clean cross-references, mapping each protective clause to the risk it addresses.
+- Keep defined-term usage, cross-references, exhibit completeness, and house style consistent across the document.
+- Flag every tactical or judgment-laden choice for the attorney instead of resolving it silently.
+- Trace the draft back to the brief and the memo so nothing in scope is left unaddressed.
 
-## Inputs and outputs
+## What NOT to do
 
-The draft consumes `research/research-memo` and `intake/legal-brief`. It produces one `DRAFT-DOCUMENT.md` per unit, which feeds `review` and `execute`. Subsequent drafting iterations (a new clause, a counterparty's redline accepted into the body) become new units, not edits to the completed one.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, drafter, feedback-assessor]` dispatches per finding. Classifier routes the FB to the right unit; drafter re-authors the affected clause; assessor closes. The gate is `ask` — the licensed attorney approves the draft locally before the review stage opens. Project overlays may add clause-library references, house numbering schemes, or specific document-platform conventions; the plugin default stays generic.
+- Don't make the legal-strategy calls — flag them; the attorney decides.
+- Don't re-litigate the research or re-investigate the facts; consume the upstream memo and brief as given.
+- Don't leave TODO markers, placeholders, or unresolved bracketed text in a draft you advance.
+- Don't introduce terms the brief and research don't support.

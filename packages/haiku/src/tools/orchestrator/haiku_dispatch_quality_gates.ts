@@ -38,16 +38,95 @@ import {
 	statSync,
 	writeFileSync,
 } from "node:fs"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import matter from "gray-matter"
+import { availableTools, isToolAvailable } from "../../capabilities.js"
+import { classifyGateRun } from "../../gate-environment.js"
 import { buildApprovalRecord } from "../../orchestrator/workflow/sign-slot.js"
 import {
 	intentDir,
+	primaryRepoRoot,
 	runInlineQualityGates,
 	writeFeedbackFile,
 } from "../../state-tools.js"
+import { type BootProcessSpec, readServiceProcesses } from "../../view-boot.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
+
+/** How many best-effort local boot attempts the agent gets before the
+ *  engine forces escalation to the user. The agent boots services once; if
+ *  the gate still can't reach its dependency, re-prompting another boot just
+ *  loops — escalate instead. */
+const ENV_BOOT_ATTEMPTS = 1
+
+interface EnvBlocked {
+	unit: string
+	reason: string
+	requires_tool?: string
+	attempts: number
+	failures: GateFailure["failures"]
+}
+
+/** Stamp an environment-blocked marker on the unit. Deliberately does NOT
+ *  touch `approvals.quality_gates` — an unreachable dependency means the
+ *  gate verified nothing, so the approval must stay unstamped and the stage
+ *  cannot advance. Increments an attempt counter so the engine can flip from
+ *  "best-effort boot" to "escalate to the user" after one cycle. Returns the
+ *  new attempt count. */
+function stampUnitGateEnvBlock(
+	unitPath: string,
+	reason: string,
+	requiresTool: string | undefined,
+): number {
+	try {
+		const parsed = matter(readFileSync(unitPath, "utf8"))
+		const data = parsed.data as Record<string, unknown>
+		const prior =
+			(data.quality_gates_env_blocked as { attempts?: number } | undefined) ??
+			undefined
+		const attempts =
+			(typeof prior?.attempts === "number" ? prior.attempts : 0) + 1
+		data.quality_gates_env_blocked = {
+			at: new Date().toISOString(),
+			reason,
+			requires_tool: requiresTool ?? null,
+			attempts,
+		}
+		writeFileSync(unitPath, matter.stringify(parsed.content, data))
+		return attempts
+	} catch {
+		return 1
+	}
+}
+
+/** Build the boot guidance the env-blocked response hands the agent: the
+ *  declared service processes, which required tools are live vs absent, and
+ *  whether a best-effort boot is even possible. */
+function bootGuidance(): {
+	services: Array<{
+		name: string
+		command: string
+		requires_tool?: string
+		tool_live: boolean
+	}>
+	bootable: boolean
+} {
+	let services: BootProcessSpec[] = []
+	try {
+		services = readServiceProcesses(primaryRepoRoot())
+	} catch {
+		services = []
+	}
+	const rows = services.map((s) => ({
+		name: s.name,
+		command: s.command.join(" "),
+		requires_tool: s.requires_tool,
+		tool_live: s.requires_tool ? isToolAvailable(s.requires_tool) : true,
+	}))
+	// Bootable when there's at least one declared service whose tool is live.
+	const bootable = rows.some((r) => r.tool_live)
+	return { services: rows, bootable }
+}
 
 type GateFailure = {
 	unit: string
@@ -72,6 +151,130 @@ interface IntentGateFailure {
 	exit_code: number
 	output: string
 	contributors: string[]
+}
+
+// How many engine-authored quality_gates FBs the local fix loop gets to
+// file for the same target before the engine DEFERS the gate to CI. Each
+// gate FB drives up to MAX_FIX_LOOP_BOLTS fixer attempts, so this is
+// several bolts of effort. Once this many still leave the gate red, the
+// gate is treated as non-source-convergent in THIS environment (no local
+// API, worktree dep mismatch, un-regenerated codegen — admin-portal #1/#4,
+// 2026-05-20): the engine stops re-filing blocking FBs, stamps the
+// approval as deferred, closes the open gate FBs, and lets the workflow
+// advance. CI re-runs the gate on the PR and is the authority — a real
+// defect shows as red CI; an environment-only failure passes clean. This
+// replaces the wedge where an unfixable gate FB stayed open forever,
+// keeping approvals.quality_gates invalidated so the stage never closed.
+const GATE_DEFER_AFTER_ATTEMPTS = 2
+
+type FbOnDisk = { path: string; data: Record<string, unknown> }
+
+/** Engine-authored quality_gates FBs on disk for a target — open or
+ *  closed. `sourceRef` may be a single ref (`unit:<slug>`,
+ *  `unit:<slug>:<gate-name>`, or `intent_quality_gates`) or an array of
+ *  refs; an FB matches if its `source_ref` equals any of them. Counts
+ *  prior fix-loop attempts and lets the deferral close the still-open
+ *  ones.
+ *
+ *  BUG-1: deferral attempts are keyed per gate command
+ *  (`unit:<slug>:<gate-name>`) so a gate that first turns red on a late
+ *  dispatch counts attempts from when *it* went red, not from the unit's
+ *  accumulated total. Legacy `unit:<slug>` FBs (filed before the per-gate
+ *  split) are still matchable by passing both refs, preserving the
+ *  attempt count for in-flight intents. */
+function gateFbsFor(
+	slug: string,
+	stage: string,
+	sourceRef: string | string[],
+): FbOnDisk[] {
+	const refs = Array.isArray(sourceRef) ? sourceRef : [sourceRef]
+	const dir = stage
+		? join(intentDir(slug), "stages", stage, "feedback")
+		: join(intentDir(slug), "feedback")
+	if (!existsSync(dir)) return []
+	const out: FbOnDisk[] = []
+	for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
+		try {
+			const p = join(dir, f)
+			const data = matter(readFileSync(p, "utf8")).data as Record<
+				string,
+				unknown
+			>
+			if (
+				(data.author as string) === "engine" &&
+				refs.includes(data.source_ref as string)
+			) {
+				out.push({ path: p, data })
+			}
+		} catch {
+			/* skip unreadable */
+		}
+	}
+	return out
+}
+
+function isFbOpen(data: Record<string, unknown>): boolean {
+	if (data.closed_at || data.rejected_at) return false
+	const st = data.status as string | undefined
+	return st !== "closed" && st !== "rejected"
+}
+
+/** Close a gate FB as deferred-to-CI with a DIRECT write — deliberately
+ *  NOT through the feedback-close handler, so `applyFeedbackInvalidations`
+ *  does NOT fire and clear the `quality_gates` approval the caller just
+ *  stamped as deferred. */
+function closeGateFbDeferred(path: string, reason: string): void {
+	try {
+		const parsed = matter(readFileSync(path, "utf8"))
+		const data = parsed.data as Record<string, unknown>
+		const now = new Date().toISOString()
+		data.status = "closed"
+		data.closed_at = now
+		data.closed_by = "engine:gate-deferred-to-ci"
+		data.resolution = "deferred"
+		data.closure_reply = { text: reason, at: now }
+		writeFileSync(path, matter.stringify(parsed.content, data))
+	} catch {
+		/* best-effort */
+	}
+}
+
+/** Stamp a unit's `approvals.quality_gates` as DEFERRED-to-CI (non-null,
+ *  so the cursor passes the gate and the stage advances) and record the
+ *  deferred gate commands + last failure on the unit FM as
+ *  `deferred_gates` for the PR / audit surface. */
+function stampUnitGateDeferral(
+	unitPath: string,
+	failures: GateFailure["failures"],
+): void {
+	try {
+		const parsed = matter(readFileSync(unitPath, "utf8"))
+		const data = parsed.data as Record<string, unknown>
+		const now = new Date().toISOString()
+		const approvals = (data.approvals as Record<string, unknown>) ?? {}
+		approvals.quality_gates = {
+			at: now,
+			deferred_to_ci: true,
+			deferred_count: failures.length,
+		}
+		data.approvals = approvals
+		const existing = Array.isArray(data.deferred_gates)
+			? (data.deferred_gates as unknown[])
+			: []
+		data.deferred_gates = [
+			...existing,
+			...failures.map((f) => ({
+				name: f.name,
+				command: f.command,
+				exit_code: f.exit_code,
+				output: f.output.slice(0, 300),
+				deferred_at: now,
+			})),
+		]
+		writeFileSync(unitPath, matter.stringify(parsed.content, data))
+	} catch {
+		/* best-effort */
+	}
 }
 
 export default defineTool({
@@ -105,6 +308,8 @@ export default defineTool({
 function runStageScope(intent: string, stage: string, units: string[]) {
 	const passed: string[] = []
 	const failures: GateFailure[] = []
+	const deferred: Array<{ unit: string; gates: string[]; reason: string }> = []
+	const envBlocked: EnvBlocked[] = []
 
 	for (const unit of units) {
 		const unitPath = join(
@@ -133,36 +338,161 @@ function runStageScope(intent: string, stage: string, units: string[]) {
 			// runQualityGates returns null on all-pass.
 			stampUnitApproval(unitPath, "quality_gates")
 			passed.push(unit)
-		} else {
-			failures.push({ unit, failures: result.failures })
-			// File an FB targeting this unit, invalidating the
-			// quality_gates role. The fix loop addresses the gate
-			// failure; on its terminal advance, this approval
-			// reopens (as null) and the cursor re-dispatches the
-			// gates. Closure of the FB clears the invalidation.
-			const failureSummary = result.failures
-				.map((f) => `- ${f.name}: \`${f.command}\` exited ${f.exit_code}`)
-				.join("\n")
-			writeFeedbackFile(intent, stage, {
-				title: `quality_gates failure on ${unit}`,
-				body: `One or more declared quality_gates failed on unit \`${unit}\`:\n\n${failureSummary}\n\nThe fix loop should resolve the failure, then quality_gates re-runs on the next tick.`,
-				origin: "agent",
-				author: "engine",
-				source_ref: `unit:${unit}`,
+		} else if (result.environment) {
+			// ENVIRONMENT-BLOCKED: the gate couldn't reach a live dependency
+			// (DB down, Docker daemon off, declared tool absent). It verified
+			// nothing, so: do NOT stamp the approval (the stage must not
+			// advance on a false green) and do NOT file a `blocker` code-fix
+			// FB (the fix loop has nothing to fix — that's the churn bug). The
+			// response below tells the agent to best-effort boot the declared
+			// services and re-dispatch, or escalate to the user and hold.
+			const attempts = stampUnitGateEnvBlock(
+				unitPath,
+				result.env_reason ?? "a runtime dependency was unreachable",
+				result.requires_tool,
+			)
+			envBlocked.push({
+				unit,
+				reason: result.env_reason ?? "a runtime dependency was unreachable",
+				requires_tool: result.requires_tool,
+				attempts,
+				failures: result.failures,
 			})
+		} else {
+			// BUG-1: attempts are counted PER GATE COMMAND, not per unit. A
+			// gate that first turns red on a late dispatch must get its full
+			// GATE_DEFER_AFTER_ATTEMPTS budget rather than inheriting the
+			// unit's accumulated FB count. Partition the failing gates into
+			// those that have exhausted their own budget (defer to CI) and
+			// those that still have local fix-loop attempts left (re-file a
+			// per-gate blocking FB).
+			const unitSourceRef = `unit:${unit}`
+			const gatesToDefer: GateFailure["failures"] = []
+			const gatesToRefile: GateFailure["failures"] = []
+			for (const failure of result.failures) {
+				const gateSourceRef = `${unitSourceRef}:${failure.name}`
+				// Count this gate's own FBs. Include legacy unit-scoped FBs so
+				// in-flight intents that accumulated attempts under the old
+				// per-unit key still defer correctly. Counting the legacy ref
+				// per-gate is intentionally conservative — it can only defer
+				// sooner, never wedge.
+				const priorAttempts = gateFbsFor(intent, stage, [
+					gateSourceRef,
+					unitSourceRef,
+				]).length
+				if (priorAttempts >= GATE_DEFER_AFTER_ATTEMPTS) {
+					gatesToDefer.push(failure)
+				} else {
+					gatesToRefile.push(failure)
+				}
+			}
+
+			if (gatesToDefer.length > 0) {
+				// Non-convergent gate(s): the fix loop has had
+				// GATE_DEFER_AFTER_ATTEMPTS engine gate FBs (each up to
+				// MAX_FIX_LOOP_BOLTS bolts) and these gates still fail. Defer
+				// them to CI rather than re-file a blocking FB that would keep
+				// the stage wedged. Close the open FBs for the deferred gates
+				// with a DIRECT write (no invalidation hook → the deferral
+				// stamp survives).
+				const gateNames = gatesToDefer.map((f) => f.name)
+				const reason = `quality_gates on \`${unit}\` (${gateNames.join(", ")}) stayed red across ${GATE_DEFER_AFTER_ATTEMPTS}+ local fix-loop attempt(s). Deferred to CI — CI runs them in a clean tree and is authoritative. A real defect surfaces as red CI on the PR; an environment-only failure (no local API, dep/codegen mismatch in the worktree) passes there.`
+				stampUnitGateDeferral(unitPath, gatesToDefer)
+				const deferRefs = [
+					unitSourceRef,
+					...gateNames.map((n) => `${unitSourceRef}:${n}`),
+				]
+				for (const fb of gateFbsFor(intent, stage, deferRefs)) {
+					if (isFbOpen(fb.data)) closeGateFbDeferred(fb.path, reason)
+				}
+				deferred.push({ unit, gates: gateNames, reason })
+			}
+
+			if (gatesToRefile.length > 0) {
+				failures.push({ unit, failures: gatesToRefile })
+				// File a per-gate FB targeting this unit, invalidating the
+				// quality_gates role. The fix loop addresses the gate
+				// failure; on its terminal advance, this approval reopens (as
+				// null) and the cursor re-dispatches the gates. Closure of the
+				// FB clears the invalidation. One FB per failing gate so each
+				// gate's attempts are counted from when *it* went red.
+				for (const failure of gatesToRefile) {
+					const gateSourceRef = `${unitSourceRef}:${failure.name}`
+					writeFeedbackFile(intent, stage, {
+						title: `quality_gates failure on ${unit} (${failure.name})`,
+						body: `Declared quality_gate \`${failure.name}\` failed on unit \`${unit}\`:\n\n- ${failure.name}: \`${failure.command}\` exited ${failure.exit_code}\n\nThe fix loop should resolve the failure, then quality_gates re-runs on the next tick. If this gate keeps failing across attempts, the engine defers it to CI (environmental / non-source-convergent).`,
+						origin: "agent",
+						severity: "blocker",
+						author: "engine",
+						source_ref: gateSourceRef,
+						targetUnit: unit,
+						targetInvalidates: ["quality_gates"],
+					})
+				}
+			}
 		}
 	}
 
+	// Environment-blocked units take priority in the response: the stage
+	// cannot advance while any gate verified nothing, so surface the
+	// best-effort-boot / escalate-to-user instruction before anything else.
+	if (envBlocked.length > 0) {
+		const guidance = bootGuidance()
+		const exhausted = envBlocked.every((e) => e.attempts > ENV_BOOT_ATTEMPTS)
+		const mode =
+			guidance.bootable && !exhausted ? "best_effort_boot" : "escalate_to_user"
+		const serviceList =
+			guidance.services.length > 0
+				? guidance.services
+						.map(
+							(s) =>
+								`  - ${s.name}: \`${s.command}\`${s.requires_tool ? ` (needs ${s.requires_tool}: ${s.tool_live ? "LIVE" : "NOT AVAILABLE"})` : ""}`,
+						)
+						.join("\n")
+				: "  (no services declared in .haiku/boot.md)"
+		const liveTools = availableTools()
+		const message =
+			mode === "best_effort_boot"
+				? `Quality gates can't reach a live environment on: ${envBlocked.map((e) => e.unit).join(", ")}.\n${envBlocked.map((e) => `  • ${e.unit}: ${e.reason}`).join("\n")}\n\nBEST-EFFORT BOOT (one attempt): bring the declared service(s) up with the available tooling, then call \`haiku_dispatch_quality_gates\` again — on a real pass the approval stamps and the stage advances.\n\nDeclared services (.haiku/boot.md):\n${serviceList}\n\nAvailable tools: ${liveTools.length > 0 ? liveTools.join(", ") : "(none of docker/compose/make are live)"}.\n\nIf the service comes up and the gate passes, you're done. If it does NOT come up, escalate to the user (next dispatch will say so). Do NOT advance — a gate that didn't run verified nothing.`
+				: `Quality gates can't reach a live environment on: ${envBlocked.map((e) => e.unit).join(", ")}, and the engine can't bring it up here (${guidance.bootable ? "best-effort boot already attempted" : "no declared service with a live tool"}).\n${envBlocked.map((e) => `  • ${e.unit}: ${e.reason}`).join("\n")}\n\nESCALATE TO THE USER. Tell them exactly what's unavailable and what to do — e.g. "start the database, then tell me to retry." Recommend a \`.haiku/boot.md\` service recipe if none exists:\n${serviceList}\n\nThen WAIT for the user. Do NOT advance, do NOT call \`haiku_run_next\` in a loop, do NOT mark the gate passed. The stage holds until the dependency is live and the gate actually runs.`
+		return text(
+			JSON.stringify(
+				{
+					action: "quality_gate_environment_blocked",
+					scope: "stage",
+					mode,
+					env_blocked: envBlocked.map((e) => ({
+						unit: e.unit,
+						reason: e.reason,
+						requires_tool: e.requires_tool ?? null,
+						attempts: e.attempts,
+					})),
+					services: guidance.services,
+					available_tools: liveTools,
+					passed,
+					message,
+				},
+				null,
+				2,
+			),
+		)
+	}
+
+	const deferredNote =
+		deferred.length > 0
+			? ` ${deferred.length} unit(s) had non-convergent gates DEFERRED to CI: ${deferred.map((d) => `${d.unit} (${d.gates.join(", ")})`).join("; ")}.`
+			: ""
 	return text(
 		JSON.stringify(
 			{
 				scope: "stage",
 				passed,
 				failures,
+				deferred,
 				message:
-					failures.length === 0
+					failures.length === 0 && deferred.length === 0
 						? `All ${passed.length} unit(s) passed quality_gates. Approvals stamped.`
-						: `${failures.length} unit(s) had quality_gate failures — FBs filed. ${passed.length} passed.`,
+						: `${failures.length} unit(s) had quality_gate failures — FBs filed. ${passed.length} passed.${deferredNote}`,
 			},
 			null,
 			2,
@@ -173,7 +503,8 @@ function runStageScope(intent: string, stage: string, units: string[]) {
 function runIntentScope(intent: string) {
 	const intentRoot = intentDir(intent)
 	const stagesRoot = join(intentRoot, "stages")
-	const distinctGates = collectIntentScopeGates(stagesRoot)
+	const skipGates = readSkipGates(intentRoot)
+	const distinctGates = collectIntentScopeGates(stagesRoot, skipGates)
 	if (distinctGates.length === 0) {
 		// No declared gates anywhere — stamp clean and let the cursor
 		// fall through to seal.
@@ -193,9 +524,27 @@ function runIntentScope(intent: string) {
 		)
 	}
 
+	// Resolve repo root for gate cwd. A gate command's path (e.g.
+	// `! grep -rL 'tokens.css' .haiku/intents/.../artifacts`) is written
+	// relative to the repo root, but `process.cwd()` is only the repo root
+	// by luck — when it isn't, the gate runs in the wrong directory and
+	// fails (exit 1) even though it passes in a shell at the root, re-filing
+	// the same false-positive FBs on every dispatch (bug report 2026-05-20,
+	// `wireframes-link-shared-tokens`). Mirror the stage-scope runner
+	// (`runInlineQualityGates`): anchor on `git rev-parse --show-toplevel`,
+	// fall back to cwd only if that fails.
+	let repoRoot = process.cwd()
+	try {
+		repoRoot = execSync("git rev-parse --show-toplevel", {
+			encoding: "utf8",
+		}).trim()
+	} catch {
+		/* not a git repo / git unavailable — use cwd */
+	}
+
 	const failures: IntentGateFailure[] = []
 	for (const gate of distinctGates) {
-		const cwd = gate.dir ? join(process.cwd(), gate.dir) : process.cwd()
+		const cwd = gate.dir ? resolve(repoRoot, gate.dir) : repoRoot
 		try {
 			execSync(gate.command, {
 				stdio: "pipe",
@@ -236,6 +585,94 @@ function runIntentScope(intent: string) {
 		)
 	}
 
+	// Environment-blocked at intent scope (mirror of the stage path): a gate
+	// that couldn't reach a live dependency verified nothing. Do NOT stamp
+	// the intent approval and do NOT file a `blocker` FB into the studio
+	// fix-hat loop — escalate to best-effort-boot / the user instead. The
+	// intent cannot seal on a gate that didn't run.
+	{
+		let requiredTools: string[] = []
+		try {
+			requiredTools = [
+				...new Set(
+					readServiceProcesses(primaryRepoRoot())
+						.map((s) => s.requires_tool)
+						.filter((t): t is string => typeof t === "string" && t.length > 0),
+				),
+			]
+		} catch {
+			requiredTools = []
+		}
+		const envClass = classifyGateRun(failures, { requiredTools })
+		if (envClass.environment) {
+			const guidance = bootGuidance()
+			const serviceList =
+				guidance.services.length > 0
+					? guidance.services
+							.map(
+								(s) =>
+									`  - ${s.name}: \`${s.command}\`${s.requires_tool ? ` (needs ${s.requires_tool}: ${s.tool_live ? "LIVE" : "NOT AVAILABLE"})` : ""}`,
+							)
+							.join("\n")
+					: "  (no services declared in .haiku/boot.md)"
+			const liveTools = availableTools()
+			return text(
+				JSON.stringify(
+					{
+						action: "quality_gate_environment_blocked",
+						scope: "intent",
+						mode: guidance.bootable ? "best_effort_boot" : "escalate_to_user",
+						reason: envClass.reason,
+						requires_tool: envClass.requiresTool ?? null,
+						services: guidance.services,
+						available_tools: liveTools,
+						message:
+							`Intent-scope quality gates can't reach a live environment: ${envClass.reason}.\n\n` +
+							(guidance.bootable
+								? `BEST-EFFORT BOOT: bring the declared service(s) up, then re-run \`haiku_dispatch_quality_gates { intent, scope: "intent" }\`. `
+								: `The engine can't bring it up here. ESCALATE TO THE USER: tell them what's unavailable and to start it, then retry. `) +
+							`Do NOT seal the intent — a gate that didn't run verified nothing.\n\nDeclared services:\n${serviceList}\n\nAvailable tools: ${liveTools.length > 0 ? liveTools.join(", ") : "(none live)"}.`,
+					},
+					null,
+					2,
+				),
+			)
+		}
+	}
+
+	// Non-convergent intent gates → defer to CI (mirror of the stage-scope
+	// path). When the studio fix-hat loop has had GATE_DEFER_AFTER_ATTEMPTS
+	// engine gate FBs and the intent-scope commands still fail, stamp
+	// approvals.intent_quality_gates as deferred, close the open gate FBs
+	// with a direct write (no invalidation hook), and let the intent seal.
+	// CI is authoritative on the PR.
+	const priorIntentAttempts = gateFbsFor(
+		intent,
+		"",
+		"intent_quality_gates",
+	).length
+	if (priorIntentAttempts >= GATE_DEFER_AFTER_ATTEMPTS) {
+		const gateNames = failures.map((f) => f.name)
+		const reason = `intent_quality_gates (${gateNames.join(", ")}) stayed red across ${priorIntentAttempts} fix-loop attempt(s). Deferred to CI — it runs them in a clean tree and is authoritative.`
+		stampIntentGateDeferral(intent, failures)
+		for (const fb of gateFbsFor(intent, "", "intent_quality_gates")) {
+			if (isFbOpen(fb.data)) closeGateFbDeferred(fb.path, reason)
+		}
+		return text(
+			JSON.stringify(
+				{
+					scope: "intent",
+					ran: distinctGates.length,
+					failures,
+					deferred: { gates: gateNames, reason },
+					message: `${failures.length} of ${distinctGates.length} intent-scope quality_gates stayed red across ${priorIntentAttempts} fix-loop attempt(s) — DEFERRED to CI. approvals.intent_quality_gates stamped deferred; intent can seal.`,
+				},
+				null,
+				2,
+			),
+		)
+	}
+
 	// File an intent-scope FB describing the failures. targets.invalidates
 	// clears the intent_quality_gates approval on close so the next tick
 	// re-dispatches.
@@ -252,8 +689,9 @@ function runIntentScope(intent: string) {
 	// The body describes the failure for the studio fix-hat loop.
 	writeFeedbackFile(intent, "", {
 		title: `intent_quality_gates: ${failures.length} failing command(s)`,
-		body: `${failures.length} of ${distinctGates.length} distinct quality_gates command(s) failed at intent scope. The studio fix-hat loop should resolve each failure; on close, the cursor's intent walk will re-dispatch dispatch_quality_gates because approvals.intent_quality_gates is still unset.\n\n${failureSummary}`,
+		body: `${failures.length} of ${distinctGates.length} distinct quality_gates command(s) failed at intent scope. The studio fix-hat loop should resolve each failure; on close, the cursor's intent walk will re-dispatch dispatch_quality_gates because approvals.intent_quality_gates is still unset. If the gates keep failing across attempts, the engine defers them to CI (environmental / non-source-convergent).\n\n${failureSummary}`,
 		origin: "agent",
+		severity: "blocker",
 		author: "engine",
 		source_ref: "intent_quality_gates",
 	})
@@ -271,12 +709,44 @@ function runIntentScope(intent: string) {
 	)
 }
 
+/** Read `skip_gates: [...]` from intent.md frontmatter — a list of gate
+ *  names (or `dir::command` keys) that should be excluded from the
+ *  intent-scope union. BUG-2: when a later owner decision relocates code
+ *  (e.g. moving a surface from one app to another), the frozen unit specs
+ *  still declare gates against the stale path that can never pass. Naming
+ *  them here lets the intent seal without re-emitting an unfixable gate
+ *  every dispatch. Backward-compatible: absent / non-array → empty set. */
+function readSkipGates(intentRoot: string): Set<string> {
+	const intentMdPath = join(intentRoot, "intent.md")
+	if (!existsSync(intentMdPath)) return new Set()
+	try {
+		const data = matter(readFileSync(intentMdPath, "utf8")).data as Record<
+			string,
+			unknown
+		>
+		const raw = data.skip_gates
+		if (!Array.isArray(raw)) return new Set()
+		return new Set(raw.filter((v): v is string => typeof v === "string"))
+	} catch {
+		return new Set()
+	}
+}
+
 /** Walk every `stages/<stage>/units/unit-*.md`, collect their
  *  `quality_gates[]`, dedupe by `command` (the canonical equality —
  *  same command at the same dir is the same gate), and return the
  *  distinct list with contributing unit slugs for the failure
- *  surface. */
-function collectIntentScopeGates(stagesRoot: string): IntentGate[] {
+ *  surface.
+ *
+ *  BUG-2: a gate entry carrying `superseded: true` is skipped (a later
+ *  relocation made its declaring unit's path non-convergent), as is any
+ *  gate whose `name` or `dir::command` key appears in the intent's
+ *  `skip_gates` set. Both are minimal, opt-in, and backward-compatible —
+ *  unmarked gates behave exactly as before. */
+function collectIntentScopeGates(
+	stagesRoot: string,
+	skipGates: Set<string> = new Set(),
+): IntentGate[] {
 	if (!existsSync(stagesRoot)) return []
 	const gateMap = new Map<string, IntentGate>()
 	const stageDirs = readdirSync(stagesRoot).filter((name) => {
@@ -311,6 +781,9 @@ function collectIntentScopeGates(stagesRoot: string): IntentGate[] {
 			for (const g of gates) {
 				if (!g || typeof g !== "object") continue
 				const obj = g as Record<string, unknown>
+				// BUG-2: skip gates explicitly marked non-convergent on the
+				// unit entry after a code relocation froze their path.
+				if (obj.superseded === true) continue
 				const name = typeof obj.name === "string" ? obj.name : ""
 				const command = typeof obj.command === "string" ? obj.command : ""
 				if (!command) continue
@@ -319,6 +792,9 @@ function collectIntentScopeGates(stagesRoot: string): IntentGate[] {
 						? obj.dir
 						: undefined
 				const key = `${dir ?? ""}::${command}`
+				// BUG-2: skip gates named in the intent's `skip_gates` FM list,
+				// matched by gate name OR by the canonical `dir::command` key.
+				if ((name && skipGates.has(name)) || skipGates.has(key)) continue
 				const existing = gateMap.get(key)
 				const contributorSlug = `${stage}/${file.replace(/\.md$/, "")}`
 				if (existing) {
@@ -353,6 +829,45 @@ function stampUnitApproval(unitPath: string, role: string): void {
 	data.approvals = approvals
 	const out = matter.stringify(parsed.content, data)
 	writeFileSync(unitPath, out)
+}
+
+/** Intent-scope mirror of `stampUnitGateDeferral`: stamp
+ *  `approvals.intent_quality_gates` on intent.md as deferred-to-CI and
+ *  record the deferred commands as `deferred_gates`. */
+function stampIntentGateDeferral(
+	intent: string,
+	failures: IntentGateFailure[],
+): void {
+	const intentMdPath = join(intentDir(intent), "intent.md")
+	if (!existsSync(intentMdPath)) return
+	try {
+		const parsed = matter(readFileSync(intentMdPath, "utf8"))
+		const data = parsed.data as Record<string, unknown>
+		const now = new Date().toISOString()
+		const approvals = (data.approvals as Record<string, unknown>) ?? {}
+		approvals.intent_quality_gates = {
+			at: now,
+			deferred_to_ci: true,
+			deferred_count: failures.length,
+		}
+		data.approvals = approvals
+		const existing = Array.isArray(data.deferred_gates)
+			? (data.deferred_gates as unknown[])
+			: []
+		data.deferred_gates = [
+			...existing,
+			...failures.map((f) => ({
+				name: f.name,
+				command: f.command,
+				exit_code: f.exit_code,
+				output: f.output.slice(0, 300),
+				deferred_at: now,
+			})),
+		]
+		writeFileSync(intentMdPath, matter.stringify(parsed.content, data))
+	} catch {
+		/* best-effort */
+	}
 }
 
 /** Stamp an intent-scope approval on intent.md. Same shape as the

@@ -15,24 +15,22 @@ review-agents-include:
 
 # Validation
 
-Prove the migrated target matches the source — quantitatively (counts, hashes, sampled reconciliation) and functionally (downstream consumers produce identical results). This is the validation stage of the migration studio: units are verification surfaces (a reconciliation method, a parity test, a performance benchmark), and the output is the validation report that gates cutover.
+Prove the migrated target matches the source — quantitatively through counts, hashes, and sampled reconciliation, and functionally by showing downstream consumers produce identical results. This is the stage that gates cutover: if it can't show parity, the migration isn't ready to go live. It also owns rehearsing the rollback end-to-end.
 
-## Per-unit baton
+## Scope
 
-Each validation unit walks three hats in `plan → do → verify` order:
+Reconciliation, functional-parity testing, performance benchmarking, and rollback rehearsal. Validation decides *whether the migrated target is correct and the rollback works* — not how the data moved (migrate) or how the production cutover is sequenced (cutover). Units are verification surfaces, each naming its method, threshold, and mechanical pass/fail criteria.
 
-- **`validator`** (plan / do for quantitative reconciliation) reads the migration artifacts for this surface and produces the reconciliation evidence — row counts, hash digests, sampled field-by-field diffs, constraint and referential-integrity checks.
-- **`regression-tester`** (do for functional parity) consumes the reconciliation results and produces the parity evidence — replayed production queries / workflows / consumer flows, with side-by-side output comparison and performance deltas.
-- **`verifier`** (verify) validates that each verification surface names its method, threshold, evidence shape, and mechanical pass/fail criteria. Advances or rejects.
+## What to do
 
-The baton: validator's reconciliation evidence is the precondition for regression-tester's parity claims; a parity test that doesn't cite reconciled data is a sign the validator missed a surface.
+- Produce quantitative reconciliation evidence — row counts, hash digests, sampled field-by-field diffs, constraint and referential-integrity checks.
+- Replay production queries, workflows, and consumer flows against both systems and compare output side by side, including performance deltas.
+- Exercise the rollback procedure end-to-end against a representative dataset and record the rehearsal.
+- Anchor every parity claim to reconciled data, and state each surface's threshold and evidence shape.
 
-This stage also owns **rollback rehearsal** — at least one unit MUST exercise the rollback procedure end-to-end against a representative dataset and produce the rehearsal record. Cutover's `rollback-readiness` review agent will refuse to advance without it.
+## What NOT to do
 
-## Inputs and outputs
-
-Validation consumes `migrate/migration-artifacts` and the upstream `mapping/accuracy` review lens. Output is `VALIDATION-REPORT.md` (reconciliation results + parity test results + performance benchmarks + the rollback rehearsal record). Cutover consumes the report to decide go / no-go.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, validator, feedback-assessor]` dispatches per finding. The classifier routes; `validator` re-runs or re-authors the affected reconciliation; `feedback-assessor` closes. The gate is `ask` — local approval after the report is complete and review agents have signed off.
+- Don't fix the migration code here — file findings; the migrate stage owns corrections.
+- Don't plan or execute the production cutover; that's the cutover stage consuming this report.
+- Don't claim parity from a test that doesn't cite reconciled data.
+- Don't advance without the rollback rehearsal — cutover will refuse to proceed without it.

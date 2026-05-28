@@ -64,6 +64,7 @@ const FSM_DRIVEN_UNIT_FIELDS_LIST = [
 	"iterations",
 	"reviews",
 	"approvals",
+	"quality_gates_env_blocked",
 ] as const
 
 // Path-shape check: must be a non-empty string with no embedded
@@ -135,6 +136,12 @@ export const UNIT_FRONTMATTER_SCHEMA = Type.Object(
 			Type.Array(Type.String(), {
 				description:
 					"Skill slugs (slash-command names without the leading `/`) identified as relevant for this unit during elaboration. The elaborator populates this from the installed skill registry. Hat subagent prompts surface these automatically so subagents know which skills to reach for.",
+			}),
+		),
+		external_refs: Type.Optional(
+			Type.Record(Type.String(), Type.String(), {
+				description:
+					"External-system references for this unit (e.g. `ticket: PROJ-123`, `design_ref: figma://...`). Populated by the agent when a workflow or source provider is active. Engine doesn't interpret values — they're the durable handle between H·AI·K·U and the external system. (2026-05-19, provider-injection wave.)",
 			}),
 		),
 	},

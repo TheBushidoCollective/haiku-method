@@ -16,8 +16,8 @@ This guide covers the day-to-day workflow of using H·AI·K·U. It assumes you'v
    - Review any blockers from previous sessions
 
 2. **Load context**
-   - Run `/haiku:pickup` if continuing existing work
-   - Run `/haiku:start` if starting new work
+   - Run `/haiku:haiku-pickup` if continuing existing work
+   - Run `/haiku:haiku-start` if starting new work
 
 3. **Announce your hat**
    - Explicitly state which hat you're wearing
@@ -52,7 +52,7 @@ This guide covers the day-to-day workflow of using H·AI·K·U. It assumes you'v
 You left off mid-unit or a colleague handed you an intent.
 
 ```
-/haiku:pickup
+/haiku:haiku-pickup
 ```
 
 This loads the intent and current unit state. Review what's been done:
@@ -68,7 +68,7 @@ Then continue from where work stopped.
 You have a new task with no existing intent.
 
 ```
-/haiku:start
+/haiku:haiku-start
 ```
 
 This enters elaboration to define the intent collaboratively:
@@ -92,7 +92,7 @@ Solution:
 /clear
 ```
 
-Then `/haiku:pickup` to reload from committed state. The hat system ensures your progress is captured in files, not just context.
+Then `/haiku:haiku-pickup` to reload from committed state. The hat system ensures your progress is captured in files, not just context.
 
 ### Getting Stuck
 

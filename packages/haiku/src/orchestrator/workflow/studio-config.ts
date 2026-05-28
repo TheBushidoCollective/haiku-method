@@ -102,6 +102,21 @@ export interface ReviewAgentInclude {
 /** Per-stage configuration. */
 export interface StageConfig {
 	readonly name: string
+	/** What the stage produces, from STAGE.md `produces:`. `"build"` stages
+	 *  ship executable artifacts and require a `quality_gates:` field on every
+	 *  producing unit (enforced at `haiku_unit_write`); `"knowledge"` stages
+	 *  produce docs judged on substance/citation and carry no such requirement.
+	 *  Defaults to `"knowledge"` when absent — the lenient default, so only
+	 *  stages that explicitly opt in to `produces: build` change behavior. */
+	readonly produces: "build" | "knowledge"
+	/** Whether this stage is optional, from STAGE.md `optional:`. When
+	 *  `true`, the cursor offers a keep-or-drop decision the first time it
+	 *  arrives at the stage (before elaboration). Dropping removes the stage
+	 *  from `intent.stages` via haiku_drop_stage and the walk advances. Cross-
+	 *  stage references (inputs / review-agents-include) to a dropped stage
+	 *  are auto-ignored. Defaults to `false` — stages are mandatory unless they
+	 *  opt in. */
+	readonly optional: boolean
 	/** Hat sequence executed during the execute phase. The fix loop
 	 *  uses `fixHats` instead. */
 	readonly hats: readonly HatConfig[]
@@ -121,11 +136,10 @@ export interface StageConfig {
 	readonly gate: StageGate
 	/** Stage-level model default — falls through to studio default. */
 	readonly defaultModel?: ModelTier
-	/** Phase override bodies, when the stage ships custom
-	 *  ELABORATION.md / EXECUTION.md / REVIEW.md files. */
+	/** Stage elaboration guidance body, when the stage ships a custom
+	 *  ELABORATION.md — additive prompt content spliced into the elaborate
+	 *  prompt, not an engine phase override. */
 	readonly elaborationOverride?: string
-	readonly executionOverride?: string
-	readonly reviewOverride?: string
 	/** Discovery templates — one subagent per template fan-out during
 	 *  the elaborate phase. */
 	readonly discoveryTemplates: readonly DiscoveryTemplateConfig[]
@@ -147,6 +161,11 @@ export interface StudioConfig {
 	readonly dir: string
 	/** Studio description from STUDIO.md frontmatter. */
 	readonly description: string
+	/** Whether this studio is deprecated, from STUDIO.md `deprecated:`.
+	 *  Deprecated studios are hidden from new-intent pickers/lists but still
+	 *  resolve by name so in-flight intents on them keep working. Defaults to
+	 *  `false`. Deprecate — never delete — a retired studio. */
+	readonly deprecated: boolean
 	/** Default ordered list of stages (intent.md `stages:` can
 	 *  override per-intent). */
 	readonly defaultStages: readonly string[]

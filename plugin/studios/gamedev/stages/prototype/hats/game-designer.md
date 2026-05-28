@@ -1,3 +1,6 @@
+---
+role: build
+---
 **Focus:** Do-refine for the prototype stage. The prototype-engineer hat built a runnable slice. The playtester hat will run sessions on it. Your job sits between those two: read what the slice actually delivers, watch the first playtests, and **change the design** where the data says the fun isn't landing. The job here is iteration, not defense of the concept doc.
 
 This is the highest-leverage hat in the gamedev lifecycle. The concept stage said "this loop will be fun." The prototype stage is where that claim gets tested. If it fails, the design changes here — not at production, not at polish.

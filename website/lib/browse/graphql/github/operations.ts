@@ -55,6 +55,7 @@ export const GitHubGetIntentQuery = graphql`
     $owner: String!
     $name: String!
     $intentExpr: String!
+    $intentTreeExpr: String!
     $stagesExpr: String!
     $knowledgeExpr: String!
     $operationsExpr: String!
@@ -64,6 +65,22 @@ export const GitHubGetIntentQuery = graphql`
       intentFile: object(expression: $intentExpr) {
         ... on Blob {
           text
+        }
+      }
+      intentTree: object(expression: $intentTreeExpr) {
+        ... on Tree {
+          entries {
+            name
+            type
+            object {
+              ... on Tree {
+                entries {
+                  name
+                  type
+                }
+              }
+            }
+          }
         }
       }
       stagesTree: object(expression: $stagesExpr) {

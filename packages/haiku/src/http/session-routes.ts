@@ -25,12 +25,14 @@ import {
 } from "haiku-api"
 import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
 import { broadcastIntent } from "../intent-broadcaster.js"
+import { closeMicroApp } from "../micro-app.js"
 import {
 	buildApprovalRecord,
 	buildReviewRecord,
 } from "../orchestrator/workflow/sign-slot.js"
 import {
 	type DirectionSelection,
+	deleteSession,
 	getSession,
 	type QuestionAnnotations,
 	type QuestionAnswer,
@@ -53,10 +55,12 @@ import {
 	timestamp,
 	writeJson,
 } from "../state-tools.js"
+import { clearE2EKey, closeTunnel, isRemoteReviewEnabled } from "../tunnel.js"
 import { logFeedbackAction } from "./action-log.js"
 import { requireTunnelAuth } from "./auth.js"
 import { respondSessionApi } from "./session-api.js"
 import { parseBodyWithSchema } from "./validation.js"
+import { closeSessionConnection } from "./ws.js"
 
 export function registerSessionRoutes(instance: FastifyInstance): void {
 	// ── SPA shell routes (no auth; token lives in URL fragment) ────────
@@ -96,6 +100,24 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 		},
 	)
 
+	// View session — SPA artifact-browser entry. Same single-page-app
+	// shell as /review and /question; the SPA's route resolver reads
+	// the session id from the URL path and `stage` / `artifact` query
+	// params (set by haiku_view) at mount. Runtime-verifier review
+	// agents (or any other consumer that wants to point Playwright at
+	// an intent's outputs) hit this URL after calling haiku_view.
+	instance.get<{ Params: { sessionId: string } }>(
+		"/view/:sessionId",
+		async (req, reply) => {
+			const session = getSession(req.params.sessionId)
+			if (!session || session.session_type !== "view") {
+				reply.status(404).send("Session not found")
+				return
+			}
+			reply.type("text/html; charset=utf-8").send(HAIKU_UI_HTML)
+		},
+	)
+
 	// ── Review decide / question answer / direction select ─────────────
 	instance.post<{
 		Params: { sessionId: string }
@@ -116,7 +138,28 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			parsed.data.decision === "approved" ? "approved" : "changes_requested"
 		const feedback = parsed.data.feedback ?? ""
 		const annotations = parsed.data.annotations as ReviewAnnotations | undefined
-		// Live-session model: queue the decision into pending_decision
+		const payload: ReviewDecisionResponse = { ok: true, decision, feedback }
+
+		// Ad-hoc panes (/haiku:haiku-show) are non-blocking — the tool
+		// returned the moment the pane opened, so there's no awaiter to
+		// drain a queued decision. The user just clicked Done / Request
+		// Changes; acknowledge and reap the session right away so it
+		// doesn't linger until the 4h TTL. Any feedback they left is
+		// already persisted as FB files on disk and the next
+		// `haiku_run_next` routes it through the normal fix-loop — none of
+		// it depends on this session surviving.
+		if (session.ad_hoc) {
+			reply.send(payload)
+			closeSessionConnection(req.params.sessionId, "ad-hoc review closed")
+			if (isRemoteReviewEnabled()) {
+				clearE2EKey(req.params.sessionId)
+				closeTunnel()
+			}
+			deleteSession(req.params.sessionId)
+			return
+		}
+
+		// Gate-bound review: queue the decision into pending_decision
 		// rather than terminally setting status="decided". This is what
 		// awaitGateReviewSession drains on entry / on each wake. Mirrors
 		// the WS `decide` handler in http/ws.ts so HTTP and WebSocket
@@ -138,8 +181,19 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				queued: true,
 			})
 		}
-		const payload: ReviewDecisionResponse = { ok: true, decision, feedback }
 		reply.send(payload)
+		// Close the micro-app window NOW. The decision is durably queued in
+		// `pending_decision` — the agent's `haiku_await_gate` drains it from
+		// session state on its next wake regardless of whether the window is
+		// open. Previously the window only closed when that await later
+		// resolved and ran `closeSessionConnection`, so Approve felt like it
+		// did nothing (the window lingered until the agent happened to wake).
+		// We close ONLY the window (not the session/WS) so the awaiter still
+		// finds the queued decision; the later `closeSessionConnection` →
+		// `closeMicroApp` is then an idempotent no-op. Applies to both
+		// approved and changes_requested — either way the review round is
+		// submitted and this window's job is done.
+		closeMicroApp(req.params.sessionId)
 	})
 
 	instance.post<{

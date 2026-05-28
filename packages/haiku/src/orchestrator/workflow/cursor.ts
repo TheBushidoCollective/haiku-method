@@ -15,7 +15,10 @@
 // No side effects. Anyone can call run_next; same disk → same answer.
 //
 // Track priority:
-//   1. Track C — drift sweep. Any drift event → drift_detected.
+//   1. Track C — drift sweep. Engine-internal: events are restamped
+//      and (deduped) FBs are filed by `engineHandleDriftEvents`. No
+//      agent-facing action emitted; control falls through to Track B
+//      so the just-filed FBs get dispatched the same tick.
 //   2. Track B — feedback. Any open FB → feedback-cycle action.
 //   3. Track A — intent. Walk stages in order; return first non-null
 //      action.
@@ -48,20 +51,40 @@
 //                 gate, no agent gates, merge_stage auto-fires once
 //                 quality_gates is signed
 
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import matter from "gray-matter"
-import { findHaikuRoot, MAX_FIX_LOOP_BOLTS } from "../../state-tools.js"
+import {
+	feedbackSeverityRank,
+	isFixBlockingSeverity,
+} from "../../state/schemas/index.js"
+import {
+	findHaikuRoot,
+	MAX_CONCURRENT_SUBAGENTS,
+	MAX_FIX_LOOP_BOLTS,
+} from "../../state-tools.js"
 import {
 	readReviewAgentPaths,
 	readStageArtifactDefs,
+	readStudioReviewAgentPaths,
 } from "../../studio-reader.js"
+import { RUNTIME_OBSERVATION_ROLES } from "../review-role-classes.js"
 import {
+	computeStageDependents,
 	resolveIntentStages,
 	resolveStageFixHats,
 	resolveStageHats,
+	resolveStageOptional,
+	resolveStudioFixHats,
 } from "../studio.js"
-import { type DriftEvent, runDriftSweep } from "./drift-sweep.js"
+import { engineHandleDriftEvents } from "./drift-handle-events.js"
+import { runDriftSweep } from "./drift-sweep.js"
+
+// Roles that dispatch as serial sequential gates (one per tick).
+// Everything else (continuity, cross-stage-consistency, studio agents)
+// batches into a single parallel dispatch. Mirrors
+// DISTINCT_MILESTONE_ROLES in progress-milestones.ts.
+const SERIAL_REVIEW_ROLES = new Set(["spec", "quality_gates", "user"])
 
 // ── CursorAction discriminated union ─────────────────────────────────
 
@@ -88,7 +111,6 @@ export type ElaborateLoopSignal =
 	| { signal: "verify_decompose" }
 
 export type CursorAction =
-	| { kind: "drift_detected"; events: DriftEvent[] }
 	// design_direction_* and clarify_required cursor actions deleted
 	// 2026-05-08: collapsed into the discovery-agent model. Studios
 	// now declare a discovery template with `tool:` (e.g., the
@@ -135,6 +157,20 @@ export type CursorAction =
 			kind: "elaborate_loop"
 			stage?: string
 			signals_unmet: ReadonlyArray<ElaborateLoopSignal>
+			// Set on the FIRST arrival at an OPTIONAL stage (no elaboration,
+			// no units): the elaborate prompt leads with a keep-or-drop offer.
+			// Dropping calls haiku_drop_stage; keeping just proceeds to
+			// elaborate (which is one-shot — once elaboration starts, the
+			// offer condition is false and never re-fires).
+			optional_offer?: boolean
+			// Downstream in-plan stages whose inputs / review-agents-include
+			// reference this stage — surfaced so the drop decision sees what
+			// it severs (those references auto-ignore once the stage drops).
+			dependents?: ReadonlyArray<{
+				stage: string
+				inputs: string[]
+				reviewAgents: string[]
+			}>
 	  }
 	| {
 			kind: "start_unit_hat"
@@ -145,10 +181,40 @@ export type CursorAction =
 	  }
 	| {
 			kind: "start_feedback_hat"
-			stage: string
-			hat: string
-			feedback_ids: string[]
-			terminal: boolean
+			/** Per-FB dispatch entries. Each entry carries its own
+			 *  (stage, hat, terminal) so the batch is heterogeneous:
+			 *  different stages, different hat positions in their
+			 *  respective fix_hats sequences, different terminal flags.
+			 *  The main agent spawns one subagent per entry in a single
+			 *  parallel Task batch.
+			 *
+			 *  Batch width: deduped by `feedback_id` (a numbering
+			 *  collision must never double-dispatch one FB), then capped
+			 *  at `MAX_CONCURRENT_SUBAGENTS` — this is the fix-loop's pool
+			 *  width. As each chain closes, `pickUndispatchedFbBlock`
+			 *  (terminal-advance slot replenishment) refills the freed
+			 *  slot with the next undispatched FB. There is NO target_unit
+			 *  dedup: same-unit chains run concurrently (the published
+			 *  fix-loop contract accepts clobber-and-retry; the only
+			 *  shared write, `applyFeedbackInvalidations`, is synchronous
+			 *  and the dispatch claim is taken under
+			 *  `withIntentDispatchLock`). */
+			dispatches: Array<{
+				feedback_id: string
+				stage: string
+				hat: string
+				terminal: boolean
+			}>
+			/** Legacy aliases mirroring `dispatches[0]`. Pre-2026-05-18 the
+			 *  action shape was `{ stage, hat, feedback_ids, terminal }`
+			 *  for a single FB; these fields are populated as convenience
+			 *  shadows so callers that read the top-level shape keep
+			 *  working while the batched `dispatches[]` is the canonical
+			 *  source. Empty / unset on batches with zero entries. */
+			stage?: string
+			hat?: string
+			feedback_ids?: string[]
+			terminal?: boolean
 	  }
 	// `feedback_question` is a Track-B preempt for open FBs that carry
 	// `resolution: "question"`. These FBs are user-decidable forks the
@@ -171,12 +237,20 @@ export type CursorAction =
 	| {
 			kind: "dispatch_review"
 			stage: string
+			/** Per-role dispatch entries. Adversarial roles (continuity,
+			 *  cross-stage-consistency, studio agents) batch into one action
+			 *  so the parent spawns them in parallel. Serial gates (spec,
+			 *  user) emit a single-element array. */
+			dispatches: Array<{ role: string; units: string[] }>
+			/** Backward-compat alias: first dispatch's role. */
 			role: string
+			/** Backward-compat alias: first dispatch's units. */
 			units: string[]
 	  }
 	| {
 			kind: "dispatch_approval"
 			stage: string
+			dispatches: Array<{ role: string; units: string[] }>
 			role: string
 			units: string[]
 	  }
@@ -201,7 +275,43 @@ export type CursorAction =
 	  }
 	| { kind: "close_feedback"; stage: string; feedback_id: string }
 	| { kind: "complete_stage"; stage: string }
-	| { kind: "intent_review"; role: string }
+	// Reflection observations (2026-05-18) — fires once per stage,
+	// after every approval is signed but before complete_stage
+	// advances. The agent writes a free-form observations.md
+	// describing where it struggled with mandates, what was
+	// ambiguous, and what surprised it. The file is committed with
+	// the stage merge so the per-intent reflection pass at intent
+	// close sees the full signal across stages.
+	| { kind: "record_observations"; stage: string }
+	// User-facing stage BRIEF (2026-05-22) — fires once per stage in the
+	// PRE-execute review walk, after the adversarial reviews sign off on the
+	// spec and BEFORE the review user gate. A dedicated briefer subagent
+	// reads the planned units + intent + inputs + knowledge and writes a
+	// human-readable `BRIEF.md`; it's the first thing the user sees when the
+	// gate opens, a persistent repo artifact, and a website-browse surface.
+	// User-facing only — the focused work agents never read it. Forward-only
+	// (see `stageOwesBrief`): never interrupts a stage already executing.
+	| { kind: "write_brief"; stage: string }
+	// `role` is the lead role (back-compat / single-role shadow); `dispatches`
+	// carries the full parallel batch when >1 (the adversarial fan-out — same
+	// shape as `dispatch_review`). `spec` and `user` dispatch single (serial).
+	| {
+			kind: "intent_review"
+			role: string
+			dispatches?: Array<{ role: string }>
+	  }
+	// Reflection (2026-05-19) — fires once at intent close, after
+	// every intent-scope approval is signed but before seal_intent.
+	// The agent reads every stage's observations.md + the FB stream
+	// + unit iterations/outputs, writes a synthesized
+	// `reflection.md` at intent root, writes proposed project
+	// overlays directly to `.haiku/...` for override-class findings,
+	// and calls `haiku_report` (with the `[autotune engine-class]`
+	// prefix convention) for engine-class findings. Every change
+	// commits with an `autotune:` prefixed message so PR review
+	// catches the provenance. Idempotent — skipped when
+	// `reflection.md` already exists for this intent.
+	| { kind: "record_reflection" }
 	| { kind: "seal_intent" }
 	| { kind: "sealed" }
 	// Pre-dispatch validation — refuse to fire `start_unit_hat` when
@@ -258,6 +368,15 @@ type Iteration = {
 	// iteration shape on disk.
 	result: "advance" | "reject" | "advanced" | "closed" | "rejected" | null
 	reason?: string | null
+	// Dispatch lease. Stamped on the OPEN iter (result === null) when its
+	// hat is dispatched (run_next start_unit_hat emit, or the mid-chain relay
+	// in computeUnitRelayBlock). A live lease means "a subagent is running
+	// this hat right now" — the `needNextHat` clause skips it so a mid-wave
+	// run_next doesn't re-dispatch an in-flight unit (the double-dispatch in
+	// the unit-015-class report). advance/reject open a FRESH leaseless iter,
+	// so the lease clears itself; an open iter with NO dispatched_at is a
+	// fresh pre-open or first-hat → eligible for dispatch (crash recovery).
+	dispatched_at?: string | null
 }
 
 // Approval slot shapes the cursor accepts as "stamped":
@@ -269,7 +388,95 @@ type Iteration = {
 //   - null — no stamp.
 type ApprovalRecord = { at: string; migrated?: boolean } | boolean | null
 
-function readFm(path: string): { data: UnitFm; body: string } | null {
+/** Stamp / clear the drift cascade alarm on intent.md FM. Called from
+ *  the cursor's pre-tick drift handler when the open-FB count crosses
+ *  the cascade threshold. The flag is read by the run_next response
+ *  enrichment in `preview.ts` so the agent sees a "consider
+ *  /haiku:haiku-repair — drift baseline may be stale" recommendation. The
+ *  flag self-heals: it's stamped on trip AND cleared when the count
+ *  drops below threshold on a subsequent tick. */
+function stampDriftCascadeAlarm(args: {
+	intentDir: string
+	stage: string
+	tripped: boolean
+}): void {
+	const intentMdPath = join(args.intentDir, "intent.md")
+	if (!existsSync(intentMdPath)) return
+	try {
+		const raw = readFileSync(intentMdPath, "utf8")
+		const parsed = matter(raw)
+		const fm = parsed.data as Record<string, unknown>
+		const key = "drift_cascade_alarm"
+		const stage = args.stage
+		const existing = fm[key]
+		const alarmMap =
+			existing && typeof existing === "object" && !Array.isArray(existing)
+				? { ...(existing as Record<string, unknown>) }
+				: {}
+		const prev = alarmMap[stage]
+		if (args.tripped) {
+			if (prev !== true) {
+				alarmMap[stage] = true
+				fm[key] = alarmMap
+				writeFileSync(intentMdPath, matter.stringify(parsed.content, fm))
+			}
+		} else if (prev === true) {
+			delete alarmMap[stage]
+			if (Object.keys(alarmMap).length === 0) {
+				delete fm[key]
+			} else {
+				fm[key] = alarmMap
+			}
+			writeFileSync(intentMdPath, matter.stringify(parsed.content, fm))
+		}
+	} catch {
+		/* swallow — alarm is advisory; a write failure shouldn't block
+		 * the tick. The next tick will re-attempt. */
+	}
+}
+
+/**
+ * Whether the reflection loop is enabled for the given intent. ON by
+ * default (2026-05-19); read `reflection: false` off intent.md FM
+ * to disable. The opt-out is for legacy intents and the e2e test
+ * suites whose fixtures predate the reflection cursor walk shape;
+ * new intents inherit the default-on behavior.
+ *
+ * Backwards compat: a `autotune: false` field from the brief
+ * 2026-05-18 window where this flag was named "autotune" still
+ * counts as opt-out.
+ */
+export function isReflectionEnabled(intentDir: string): boolean {
+	const intentMdPath = join(intentDir, "intent.md")
+	if (!existsSync(intentMdPath)) return true
+	try {
+		const raw = readFileSync(intentMdPath, "utf8")
+		const parsed = matter(raw)
+		const fm = parsed.data as { reflection?: unknown; autotune?: unknown }
+		if (fm.reflection === false) return false
+		if (fm.autotune === false) return false
+		return true
+	} catch {
+		return true
+	}
+}
+
+/** The per-stage user-facing BRIEF is ON by default; opt out per intent
+ *  with `brief: false` on intent.md frontmatter. Mirrors
+ *  `isReflectionEnabled`. */
+export function isBriefEnabled(intentDir: string): boolean {
+	const intentMdPath = join(intentDir, "intent.md")
+	if (!existsSync(intentMdPath)) return true
+	try {
+		const raw = readFileSync(intentMdPath, "utf8")
+		const fm = matter(raw).data as { brief?: unknown }
+		return fm.brief !== false
+	} catch {
+		return true
+	}
+}
+
+export function readFm(path: string): { data: UnitFm; body: string } | null {
 	if (!existsSync(path)) return null
 	try {
 		const raw = readFileSync(path, "utf8")
@@ -278,6 +485,62 @@ function readFm(path: string): { data: UnitFm; body: string } | null {
 	} catch {
 		return null
 	}
+}
+
+/**
+ * Terminal-state predicate for FB frontmatter. Returns true when the FB
+ * is in any terminal lifecycle state — closure or rejection — and must
+ * NEVER be re-dispatched by the fix-hat walker. Any one signal is
+ * sufficient:
+ *
+ *   - `closed_at` is truthy (string OR Date — gray-matter parses
+ *     unquoted ISO timestamps as Date objects, and earlier versions
+ *     of this guard checked `typeof === "string"` which let Date-typed
+ *     closures slip through and triggered the infinite re-dispatch
+ *     loop reported 2026-05-18 in `haiku-bug-fb-cursor-stuck`)
+ *   - `rejected_at` is truthy (same Date/string handling — caught the
+ *     `haiku-bug-fb111-stuck-loop` regression 2026-05-18 where a
+ *     terminal-rejected FB kept getting re-dispatched because the
+ *     classifier had nothing left to do and both `advance_hat` and
+ *     `reject_hat` returned `lifecycle_violation` against terminal
+ *     status, leaving the cursor with no on-disk progress to read)
+ *   - `status === "closed"` OR `status === "rejected"` (legacy explicit
+ *     fields; many on-disk FBs still carry one of these even after
+ *     `closed_at` / `rejected_at` write paths landed)
+ *   - `closed_by` is set with a `fix-loop:*` prefix (the terminal
+ *     advance_hat write — paired with closed_at but checked
+ *     independently as a belt-and-suspenders against partial writes)
+ *
+ * Renamed from `isFbClosed` on 2026-05-18 — closure was always a
+ * proxy for "terminal," and conflating the two left rejected FBs in
+ * the dispatch queue forever.
+ */
+function isFbTerminal(fm: UnitFm | FbFm): boolean {
+	if (fm.closed_at) {
+		// Truthy covers string + Date + any non-empty value. Empty
+		// string and null fall through to the other signals.
+		if (fm.closed_at instanceof Date) return true
+		if (typeof fm.closed_at === "string" && fm.closed_at.length > 0) return true
+	}
+	// Same Date/string handling for the rejection timestamp. v4 FB
+	// derivation treats `rejected_at` as the highest-priority terminal
+	// signal (deriveFeedbackStatus signal 1 in state-tools.ts) — the
+	// cursor must agree.
+	const rejectedAt = (fm as Record<string, unknown>).rejected_at
+	if (rejectedAt) {
+		if (rejectedAt instanceof Date) return true
+		if (typeof rejectedAt === "string" && rejectedAt.length > 0) return true
+	}
+	if (typeof fm.status === "string") {
+		if (fm.status === "closed" || fm.status === "rejected") return true
+	}
+	if (
+		typeof fm.closed_by === "string" &&
+		fm.closed_by.startsWith("fix-loop:")
+	) {
+		return true
+	}
+	return false
 }
 
 // readClarifyQuestions deleted 2026-05-08 along with the
@@ -302,11 +565,11 @@ function pickReviews(fm: UnitFm): Record<string, ApprovalRecord> {
 	return r as Record<string, ApprovalRecord>
 }
 
-function unitName(unitPath: string): string {
+export function unitName(unitPath: string): string {
 	return basename(unitPath).replace(/\.md$/, "")
 }
 
-function listUnitPaths(stageDir: string): string[] {
+export function listUnitPaths(stageDir: string): string[] {
 	const dir = join(stageDir, "units")
 	if (!existsSync(dir)) return []
 	return readdirSync(dir, { withFileTypes: true })
@@ -476,6 +739,14 @@ function approvalRolesFor(
 	mode: string,
 ): string[] {
 	const reviewAgents = Object.keys(readReviewAgentPaths(studio, stage)).sort()
+	// `isUnitComplete` / `findCurrentStage` use this list to decide
+	// whether a unit is past. Engine-built `continuity` and
+	// `cross-stage-consistency` are NOT included here — they're
+	// auto-managed by the cursor's per-tick dispatch loop and not
+	// load-bearing for the "is this unit eligible to be considered
+	// done" check. Including them here would make every unit "incomplete"
+	// until the cursor stamps the auto-managed roles, which is what the
+	// dispatch loop does — circular. Keep this list narrow.
 	return mode === "autopilot"
 		? ["spec", "quality_gates"]
 		: ["spec", "quality_gates", ...reviewAgents, "user"]
@@ -622,6 +893,16 @@ function areStageUnitsComplete(
  * Is this stage complete? Currently equivalent to "all units complete";
  * elaboration / discovery / merge state are handled by the per-stage
  * walk (`walkIntentTrack`), not by the active-stage selector.
+ *
+ * Deliberately units-only. It must NOT factor in observations.md:
+ * `findCurrentStage` drives off this predicate, so any clause that read
+ * false for an already-completed stage would rewind the cursor to it —
+ * and for every legacy intent whose merged stages predate the
+ * observations file, that's a full-pipeline rewind. The observations
+ * milestone is instead enforced at the stage MERGE moment (see
+ * `stageOwesObservations`, consulted in run_next's complete_stage path),
+ * which fires only for the frontier stage that's actively completing —
+ * never retroactively. (2026-05-20.)
  */
 export function isStageComplete(
 	intentDir: string,
@@ -630,6 +911,50 @@ export function isStageComplete(
 	mode: string,
 ): boolean {
 	return areStageUnitsComplete(intentDir, studio, stage, mode)
+}
+
+/**
+ * Does this stage still owe its free-form `observations.md` before it can
+ * merge? True only when reflection is enabled and the file is absent.
+ *
+ * The forward-only observations gate. Callers consult it at the moment a
+ * stage is about to complete/merge — the cursor has already produced
+ * `complete_stage` for the frontier stage — so it can never pull an
+ * already-merged stage backwards. Keeping it OUT of `isStageComplete` is
+ * what prevents the whole-pipeline rewind a reflection-aware completeness
+ * predicate would cause on legacy intents.
+ */
+export function stageOwesObservations(
+	intentDir: string,
+	stage: string,
+): boolean {
+	if (!isReflectionEnabled(intentDir)) return false
+	return !existsSync(join(intentDir, "stages", stage, "observations.md"))
+}
+
+/**
+ * Does this stage still owe its user-facing `BRIEF.md` before the
+ * pre-execute review gate? The brief summarizes the planned work (units,
+ * intent, inputs, knowledge) for the human reviewing the spec before any
+ * code lands. It fires in the review walk AFTER the adversarial reviews and
+ * BEFORE the review user gate.
+ *
+ * Forward-only — exactly like `stageOwesObservations`, it must never pull a
+ * stage backwards. The brief window is "reviews signed, execution not yet
+ * started": `anyUnitStarted` short-circuits it so a stage already mid-execute
+ * (or any legacy/in-flight intent that started building before this feature
+ * shipped) is never interrupted to write a brief. A fresh stage hits this
+ * window once, between review sign-off and the first hat dispatch.
+ */
+export function stageOwesBrief(
+	intentDir: string,
+	stage: string,
+	anyUnitStarted: boolean,
+): boolean {
+	if (!isBriefEnabled(intentDir)) return false
+	if (existsSync(join(intentDir, "stages", stage, "BRIEF.md"))) return false
+	if (anyUnitStarted) return false
+	return true
 }
 
 /**
@@ -682,12 +1007,13 @@ export function findCurrentStage(
 
 	const intentMdPath = join(resolvedIntentDir, "intent.md")
 	const intentFm = readFm(intentMdPath)?.data ?? {}
-	// Use the intent's effective stage list — intersection of studio
-	// stages with `intent.stages` (if set) minus `intent.skip_stages`.
-	// Walking the full studio list would surface stages the intent
-	// explicitly opted out of (e.g. a `/haiku:quick` intent that
-	// declared only [inception, design, product] in a 6-stage software
-	// studio would otherwise loop trying to elaborate `development`).
+	// Use the intent's canonical materialized stage plan (`intent.stages`).
+	// The studio's `stages:` is the superset template; the intent owns the
+	// live list, with any dropped optional stages already removed. Walking
+	// the full studio list would surface stages the intent dropped (e.g. a
+	// `/haiku:haiku-quick` intent that declared only [inception, design,
+	// product] in a 6-stage software studio would otherwise loop trying to
+	// elaborate `development`).
 	const stages = resolveIntentStages(intentFm, studio)
 	if (stages.length === 0) return null
 	const mode =
@@ -712,7 +1038,7 @@ function walkFeedbackTrack(args: {
 	// Walk feedback in stage order: every prior stage's open FBs come
 	// before the current stage's open FBs come before intent-scope.
 	// Use intent-effective stages so an intent scoped to a subset of the
-	// studio's stages (e.g. `/haiku:quick` restricting to 3 stages in a
+	// studio's stages (e.g. `/haiku:haiku-quick` restricting to 3 stages in a
 	// 6-stage studio) doesn't surface FBs from stages the intent opted
 	// out of.
 	const stages = resolveIntentStages(intent, studio)
@@ -726,25 +1052,227 @@ function walkFeedbackTrack(args: {
 	// intent-scope FBs below.
 	const toWalk = cutoff >= 0 ? stages.slice(0, cutoff + 1) : []
 
+	// Collect EVERY open FB whose next action is a fix-hat dispatch,
+	// then batch them into a single `start_feedback_hat` carrying N
+	// heterogeneous dispatches. Non-dispatch actions (close_feedback,
+	// feedback_question, user_gate) preempt as singletons — they're
+	// terminal cursor moves that need their own tick to fully resolve
+	// before the next batch.
+	type FbDispatch = {
+		feedback_id: string
+		stage: string
+		hat: string
+		terminal: boolean
+		// Finding urgency — drives dispatch order (blocker first). Read
+		// from the FB's frontmatter; null/absent for not-yet-classified
+		// findings, which rank alongside `medium`.
+		severity: string | null
+		// True when the FB already has an open fix-chain (≥1 iteration).
+		// In-flight chains always continue (finish what you started); only
+		// the START of a NEW chain is severity-threshold-gated.
+		inFlight: boolean
+	}
+	const dispatches: FbDispatch[] = []
+
+	const collect = (stage: string, fbPath: string): CursorAction | null => {
+		const action = nextActionForFeedback(stage, fbPath, studio)
+		if (!action) return null
+		if (action.kind !== "start_feedback_hat") {
+			// Non-dispatch action — return immediately, can't be batched.
+			return action
+		}
+		const fbFm = readFm(fbPath)?.data as Record<string, unknown> | undefined
+		const fbSeverity = (fbFm?.severity as string | undefined) ?? null
+		const fbInFlight = Array.isArray(fbFm?.iterations)
+			? (fbFm.iterations as unknown[]).length > 0
+			: false
+		// Pull the single FB ID out of the action's dispatches array
+		// (nextActionForFeedback always returns a single-entry array).
+		const entry = action.dispatches[0]
+		if (!entry) return null
+		dispatches.push({ ...entry, severity: fbSeverity, inFlight: fbInFlight })
+		return null
+	}
+
 	for (const stage of toWalk) {
 		const fbPaths = listFbPaths(join(intentDir, "stages", stage))
 		for (const fbPath of fbPaths) {
-			const action = nextActionForFeedback(stage, fbPath, studio)
-			if (action) return action
+			const preempt = collect(stage, fbPath)
+			if (preempt) return preempt
 		}
 	}
-	// Intent-scope feedback last.
 	const intentFbPaths = listFbPaths(intentDir)
 	for (const fbPath of intentFbPaths) {
-		// For intent-scope FBs we still walk fix_hats from the
-		// originating stage if it's listed in targets.unit's path; for
-		// truly scope-less intent-FBs we'd need an intent-level
-		// fix_hats list. Defer; treat as the current stage's fix_hats
-		// for now.
-		const action = nextActionForFeedback(currentStage, fbPath, studio)
-		if (action) return action
+		// Intent-scope FBs (originating from intent_review / studio-level
+		// reviewers like cross-stage-consistency) route through the
+		// studio's `fix_hats:` chain, NOT the current stage's. Pre-2026-
+		// 05-19 the cursor passed `currentStage` here, which made the
+		// classifier subagent read `{stage: currentStage, feedback_id: N}`
+		// — but the FB lives at intent scope, so the read returned
+		// not-found and the subagent terminated without closure → infinite
+		// re-dispatch loop. Pass empty stage so `nextActionForFeedback`
+		// resolves studio fix-hats and the prompt builder's
+		// `if (d.stage)` gate uses the intent-scope code paths.
+		const preempt = collect("", fbPath)
+		if (preempt) return preempt
 	}
-	return null
+
+	if (dispatches.length === 0) return null
+
+	// Dedup by feedback_id (fixloop-bug-f4dd5a92 Bug 3). Two dispatch
+	// entries for the SAME FB-NN must never both fire — they'd spawn two
+	// subagents racing on one feedback body's read-modify-write. This
+	// happens when two files in a feedback dir share the same numeric
+	// prefix (a numbering collision from create/move), so
+	// `nextActionForFeedback` derives the same `FB-NN` for both.
+	//
+	// NO target_unit dedup. Pre-2026-05-21 this batch held at most ONE
+	// FB per `targets.unit` per tick, on the theory that two same-unit
+	// closures race on the close hook's `applyFeedbackInvalidations` FM
+	// write. That dedup was both harmful and ineffective:
+	//   - Harmful: it capped the INITIAL fix-loop pool width at the
+	//     distinct-unit count. When adversarial review clusters many
+	//     findings on a few units (the common case for a stage with few
+	//     units), the pool opened at 1-2 chains and the replenishment
+	//     path held it there — the "only 1-2 agents run" symptom.
+	//   - Ineffective: the slot-replenishment path
+	//     (`pickUndispatchedFbBlock` in state-tools.ts) refills a freed
+	//     slot with the next undispatched FB IGNORING target_unit, so
+	//     same-unit chains already ran concurrently the moment any chain
+	//     closed. The dedup never delivered the serialization it claimed.
+	// The real protection is structural, not a cursor-side dedup:
+	//   1. `applyFeedbackInvalidations` is a single SYNCHRONOUS function
+	//      (readFileSync → setFrontmatterField, no await between), so the
+	//      MCP server — which runs one tool handler at a time — cannot
+	//      interleave two calls' read-modify-write on a unit's FM.
+	//   2. Dispatch claims stamp under `withIntentDispatchLock`, so two
+	//      concurrent terminal advances can't double-claim a slot.
+	//   3. The published fix-loop contract
+	//      (`_shared/workflow-contracts-fix-loop.md`) explicitly accepts
+	//      concurrent same-artifact chains: "a chain whose fix was
+	//      clobbered by another chain will leave its finding open, and
+	//      the next bolt will retry. Budget is spent, not lost."
+	const seenFbIds = new Set<string>()
+	const batch: FbDispatch[] = []
+	for (const d of dispatches) {
+		if (seenFbIds.has(d.feedback_id)) continue // never double-dispatch one FB
+		seenFbIds.add(d.feedback_id)
+		batch.push(d)
+	}
+
+	// Final defensive re-check against the on-disk state, mirroring the
+	// prompt builder's filter in `start_feedback_hat/index.ts` so the
+	// action JSON and the agent-facing prompt agree about which FBs are
+	// being dispatched. Without this, a closed FB's dispatch entry can
+	// survive into the action JSON (e.g. the FB lives at intent scope
+	// but `d.stage` was assigned the current stage) while the prompt
+	// builder reads the matching stage-scope file and drops it, leaving
+	// the agent staring at "no FBs, retick" forever. Reported
+	// 2026-05-19 (haiku-bug-report-2026-05-19: stuck loop on closed
+	// FB-001 after uncommitted closure metadata + pre-cursor-sync
+	// conflict). Reading the FB file by both the dispatch's declared
+	// stage AND the intent-scope path so we catch the mismatched-scope
+	// case too.
+	const verifiedBatch: FbDispatch[] = []
+	for (const d of batch) {
+		const fbInt = Number.parseInt(d.feedback_id.replace(/^FB-/i, ""), 10)
+		const candidateDirs: string[] = []
+		if (d.stage) {
+			candidateDirs.push(join(intentDir, "stages", d.stage, "feedback"))
+		}
+		candidateDirs.push(join(intentDir, "feedback"))
+		let stillOpen = true
+		for (const dir of candidateDirs) {
+			if (!existsSync(dir)) continue
+			// Match the FB id EXACTLY by its leading integer — `startsWith`
+			// on the zero-padded prefix (e.g. "001") also matched "0010-…",
+			// and reading only `matches[0]` made the decision depend on
+			// readdir order. When a reused/duplicated id leaves two files
+			// for the same FB (one open, one closed — the title/body-mismatch
+			// state in the 2026-05-20 livelock report), `matches[0]` flapped:
+			// some ticks read the closed copy (skip) and some read the open
+			// copy (dispatch a CLOSED FB forever). Check EVERY file with this
+			// id and treat the FB as terminal if ANY is terminal — a closed
+			// FB-NN means NN is done, full stop, regardless of a stray
+			// duplicate. Order-independent and correct.
+			const matches = readdirSync(dir).filter((f) => {
+				if (!f.endsWith(".md")) return false
+				const m = /^(\d+)/.exec(f)
+				return m != null && Number.parseInt(m[1], 10) === fbInt
+			})
+			let anyTerminal = false
+			for (const f of matches) {
+				const fbFm = readFm(join(dir, f))?.data
+				if (fbFm && isFbTerminal(fbFm)) {
+					anyTerminal = true
+					break
+				}
+			}
+			if (anyTerminal) {
+				stillOpen = false
+				break
+			}
+		}
+		if (stillOpen) verifiedBatch.push(d)
+	}
+	if (verifiedBatch.length === 0) return null
+
+	// Severity-threshold activation gate. Only START a fix wave when at
+	// least one finding is BLOCKING (severity at/above
+	// HAIKU_FIX_SEVERITY_THRESHOLD, default `high`; unclassified always
+	// blocks so the classifier runs). A wave already in progress
+	// (`inFlight`) always continues — you finish chains you started. When
+	// neither holds, every open finding is a sub-threshold ride-along
+	// (e.g. a reviewer's stream of `low` nits) with nothing to ride: emit
+	// no wave, leave them open + advisory, and let Track A advance the
+	// stage. Once a blocker DOES force a wave open, the whole batch
+	// dispatches together (severity-ordered below), so the lows get swept
+	// in the same pass rather than spinning their own worktrees.
+	const waveActive = verifiedBatch.some(
+		(d) => d.inFlight || isFixBlockingSeverity(d.severity),
+	)
+	if (!waveActive) return null
+
+	// Severity-first ordering: dispatch the findings that matter most
+	// before the rest. A stable sort by severity rank (blocker < high <
+	// medium < low; unclassified ranks as medium) preserves the existing
+	// walk order (stage order, then readdir-sorted FBs, then intent
+	// scope) WITHIN each severity band, so re-ticks stay deterministic.
+	// `pickUndispatchedFbBlock` applies the same ranking when it refills a
+	// freed slot, so the whole queue drains highest-severity-first.
+	const rankedBatch = [...verifiedBatch].sort(
+		(a, b) =>
+			feedbackSeverityRank(a.severity) - feedbackSeverityRank(b.severity),
+	)
+
+	// Cap the initial pool width at MAX_CONCURRENT_SUBAGENTS. This is the
+	// fix-loop's true slot count: the parent spawns this many chains in
+	// one wave, and `pickUndispatchedFbBlock` (terminal-advance slot
+	// replenishment) refills each freed slot with the next undispatched
+	// FB until the queue drains. Without a cap a stage with dozens of
+	// open findings would spawn all of them at once; with it the pool
+	// runs at a steady width. Override via HAIKU_MAX_CONCURRENT_SUBAGENTS.
+	const pooledBatch = rankedBatch.slice(0, MAX_CONCURRENT_SUBAGENTS)
+
+	const first = pooledBatch[0]
+	return {
+		kind: "start_feedback_hat",
+		dispatches: pooledBatch.map((d) => ({
+			feedback_id: d.feedback_id,
+			stage: d.stage,
+			hat: d.hat,
+			terminal: d.terminal,
+		})),
+		// Legacy shadow fields — see CursorAction union docs. Mirror
+		// `dispatches[0]` so callers that only read top-level
+		// (`action.stage`, `action.hat`, etc.) see the first FB.
+		// Heterogeneous batches MUST read `dispatches[]` to act on more
+		// than the first entry.
+		stage: first?.stage ?? "",
+		hat: first?.hat ?? "",
+		feedback_ids: pooledBatch.map((d) => d.feedback_id),
+		terminal: first?.terminal ?? false,
+	}
 }
 
 function nextActionForFeedback(
@@ -755,8 +1283,14 @@ function nextActionForFeedback(
 	const result = readFm(fbPath)
 	if (!result) return null
 	const fm = result.data
-	if (typeof fm.closed_at === "string" && fm.closed_at.length > 0) {
-		// Closed — skip.
+	if (isFbTerminal(fm)) {
+		// Terminal (closed OR rejected) — skip. See `isFbTerminal` for
+		// the multi-signal terminal-state detection. Covers two
+		// 2026-05-18 regression classes: (1) unquoted-ISO `closed_at`
+		// parsed as Date that fell through a typeof check, and (2)
+		// manually-rejected FBs where both `advance_hat` and
+		// `reject_hat` return `lifecycle_violation` so the cursor sees
+		// no on-disk progress and re-dispatches forever.
 		return null
 	}
 	const fbId = parseFbIdFromFilename(fbPath)
@@ -804,10 +1338,50 @@ function nextActionForFeedback(
 			// continues; later FBs may still be dispatchable.
 			return null
 		}
+		// Stuck-reject escalation (2026-05-18 reported as
+		// haiku-fix-loop-bug: FB-111 in admin-portal-reimagine/design).
+		// When the reject chain bubbles to the first hat in fix_hats,
+		// `nextHatForUnit` re-dispatches the same first hat (idx=0
+		// branch — there's no prior hat to fall back to). Same input,
+		// same answer → same reject → infinite loop. The bolt counter
+		// increments slowly because the engine assigns a new bolt only
+		// on advance, not on every reject-then-redispatch, so the
+		// MAX_FIX_LOOP_BOLTS cap takes a long time to fire (the bug
+		// report shows bolts 3 and 4 still dispatching).
+		//
+		// Treat ≥2 immediately-consecutive `rejected` iterations on the
+		// SAME hat as terminal-stuck and refuse further dispatch. The FB
+		// stays open; the SPA flags it as escalated (same surface as the
+		// bolt-cap path); a human breaks the tie. Cosmetic drift FBs
+		// that the classifier can't validly classify drop out of the
+		// queue immediately instead of burning through three bolts.
+		if (iters.length >= 2) {
+			const last = iters[iters.length - 1]
+			const prev = iters[iters.length - 2]
+			const lastRejected =
+				last.result === "reject" || last.result === "rejected"
+			const prevRejected =
+				prev.result === "reject" || prev.result === "rejected"
+			if (lastRejected && prevRejected && last.hat === prev.hat) {
+				return null
+			}
+		}
 	}
-	const fixHats = resolveStageFixHats(studio, stage)
+	// Stage-scope FBs use the stage's `fix_hats:` chain. Intent-scope
+	// FBs (stage === "") use the studio-level `fix_hats:` chain from
+	// `STUDIO.md` frontmatter (or the alphabetical fallback over
+	// `studios/<studio>/fix-hats/`). Reported 2026-05-19: cross-stage-
+	// consistency intent-completion reviewer files FBs at intent scope;
+	// pre-fix the cursor was attributing them to the current stage's
+	// fix-hat chain, causing the dispatched classifier subagent to read
+	// the FB at stage-scope (where it doesn't exist) and bail without
+	// closure, looping forever.
+	const fixHats =
+		stage === ""
+			? resolveStudioFixHats(studio)
+			: resolveStageFixHats(studio, stage)
 	if (fixHats.length === 0) {
-		// Stage doesn't define a fix loop. The FB is unresolvable
+		// No fix-hat chain defined for this scope. The FB is unresolvable
 		// without manual intervention. Cursor surfaces it as a
 		// review-track signal so the user sees it.
 		return {
@@ -854,6 +1428,20 @@ function nextActionForFeedback(
 	}
 	return {
 		kind: "start_feedback_hat",
+		// Single-FB candidate from `nextActionForFeedback`. The caller
+		// (`walkFeedbackTrack`) collects these across every open FB, dedups
+		// by target_unit, and emits the final multi-FB batch action. We
+		// still return the structured shape so the caller can read
+		// (stage, hat, terminal) without re-deriving them.
+		dispatches: [
+			{
+				feedback_id: fbId,
+				stage,
+				hat: next.hat,
+				terminal: next.terminal,
+			},
+		],
+		// Legacy shadow fields — see CursorAction union docs.
 		stage,
 		hat: next.hat,
 		feedback_ids: [fbId],
@@ -909,13 +1497,35 @@ function walkIntentTrack(args: {
 	//   - discrete + continuous: full role lists. Discrete differs only
 	//                in HOW the user gate dispatches (MR open vs internal
 	//                pop) — handled at dispatch time, not in the role list.
-	const isAutopilot = mode === "autopilot"
-	const reviewRoles: string[] = isAutopilot
-		? ["spec"]
-		: ["spec", ...reviewAgents, "user"]
-	const approvalRoles: string[] = isAutopilot
-		? ["spec", "quality_gates"]
-		: ["spec", "quality_gates", ...reviewAgents, "user"]
+	// Stage-level walks. The two phases are now properly distinct:
+	//
+	// • reviewRoles  → PRE-execute. Audits the SPEC before any code
+	//   lands. Fires between elaborate_loop completion and wave-ready
+	//   hat dispatch. Per-unit `reviews.<role>` stamps. Engine-built-in
+	//   roles render mandate bodies from
+	//   `prompts/stage/review/dispatch_review/engine-bodies/<role>.eta.md`.
+	//
+	// • approvalRoles → POST-execute. Audits the WORK after every
+	//   unit's hat chain completes. Per-unit `approvals.<role>` stamps.
+	//   Engine-built-in roles render mandate bodies from
+	//   `prompts/stage/approve/dispatch_approval/engine-bodies/<role>.eta.md`.
+	//
+	// Engine-built-in roles (spec, continuity, cross-stage-consistency)
+	// fire in BOTH lists. The same check has cheap pre-execute prose
+	// (catch the planning failure before code lands) and a real
+	// post-execute prose (verify the built work matches the spec). The
+	// per-phase mandate bodies live in different sibling dirs.
+	//
+	// Order within each list: engine roles first (cheap, mechanical
+	// sequential gates), then configured agents (parallel-shaped wave
+	// via per-role serial dispatch today), then user. quality_gates is
+	// post-execute-only — there's nothing to run pre-execute against.
+	const { reviewRoles, approvalRoles } = stageRoleLists(
+		studio,
+		stage,
+		mode,
+		reviewAgents,
+	)
 
 	// Elaborate loop — single cursor state, multi-signal payload.
 	//
@@ -937,10 +1547,176 @@ function walkIntentTrack(args: {
 	})
 
 	if (signalsUnmet.length > 0) {
+		// First arrival at an OPTIONAL stage (nothing started yet): lead the
+		// elaborate prompt with a keep-or-drop offer. One-shot by construction
+		// — once elaboration.md or any unit exists, this condition is false, so
+		// keeping (proceeding to elaborate) naturally stops the offer. No FM
+		// bookkeeping; the on-disk elaboration/unit state IS the "decided"
+		// signal (outputs-are-the-signal).
+		if (
+			resolveStageOptional(studio, stage) &&
+			units.length === 0 &&
+			!existsSync(join(stageDir, "elaboration.md"))
+		) {
+			const planStages = resolveIntentStages(
+				readFm(join(intentDir, "intent.md"))?.data ?? {},
+				studio,
+			)
+			return {
+				kind: "elaborate_loop",
+				stage,
+				signals_unmet: signalsUnmet,
+				optional_offer: true,
+				dependents: computeStageDependents(studio, stage, planStages),
+			}
+		}
 		return { kind: "elaborate_loop", stage, signals_unmet: signalsUnmet }
 	}
-	// Every elaborate-loop signal is met → fall through to the
-	// pre-execution review track.
+
+	// Pre-review structural-validation gate: `unit_inputs_not_declared`.
+	// Non-first stages whose units lack an `inputs:` field entirely fail
+	// fast BEFORE the pre-execute review track. Reviewing a spec that
+	// can't even be dispatched would burn subagent budget on findings
+	// the agent can't act on (the spec ships invalid; reviewers would
+	// flag it; the fix is just adding the field, which the structural
+	// gate already names). Pre-2026-05-18 this check lived inside the
+	// wave-ready dispatch path; the pre/post review split moved
+	// `dispatch_review` ahead of wave-ready, so the structural check
+	// also has to move forward to keep the same ordering relative to
+	// review work. First-stage exemption: nothing upstream to draw
+	// inputs from.
+	{
+		const intentStages = resolveIntentStages(
+			readFm(join(intentDir, "intent.md"))?.data ?? {},
+			studio,
+		)
+		const isFirstStage = intentStages.length > 0 && intentStages[0] === stage
+		if (!isFirstStage) {
+			const missingInputs = units
+				.filter((u) => !("inputs" in u.fm))
+				.map((u) => u.name)
+			if (missingInputs.length > 0) {
+				return {
+					kind: "unit_inputs_not_declared",
+					stage,
+					units: missingInputs,
+				}
+			}
+		}
+	}
+
+	// Every elaborate-loop signal is met → pre-execute review track.
+	// Walks reviewRoles per-unit, stamping `reviews.<role>` as each
+	// fires. Serial gates (`spec`, `user`) dispatch one-at-a-time.
+	// Adversarial roles (continuity, cross-stage-consistency, studio
+	// agents) batch into a single `dispatch_review` action with
+	// `dispatches[]` so the parent spawns them in parallel.
+	//
+	// Why pre-execute: catching a misaligned spec before code lands is
+	// vastly cheaper than catching it post-execute. The post-execute
+	// `dispatch_approval` walk fires the same engine roles AGAINST THE
+	// WORK (different mandate prose, different sibling dir) for the
+	// final sign-off before complete_stage.
+	{
+		const pendingAdversarial: Array<{ role: string; units: string[] }> = []
+		let userMissing: string[] | null = null
+		for (const role of reviewRoles) {
+			const missing = units
+				.filter((u) => {
+					// Pre-execute review is forward-only per unit: it audits the
+					// SPEC *before* any code lands. Once a unit has started
+					// executing (started_at set, or any iteration recorded) its
+					// spec is frozen — `haiku_unit_write` refuses non-pending
+					// units — so re-running a pre-execute review on it can only
+					// churn: the only remediation the engine offers (the fix
+					// loop) is contractually barred from editing the spec doc
+					// (`workflow-contracts-fix-loop.md` — "the feedback file IS
+					// the scope; do NOT synthesize a new unit spec"). A
+					// post-execute code-finding closure that invalidates
+					// `reviews.<role>` on an already-executed unit must therefore
+					// NOT re-trigger a pre-execute review here; that divergence
+					// belongs to the post-execute `dispatch_approval` walk (it
+					// audits the WORK, which the fix loop CAN change) or to a
+					// corrective unit. Skipping started units is what gives the
+					// stage a convergence path instead of an A↔B review↔fix
+					// churn the loop guard can only halt, never resolve.
+					//
+					// Frozen-spec ↔ fix-loop non-convergence churn — bug reports
+					// 2026-05-20 admin-portal-reimagine/development (FB-034→037
+					// re-filing a verbatim finding against unit-005's frozen
+					// spec) and twelve-week-plan-accountability-app/security
+					// (cross-stage-consistency re-flagging unit-09's stale gate
+					// path). In normal flow no unit executes until every unit's
+					// pre-execute reviews are stamped, so this filter only fires
+					// on the invalidation re-entry — the exact churn path.
+					const started =
+						u.fm.started_at != null || pickIterations(u.fm).length > 0
+					if (started) return false
+					const reviews = pickReviews(u.fm)
+					return !reviews[role]
+				})
+				.map((u) => u.name)
+			if (missing.length === 0) continue
+			if (role === "user") {
+				// Defer the user gate — the BRIEF fires between the adversarial
+				// reviews and the gate so the human reads the brief first.
+				userMissing = missing
+				continue
+			}
+			if (SERIAL_REVIEW_ROLES.has(role)) {
+				// Serial gate — flush any pending adversarial batch first.
+				if (pendingAdversarial.length > 0) {
+					const first = pendingAdversarial[0]
+					return {
+						kind: "dispatch_review",
+						stage,
+						dispatches: pendingAdversarial,
+						role: first.role,
+						units: first.units,
+					}
+				}
+				return {
+					kind: "dispatch_review",
+					stage,
+					dispatches: [{ role, units: missing }],
+					role,
+					units: missing,
+				}
+			}
+			// Adversarial role — collect for parallel dispatch.
+			pendingAdversarial.push({ role, units: missing })
+		}
+		// Flush any remaining adversarial roles before the brief / gate.
+		if (pendingAdversarial.length > 0) {
+			const first = pendingAdversarial[0]
+			return {
+				kind: "dispatch_review",
+				stage,
+				dispatches: pendingAdversarial,
+				role: first.role,
+				units: first.units,
+			}
+		}
+		// Every spec + adversarial review has signed. Write the user-facing
+		// BRIEF before the review user gate — it summarizes the planned work
+		// (units, intent, inputs, knowledge) and is the first thing the human
+		// sees at the gate. Fires in every mode (in autopilot/auto there's
+		// simply no gate after it). Forward-only: `stageOwesBrief` short-
+		// circuits once any unit has started executing, so an in-flight stage
+		// is never interrupted to write a brief.
+		{
+			const anyUnitStarted = units.some(
+				(u) => Boolean(u.fm.started_at) || pickIterations(u.fm).length > 0,
+			)
+			if (stageOwesBrief(intentDir, stage, anyUnitStarted)) {
+				return { kind: "write_brief", stage }
+			}
+		}
+		// Brief written → the deferred review user gate.
+		if (userMissing) {
+			return { kind: "user_gate", stage, gate_kind: "spec", units: userMissing }
+		}
+	}
 
 	// 5. Wave logic removed 2026-05-13.
 	//
@@ -979,13 +1755,41 @@ function walkIntentTrack(args: {
 			})
 			.map((u) => u.name),
 	)
-	const waveReady = units.filter((u) => {
-		if (u.fm.started_at != null) return false
-		const deps = Array.isArray(u.fm.depends_on)
-			? (u.fm.depends_on as string[])
+
+	// In-flight units: started, with at least one hat still to run. This
+	// is the set the `needNextHat` clause below advances; it's also the
+	// wave barrier's "is the current wave still working?" signal.
+	const inFlight = units.filter(
+		(u) => u.fm.started_at != null && nextHatForUnit(u.fm, hats) !== null,
+	)
+
+	// Wave dispatch is capped + barriered (2026-05-21):
+	//   - Cap: a wave is at most MAX_CONCURRENT_SUBAGENTS units, so a
+	//     stage with dozens of independent units doesn't spawn all of
+	//     them at once. (HAIKU_MAX_CONCURRENT_SUBAGENTS overrides.)
+	//   - Barrier: a new wave only opens once the current wave has fully
+	//     drained — every started unit has run ALL its hats. While any
+	//     unit is in flight, `waveReady` is empty and control falls
+	//     through to the `needNextHat` clause, which advances the
+	//     in-flight units' hat chains. The next wave's units wait even if
+	//     their `depends_on` already cleared.
+	// Together these mean: never more than MAX_CONCURRENT_SUBAGENTS units
+	// in flight, and the engine — not the agent's "wait for all before
+	// re-ticking" habit — enforces the wave boundary. The unit relay
+	// (`computeUnitRelayBlock`) already declines cross-unit/next-wave
+	// dispatch and defers it to `haiku_run_next`, so the next wave is
+	// dispatched atomically on the tick after the prior one drains.
+	const depsReady =
+		inFlight.length === 0
+			? units.filter((u) => {
+					if (u.fm.started_at != null) return false
+					const deps = Array.isArray(u.fm.depends_on)
+						? (u.fm.depends_on as string[])
+						: []
+					return deps.every((d) => completedNames.has(d))
+				})
 			: []
-		return deps.every((d) => completedNames.has(d))
-	})
+	const waveReady = depsReady.slice(0, MAX_CONCURRENT_SUBAGENTS)
 
 	// Task #25 pre-dispatch gate: refuse to fire `start_unit_hat` when
 	// any wave-ready unit's FM lacks an `inputs:` field entirely on a
@@ -1031,16 +1835,53 @@ function walkIntentTrack(args: {
 	}
 
 	// 7. Units that need their next hat (started but not yet done).
+	//
+	// Dispatch-lease skip: if a unit's OPEN iter (result === null) carries a
+	// `dispatched_at` lease, a subagent is running that hat right now — skip
+	// it. This is the fix for the unit-015-class double-dispatch: a mid-wave
+	// run_next (one unit terminal-advanced, parent re-ticked to pick up the
+	// next wave) used to re-emit start_unit_hat for the STILL-RUNNING wave
+	// siblings, because their open iters looked like "needs dispatch." The
+	// lease distinguishes "dispatched and running" (skip) from "fresh
+	// pre-open / first hat" (dispatch — crash recovery preserved, since a
+	// freshly-opened iter has no lease). `nextHatForUnit` is intentionally
+	// left unchanged (crash-recovery contract, cursor §nextHatForUnit), so
+	// `inFlight` still counts leased units and the wave barrier stays closed.
 	const needNextHat: { unit: string; hat: string; terminal: boolean }[] = []
+	let leasedSkipped = false
 	for (const u of units) {
 		if (u.fm.started_at == null) continue
 		const next = nextHatForUnit(u.fm, hats)
 		if (next === null) continue
+		const iters = Array.isArray(u.fm.iterations)
+			? (u.fm.iterations as Iteration[])
+			: []
+		const last = iters[iters.length - 1]
+		if (
+			last &&
+			last.result === null &&
+			typeof last.dispatched_at === "string" &&
+			last.dispatched_at.length > 0
+		) {
+			leasedSkipped = true
+			continue
+		}
 		needNextHat.push({
 			unit: u.name,
 			hat: next.hat,
 			terminal: next.terminal,
 		})
+	}
+
+	// Wave-draining guard: every in-flight unit is leased (running its own
+	// subagent) and nothing fresh is dispatchable. Return null → the run_next
+	// handler surfaces the existing mid-wave `noop` ("in-flight subagents are
+	// still working — wait, then retick"). Without this, a lease-emptied
+	// needNextHat would fall through into the post-execute review/approval
+	// track mid-build. Guarded on inFlight > 0, so an all-complete stage is
+	// unaffected and still proceeds to its gate.
+	if (needNextHat.length === 0 && leasedSkipped && inFlight.length > 0) {
+		return null
 	}
 
 	// Task #25 pre-dispatch gate for the needs-next-hat path. Same
@@ -1125,55 +1966,107 @@ function walkIntentTrack(args: {
 		}
 	}
 
-	// 8. All units' hat sequences done → spec review track. Walk
-	//    review roles in declared order.
-	for (const role of reviewRoles) {
-		const missing = units
-			.filter((u) => {
-				const reviews = pickReviews(u.fm)
-				return !reviews[role]
-			})
-			.map((u) => u.name)
-		if (missing.length === 0) continue
-		if (role === "user") {
-			return { kind: "user_gate", stage, gate_kind: "spec", units: missing }
+	// 8. All units' hat sequences done → post-execute output approval
+	//    track. Walks approvalRoles per-unit, stamping
+	//    `approvals.<role>` as each fires. The pre-execute reviewRoles
+	//    walk fired earlier (between elaborate completion and execute);
+	//    this is the post-execute counterpart that audits the BUILT
+	//    work, not the spec. Engine-built-in roles render mandate
+	//    bodies from `prompts/stage/approve/dispatch_approval/
+	//    engine-bodies/<role>.eta.md` (different prose from the
+	//    pre-execute siblings; same three roles).
+	//
+	//    Walk approvalRoles which may include `quality_gates`
+	//    (engine-run, not subagent-dispatched).
+	{
+		const pendingAdversarial: Array<{ role: string; units: string[] }> = []
+		for (const role of approvalRoles) {
+			const missing = units
+				.filter((u) => {
+					const approvals = pickApprovals(u.fm)
+					return !approvals[role]
+				})
+				.map((u) => u.name)
+			if (missing.length === 0) continue
+			if (role === "user") {
+				if (pendingAdversarial.length > 0) {
+					const first = pendingAdversarial[0]
+					return {
+						kind: "dispatch_approval",
+						stage,
+						dispatches: pendingAdversarial,
+						role: first.role,
+						units: first.units,
+					}
+				}
+				return {
+					kind: "user_gate",
+					stage,
+					gate_kind: "approval",
+					units: missing,
+				}
+			}
+			if (SERIAL_REVIEW_ROLES.has(role)) {
+				if (pendingAdversarial.length > 0) {
+					const first = pendingAdversarial[0]
+					return {
+						kind: "dispatch_approval",
+						stage,
+						dispatches: pendingAdversarial,
+						role: first.role,
+						units: first.units,
+					}
+				}
+				if (role === "quality_gates") {
+					return { kind: "dispatch_quality_gates", stage, units: missing }
+				}
+				return {
+					kind: "dispatch_approval",
+					stage,
+					dispatches: [{ role, units: missing }],
+					role,
+					units: missing,
+				}
+			}
+			pendingAdversarial.push({ role, units: missing })
 		}
-		return { kind: "dispatch_review", stage, role, units: missing }
-	}
-
-	// 9. All spec reviews signed → output approval track. Walk
-	//    approvalRoles which may include `quality_gates` (engine-run,
-	//    not subagent-dispatched) before configured agents.
-	for (const role of approvalRoles) {
-		const missing = units
-			.filter((u) => {
-				const approvals = pickApprovals(u.fm)
-				return !approvals[role]
-			})
-			.map((u) => u.name)
-		if (missing.length === 0) continue
-		if (role === "user") {
+		if (pendingAdversarial.length > 0) {
+			const first = pendingAdversarial[0]
 			return {
-				kind: "user_gate",
+				kind: "dispatch_approval",
 				stage,
-				gate_kind: "approval",
-				units: missing,
+				dispatches: pendingAdversarial,
+				role: first.role,
+				units: first.units,
 			}
 		}
-		if (role === "quality_gates") {
-			return { kind: "dispatch_quality_gates", stage, units: missing }
-		}
-		return { kind: "dispatch_approval", stage, role, units: missing }
 	}
 
-	// 8. Every approval signed. Emit `complete_stage` — a SEMANTIC
-	//    action ("this stage is done"), NOT a VCS verb. The underlying
-	//    implementation under a git-backed portfolio happens to merge
-	//    the stage branch into intent main, but the action's name
-	//    doesn't reflect that — the engine handles git as an
-	//    implementation detail. Filesystem-only backings perform
-	//    whatever "complete" means there (stamp `completed_at`, move
-	//    artifacts, etc.) without touching git.
+	// 8a. Reflection observations (2026-05-18). ON by default; opt
+	//     out per intent via `reflection: false` on intent.md FM.
+	//     When enabled, give the agent one tick before complete_stage
+	//     to write a free-form observations.md describing where it
+	//     struggled with mandates, what was ambiguous, and what
+	//     surprised it. The file is committed with the stage merge
+	//     so the per-intent reflection pass at intent close has
+	//     signal across every stage. Idempotent — re-ticks after the
+	//     agent wrote the file fall through to complete_stage.
+	if (isReflectionEnabled(intentDir)) {
+		const observationsPath = join(stageDir, "observations.md")
+		if (!existsSync(observationsPath)) {
+			return { kind: "record_observations", stage }
+		}
+	}
+
+	// 8b. Every approval signed AND observations recorded. Emit
+	//     `complete_stage` — a SEMANTIC action ("this stage is
+	//     done"), NOT a VCS verb. The underlying implementation
+	//     under a git-backed portfolio happens to merge the stage
+	//     branch into intent main, but the action's name doesn't
+	//     reflect that — the engine handles git as an
+	//     implementation detail. Filesystem-only backings perform
+	//     whatever "complete" means there (stamp `completed_at`,
+	//     move artifacts, etc.) without touching git.
 	return { kind: "complete_stage", stage }
 }
 
@@ -1277,6 +2170,19 @@ export function derivePosition(args: {
 	const activeStage = findCurrentStage(slug, studio, intentDir)
 
 	// Track C — drift sweep, only against the active stage.
+	//
+	// Engine-internal as of 2026-05-17. The sweep runs, the engine
+	// restamps every affected witness to current SHA (closing the
+	// drift loop so the same signal can NEVER re-fire), and emits
+	// one deduped FB per (file, kind) tuple via writeFeedbackFile.
+	// The agent never sees a `drift_detected` action — the FB queue
+	// IS the agent-facing surface, processed by the stage's
+	// `fix_hats:` chain on the next tick like any other FB.
+	//
+	// Returning falls through to Track B (feedback) below so the
+	// just-filed FB(s) get dispatched without waiting for an extra
+	// tick. See drift-handle-events.ts for the rationale and the
+	// dedup model.
 	if (activeStage) {
 		const drift = runDriftSweep({
 			intentDir,
@@ -1284,9 +2190,23 @@ export function derivePosition(args: {
 			studio,
 		})
 		if (drift.events.length > 0) {
-			return {
-				track: "drift",
-				action: { kind: "drift_detected", events: drift.events },
+			const summary = engineHandleDriftEvents({
+				events: drift.events,
+				intentDir,
+				stage: activeStage,
+				slug,
+			})
+			// Stamp the cascade alarm on the intent FM when tripped so
+			// the run_next response (and downstream UIs) can surface a
+			// "consider /haiku:haiku-repair" recommendation. Stamp the
+			// CLEARED state too when it un-trips, so the flag self-heals
+			// once the queue drains below threshold.
+			if (intentResult) {
+				stampDriftCascadeAlarm({
+					intentDir,
+					stage: activeStage,
+					tripped: summary.cascade_alarm_tripped,
+				})
 			}
 		}
 	}
@@ -1342,31 +2262,74 @@ export function derivePosition(args: {
 	// All stages merged → intent-level approvals.
 	if (intentResult) {
 		const intentApprovals = pickApprovals(intentResult.data)
-		// Mode-shaped intent role list:
-		//   autopilot: spec + continuity only (no agents, no user)
-		//   discrete + continuous: full list including configured
-		//     intent-completion review agents + user
-		//
-		// M3 wires the intent-completion agent set from studio config
-		// via readStudioReviewAgentPaths(studio).
-		const isAutopilot = mode === "autopilot"
-		const intentRoles: string[] = isAutopilot
-			? ["spec", "continuity"]
-			: ["spec", "continuity", "user"]
+		// Mode-shaped intent role list. The three engine-built-in roles
+		// (spec, continuity, cross-stage-consistency) are generic enough to
+		// apply to every studio, so they live in code rather than as
+		// per-studio mandate files; their inline bodies render in
+		// `intent_review/index.ts`. Studio intent-review agents from
+		// `intent-review-agents/` (e.g. runtime-verifier, delivery-verifier)
+		// follow the engine roles — `intentReviewRoles` dedupes them against
+		// the engine base and `intent_review/index.ts` resolves their mandate
+		// bodies. The terminal human gate (`user`) now fires in EVERY mode —
+		// autopilot included (2026-05-26): the final intent gate is the
+		// always-on final-feedback checkpoint before seal.
+		const studioAgents = Object.keys(readStudioReviewAgentPaths(studio)).sort()
+		const intentRoles = intentReviewRoles(mode, studioAgents)
+		// Mirror the per-stage review walk: `spec` runs serial-alone first,
+		// then the adversarial intent-review agents (continuity, cross-stage-
+		// consistency, the studio agents) fan out in ONE parallel
+		// `intent_review` dispatch (`dispatches[]`), then the terminal `user`
+		// gate runs serial-last. Without this batching the adversarial roles
+		// ran one-per-tick (serial), slower and inconsistent with stages.
+		const pendingAdversarial: Array<{ role: string }> = []
+		let userMissing = false
 		for (const role of intentRoles) {
-			if (!intentApprovals[role]) {
+			if (intentApprovals[role]) continue
+			if (role === "user") {
+				userMissing = true
+				continue
+			}
+			if (SERIAL_REVIEW_ROLES.has(role)) {
+				// Serial role (spec) — flush any pending adversarial batch first
+				// so the parallel fan-out completes before the serial gate.
+				if (pendingAdversarial.length > 0) {
+					return {
+						track: "intent",
+						action: {
+							kind: "intent_review",
+							role: pendingAdversarial[0].role,
+							dispatches: pendingAdversarial,
+						},
+					}
+				}
 				return {
 					track: "intent",
-					action: { kind: "intent_review", role },
+					action: { kind: "intent_review", role, dispatches: [{ role }] },
 				}
+			}
+			// Adversarial role — collect for the parallel batch.
+			pendingAdversarial.push({ role })
+		}
+		// Flush the adversarial fan-out before the user gate.
+		if (pendingAdversarial.length > 0) {
+			return {
+				track: "intent",
+				action: {
+					kind: "intent_review",
+					role: pendingAdversarial[0].role,
+					dispatches: pendingAdversarial,
+				},
 			}
 		}
 		// Intent-scope quality_gates re-run. Per GOALS § "Quality gates
 		// are one handler at three scopes," the intent-scope set is
 		// **derived** from the union of every unit's quality_gates[]
-		// across every stage, deduped by command. Fires after every
-		// agent + user review approval is signed and before the seal.
-		// Stamp lives at intent FM under `approvals.intent_quality_gates`.
+		// across every stage, deduped by command. Fires after the
+		// adversarial reviewers sign and BEFORE the terminal user gate —
+		// the human is "the final check before reflection," so they must
+		// approve over a green automated bar, never ahead of it (Bug 4,
+		// worker-new-badge 2026-05-28). Stamp lives at intent FM under
+		// `approvals.intent_quality_gates`.
 		if (!intentApprovals.intent_quality_gates) {
 			return {
 				track: "intent",
@@ -1378,8 +2341,36 @@ export function derivePosition(args: {
 				},
 			}
 		}
-		// All intent-level approvals signed → seal.
+		// Terminal human gate — the LAST signature before reflection +
+		// seal, now reached only after the intent quality gates are green.
+		if (userMissing) {
+			return {
+				track: "intent",
+				action: {
+					kind: "intent_review",
+					role: "user",
+					dispatches: [{ role: "user" }],
+				},
+			}
+		}
+		// All intent-level approvals signed → optional reflection
+		// pass, then seal. Reflection (2026-05-18) is ON by default;
+		// opt out per intent via `reflection: false` on intent.md FM.
+		// When enabled, the agent writes `reflection.md` (synthesized
+		// recap + project overlays + engine-class reports); the
+		// file's existence on disk is the seen-this-cycle signal, so
+		// a re-tick after the agent wrote it falls through to
+		// seal_intent.
 		if (intentResult.data.sealed_at == null) {
+			if (isReflectionEnabled(intentDir)) {
+				const reflectionPath = join(intentDir, "reflection.md")
+				if (!existsSync(reflectionPath)) {
+					return {
+						track: "intent",
+						action: { kind: "record_reflection" },
+					}
+				}
+			}
 			return {
 				track: "intent",
 				action: { kind: "seal_intent" },
@@ -1399,6 +2390,105 @@ export function derivePosition(args: {
  *  (so this helper doesn't reach back into per-unit FM) and the resolved
  *  stage directory. Mode bypass for autopilot mirrors the original
  *  cursor block exactly. */
+/** The ordered intent-completion review roles — the engine-built agent
+ *  roles (spec, continuity, cross-stage-consistency), the studio
+ *  intent-review agents, then the terminal human `user` gate. Source of
+ *  truth for both the intent-level cursor walk and the progress track.
+ *  Done-ness is read from intent.md `approvals.<role>` (NOT reviews.*). */
+export function intentReviewRoles(
+	_mode: string,
+	studioAgents: ReadonlyArray<string> = [],
+): string[] {
+	const base = ["spec", "continuity", "cross-stage-consistency"]
+	// Studio intent-review agents (e.g. runtime-verifier, delivery-verifier)
+	// follow the engine roles. Dedupe against `base` so a studio file that
+	// shadows an engine role (e.g. an `intent-review-agents/cross-stage-
+	// consistency.md`) doesn't double-walk — the engine body wins, same as
+	// `intent_review/index.ts` resolves engine bodies before studio files.
+	const extras = studioAgents.filter((a) => !base.includes(a))
+	// The terminal `user` gate ALWAYS fires at intent completion — EVERY
+	// mode, autopilot included. It is the final-feedback checkpoint: the
+	// user reviews the whole delivered intent and signs off before the
+	// engine seals, and an intent must never seal without that last human
+	// look. Autopilot still trims the PER-STAGE human gates (see
+	// `stageRoleLists` — unattended drive through the stages) but the
+	// FINAL intent gate is sacred and is exempt from the never-attached
+	// fail-fast (it holds for the human; see `awaitGateReviewSession`).
+	// (2026-05-26: autopilot previously dropped this, so autopilot intents
+	// sealed unattended with no final-feedback window — the reported bug.)
+	return [...base, ...extras, "user"]
+}
+
+/** The ordered review + approval role lists for a stage — the SINGLE
+ *  source of truth the cursor walks (pre-execute reviews, then
+ *  post-execute approvals) and the progress track renders. `spec` leads
+ *  both lists (the serial conformance gate), then the adversarial fan-out
+ *  (`continuity`, `cross-stage-consistency`, configured studio agents).
+ *  On the approval walk `quality_gates` runs AFTER the fan-out (it's the
+ *  final automated certification — see the body comment), then `user` is
+ *  the terminal human gate. Reviews carry no `quality_gates` (nothing to
+ *  run pre-execute). Autopilot keeps the full adversarial fan-out
+ *  (engine roles + studio agents) and `quality_gates`; it drops ONLY the
+ *  human `user` gate. Pass `reviewAgents` when the caller has already read
+ *  them (the cursor has); omitted, it reads them here. */
+export function stageRoleLists(
+	studio: string,
+	stage: string,
+	mode: string,
+	reviewAgents?: ReadonlyArray<string>,
+): { reviewRoles: string[]; approvalRoles: string[] } {
+	const agents =
+		reviewAgents ?? Object.keys(readReviewAgentPaths(studio, stage)).sort()
+	// `spec` is the serial conformance gate that leads both walks;
+	// `continuity` + `cross-stage-consistency` are the engine-built
+	// adversarial reviewers that fan out alongside the studio review
+	// agents. The whole group runs in parallel in BOTH modes — autopilot
+	// keeps the studio agents (they're the only adversarial backstop when
+	// no human is watching, so trimming them would strip enforcement
+	// exactly when nothing else enforces it; mirrors `intentReviewRoles`).
+	// Autopilot drops ONLY the terminal human `user` gate.
+	const adversarialRoles = ["continuity", "cross-stage-consistency", ...agents]
+	const isAutopilot = mode === "autopilot"
+	// PRE-execute review audits the planned SPEC, before any code lands.
+	// Runtime-observation roles (e.g. `runtime-verifier`) DRIVE the live,
+	// built work — there is nothing to observe before execution, so they are
+	// dropped from the review walk and fire only in the POST-execute approval
+	// walk (and at intent completion). The static engine reviewers
+	// (`continuity`, `cross-stage-consistency`) audit the spec and stay in
+	// both. See `orchestrator/review-role-classes` for the classification.
+	const preExecuteAdversarialRoles = adversarialRoles.filter(
+		(role) => !RUNTIME_OBSERVATION_ROLES.has(role),
+	)
+	const reviewRoles = isAutopilot
+		? ["spec", ...preExecuteAdversarialRoles]
+		: ["spec", ...preExecuteAdversarialRoles, "user"]
+	// Post-execute order: `spec` (serial conformance) → the adversarial
+	// fan-out → `quality_gates` (engine-run mechanical gate) → `user`.
+	//
+	// `quality_gates` runs LAST of the automated checks — after the
+	// adversarial fan-out, just before the human gate (and terminal in
+	// autopilot, where there is no human after). It must, because quality
+	// gates are the FINAL automated certification of the work: they run
+	// the unit's own test/typecheck/lint commands and stamp pass/fail. If
+	// they ran earlier and the adversarial fix loop then changed the code,
+	// the stamp would certify the PRE-fix version — the work would merge
+	// with gates that never ran against what actually landed. Running them
+	// after adversarial review settles means they always certify the final
+	// state. Cheaper-first would save review tokens, but a stale gate is a
+	// correctness bug, not a cost; correctness wins.
+	//
+	// Keeping `quality_gates` after the whole adversarial group also leaves
+	// that group (`continuity`, `cross-stage-consistency`, studio agents)
+	// contiguous, so it collapses into a single parallel "adversarial
+	// approval" fan-out pip rather than being split by a gate in the
+	// middle. `quality_gates` itself stays its own serial tick (it's in
+	// `SERIAL_REVIEW_ROLES`) — never folded into the fan-out.
+	const approvalRoles = isAutopilot
+		? ["spec", ...adversarialRoles, "quality_gates"]
+		: ["spec", ...adversarialRoles, "quality_gates", "user"]
+	return { reviewRoles, approvalRoles }
+}
+
 export function computeElaborateSignals(args: {
 	slug: string
 	studio: string
@@ -1485,6 +2575,13 @@ export function serializeElaborateSignals(
 		s.signal === "discovery" ? `discovery:${s.agent}` : s.signal,
 	)
 }
+
+// Exported for `state-tools.ts` so `haiku_feedback_advance_hat` /
+// `haiku_unit_advance_hat` can do the same queue walk the cursor would
+// after persisting an iteration — and return the next dispatch block as
+// a breadcrumb in the tool response. Engine emits the next instruction;
+// the agent relays it. See `.claude/rules/no-agent-mechanics-teaching.md`.
+export { walkFeedbackTrack }
 
 // Test-only escape hatch.
 export const __testOnly = {

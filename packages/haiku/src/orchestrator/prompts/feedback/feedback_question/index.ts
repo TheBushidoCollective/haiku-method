@@ -10,6 +10,7 @@
 // answering.
 
 import { Eta } from "eta"
+import { readIntentMode } from "../../_helpers.js"
 import { loadTemplate } from "../../_load-template.js"
 import { definePromptBuilder } from "../../define.js"
 
@@ -27,5 +28,8 @@ export default definePromptBuilder((ctx) => {
 		stage: action.stage,
 		feedbackId: action.feedback_id,
 		feedbackPath: action.feedback_path,
+		// Autopilot has no human to answer a question FB — the agent
+		// resolves the fork itself instead of surfacing it.
+		isAutopilot: readIntentMode(ctx.dir) === "autopilot",
 	})
 })

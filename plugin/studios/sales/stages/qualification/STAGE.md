@@ -12,18 +12,22 @@ inputs:
 
 # Qualification
 
-Qualification is the gate that decides whether a prospect is a real opportunity or a polite tour through the pipeline. The stage takes the `PROSPECT-BRIEF.md` from research and produces a `DEAL-BRIEF.md` — a defensible go/no-go, an evidence-backed scoring against the seller's ICP and a chosen qualification framework (BANT, MEDDIC, GAP, SPIN, or the team's own), and a deal strategy with named champion, identified economic buyer, and a risk register. This is a research/distillation stage per architecture §4.1; units are qualification topics (BANT dimension, buying-committee mapping, champion analysis, etc.), not execution work.
+The gate that decides whether a prospect is a real opportunity or a polite tour through the pipeline. Qualification takes the prospect brief and produces a defensible go/no-go: an evidence-backed score against the seller's ICP and a chosen framework, plus a deal strategy with a named champion, an identified economic buyer, and a risk register.
 
-## Per-unit baton
+## Scope
 
-- **`qualifier`** (plan/do) reads the prospect brief plus any discovery-call notes and scores the opportunity against the chosen qualification framework. Each criterion gets an evidence-backed rating, not an optimistic guess.
-- **`deal-strategist`** (do) turns the qualification scoring into a forward plan — champion development, multi-thread strategy, anticipated objections, competitive positioning, mutual close plan.
-- **`verifier`** (verify) validates the unit body for substance, citation, internal consistency, and decision-register alignment.
+The pursue-or-pass decision and the strategy behind it: scoring against ICP and a qualification framework (BANT, MEDDIC, GAP, SPIN, or the team's own), champion and buying-committee analysis, and the risk register. Qualification decides *whether and how to pursue* — not who the prospect is (research) or what the offer looks like (proposal).
 
-## Inputs and outputs
+## What to do
 
-The stage consumes `research/prospect-brief`. It produces the intent-scope `DEAL-BRIEF.md` (declared in `discovery/`) which downstream stages depend on.
+- Score each criterion against evidence from research and discovery, not against optimism — an honest "no" here saves the team's most expensive cycles.
+- Identify the champion and the economic buyer by name, and assess whether the deal can actually be won through them.
+- Build a forward strategy: multi-thread plan, anticipated objections, competitive positioning, mutual close plan.
+- Keep a risk register that names what could kill the deal, not just what favors it.
 
-## Fix loop and gate
+## What NOT to do
 
-`fix_hats: [classifier, qualifier, feedback-assessor]` dispatches per open finding. The gate is `ask` — a sales manager or deal-desk reviewer approves the qualification locally before the team invests in proposal work. Project overlays may add house-style scoring rubrics, named qualification playbooks, or team-specific risk taxonomies without modifying the plugin defaults.
+- Don't re-gather prospect facts from scratch — consume the research brief; flag gaps back to it if it's thin.
+- Don't write proposal content or commit to pricing.
+- Don't inflate a criterion's rating to keep the deal alive.
+- Don't pass the deal forward with an unidentified buyer or an empty risk register.

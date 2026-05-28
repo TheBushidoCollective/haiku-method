@@ -1,0 +1,40 @@
+{
+  "name": "haiku",
+  "version": "9.0.0",
+  "description": "H·AI·K·U methodology — universal lifecycle orchestration with hat-based workflows, completion criteria, and automatic context preservation.",
+  "author": {
+    "name": "GigSmart",
+    "url": "https://gigsmart.com"
+  },
+  "homepage": "https://haikumethod.ai",
+  "repository": "https://github.com/gigsmart/haiku-method",
+  "license": "Apache-2.0",
+  "keywords": [
+    "haiku",
+    "haiku-method",
+    "lifecycle",
+    "orchestration",
+    "methodology",
+    "workflow",
+    "completion-criteria",
+    "hat-switching",
+    "context-preservation",
+    "human-ai-collaboration"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.codex-plugin/mcp.json",
+  "interface": {
+    "displayName": "H·AI·K·U",
+    "shortDescription": "Universal lifecycle orchestration for AI-assisted work across 24 domains.",
+    "longDescription": "H·AI·K·U is a workflow engine that hands an agent one action at a time from a plan kept on disk. Hat-based stages (plan → do → verify), executable completion criteria, drift detection, and a forward-only lifecycle keep long-running work on the rails. Studios cover software, gamedev, hardware, design, product, legal, finance, and more.",
+    "developerName": "GigSmart",
+    "category": "Coding",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "defaultPrompt": [
+      "Start a new H·AI·K·U intent for the feature I want to build.",
+      "Pick up where my last H·AI·K·U intent left off."
+    ],
+    "websiteURL": "https://haikumethod.ai",
+    "brandColor": "#0F766E"
+  }
+}

@@ -1,6 +1,7 @@
 ---
 name: execute
 description: Finalize documents and coordinate signatures
+optional: true
 hats: [closer, administrator, verifier]
 fix_hats: [classifier, closer, feedback-assessor]
 review: await
@@ -17,22 +18,22 @@ outputs:
 
 # Execute
 
-Take the reviewed draft, incorporate the resolved findings, run the execution formalities, and file the executed document. Execute is an operational-class stage: each unit corresponds to one operational step — finalizing the body, validating execution prerequisites (signing authority, conditions precedent, notarization or witness requirements as the jurisdiction requires), routing for signature, and post-execution filing. The output is an `EXECUTED-DOCUMENT.md` per unit recording the final state plus the audit trail.
+The closing stage of a legal matter: incorporate the resolved review findings, satisfy the execution formalities, route the document for signature, and file the executed copy with its audit trail. The agent coordinates the workflow; the licensed attorney is the authority of record on whether the document is ready to sign.
 
-The agent coordinates the workflow; the licensed attorney is the authority of record on whether the document is ready to execute. Anything that affects execution validity (signing authority, notarization, conditions precedent, choice-of-law implications) is **escalated** to the attorney, not decided autonomously.
+## Scope
 
-## Per-unit baton
+Finalizing and formalizing the approved draft — incorporating findings, confirming signing authority and conditions precedent, handling notarization or witness requirements, and recording the executed state plus its audit trail. Execute decides *whether the document is ready and what its final state is* — not whether the language was right (draft) or whether it was reviewed (review). Anything affecting execution validity is escalated to the attorney.
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`closer`** (plan / do for finalization) — incorporates the resolved review findings into the body, produces the final document, and confirms with the attorney that conditions precedent are satisfied
-- **`administrator`** (do for filing) — verifies execution formalities are appropriate for the document type and jurisdictions, organizes the version history, and records the key calendar dates (renewal, termination, compliance deadlines)
-- **`verifier`** (verify) — confirms the audit trail is complete, the executed copy matches the approved draft plus the closer's recorded changes, and every critical finding from review was either incorporated or has a documented attorney waiver
+- Incorporate the resolved review findings into the body and produce the final document.
+- Confirm with the attorney that conditions precedent are satisfied and signing authority is in place before routing for signature.
+- Handle the execution formalities appropriate to the document type and jurisdictions, and record the key calendar dates (renewal, termination, compliance deadlines).
+- Keep a complete audit trail: the executed copy must match the approved draft plus the closer's recorded changes.
 
-## Inputs and outputs
+## What NOT to do
 
-Execute consumes `review/review-findings` and the upstream `draft/draft-document`. It produces an `EXECUTED-DOCUMENT.md` per unit at intent scope, holding the final body and the execution metadata.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, closer, feedback-assessor]` dispatches per finding. Classifier routes; closer re-authors the affected section or audit-trail entry; assessor closes. The gate is `await` — the workflow blocks until the external signature event arrives (countersigned PDF, electronic-signature platform completion event, attorney confirmation). The agent does not self-advance this gate.
+- Don't decide questions of execution validity (authority, notarization, conditions precedent) on your own — escalate them.
+- Don't reopen drafting or review judgments; execute formalizes what's already approved.
+- Don't self-advance the signature gate — the executed document is recorded when the external signing event actually arrives.
+- Don't file a document with an unresolved critical finding that lacks a documented attorney waiver.

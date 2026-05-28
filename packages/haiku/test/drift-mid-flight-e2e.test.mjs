@@ -1,11 +1,18 @@
-// E2E: drift introduced mid-flight → cursor surfaces drift_detected →
-// agent files FB → cursor walks Track B → fix loop → pipeline seals.
+// E2E: drift introduced mid-flight → engine files FB → cursor walks
+// Track B → fix loop → pipeline seals.
 //
 // Drift-scenarios.test.mjs covers the sweep in isolation. This test
 // drives the full lifecycle end-to-end: a real out-of-band edit to a
-// signed unit triggers drift_detected, which the agent translates
-// into a feedback file, which routes through the fix loop, which
-// closes, which lets the pipeline reach sealed.
+// signed unit produces a drift sweep event, which the engine handler
+// (engineHandleDriftEvents) immediately restamps the witnesses for
+// AND files a single deduped FB. The FB routes through the fix loop
+// like any other FB; once it closes, the pipeline reaches sealed.
+//
+// 2026-05-17: refactored to expect engine-emitted FBs instead of a
+// `drift_detected` action. The pre-refactor model returned events to
+// the agent and asked it to translate them into FBs; the new model
+// does that translation in-engine for dedup + restamp-at-detect
+// reasons. See orchestrator/workflow/drift-handle-events.ts.
 
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
@@ -23,12 +30,7 @@ import { dirname, join } from "node:path"
 import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import matter from "gray-matter"
-import {
-	initTestRepo,
-	makeFeedback,
-	makeIntent,
-	makeStudio,
-} from "./_v4-fixtures.mjs"
+import { initTestRepo, makeIntent, makeStudio } from "./_v4-fixtures.mjs"
 
 // Promoted to module scope so applyResponse and helpers can use it
 // without re-importing per call.
@@ -90,45 +92,6 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 				fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
 			apps[action.role] = { at }
 			writeFm(intentMd, { ...fm, approvals: apps })
-		} else if (action.action === "drift_detected") {
-			// Translate drift events into FBs on the affected stage.
-			// Each FB carries source_ref="drift:<kind>:<file>" so the
-			// drift sweep dedup can suppress re-emission until close.
-			const events = action.events || []
-			for (let i = 0; i < events.length; i++) {
-				const e = events[i]
-				const stageOfDrift = e.file?.includes("/stages/")
-					? e.file.split("/stages/")[1].split("/")[0]
-					: "a"
-				const num = i + 1
-				const fbDir = join(intentDir, "stages", stageOfDrift, "feedback")
-				mkdirSync(fbDir, { recursive: true })
-				const fbPath = join(fbDir, `${String(num).padStart(3, "0")}-drift.md`)
-				const sourceRef = `drift:${e.kind}:${e.file}`
-				writeFm(
-					fbPath,
-					{
-						title: `drift on ${e.unit}/${e.role}`,
-						origin: "drift",
-						author: "drift-sweep",
-						author_type: "agent",
-						created_at: at,
-						source_ref: sourceRef,
-						targets: { unit: e.unit, invalidates: [] },
-						iterations: [],
-						closed_at: null,
-					},
-					`Out-of-band edit on ${e.file} since ${e.since}`,
-				)
-			}
-			// Commit the FB write so the next drift sweep doesn't re-flag
-			// the same drift forever (the sweep walks `git log --since=<at>`).
-			try {
-				git(repoRoot, "add", "-A")
-				git(repoRoot, "commit", "-m", "drift: file FB for out-of-band edit")
-			} catch {
-				/* nothing to commit */
-			}
 		} else if (
 			action.action === "dispatch_quality_gates" &&
 			(action.scope === "intent" || stage === "")
@@ -286,52 +249,40 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 			}
 			break
 		}
-		case "drift_detected": {
-			// Translate drift events into feedback files (matches what
-			// the drift_detected prompt instructs the agent to do).
-			const events = action.events || []
-			for (let i = 0; i < events.length; i++) {
-				const e = events[i]
-				const id = `FB-DRIFT-${String(i + 1).padStart(2, "0")}`
-				makeFeedback({
-					intentDir,
-					stage: e.kind === "spec" || e.kind === "output" ? stage || "a" : null,
-					id,
-					title: `drift on ${e.unit}/${e.role}`,
-					body: `Out-of-band edit detected on ${e.file} since ${e.since}`,
-					origin: "drift",
-					target_unit: e.unit,
-					target_invalidates: [],
-				})
-			}
-			break
-		}
+		// drift_detected case retired 2026-05-17 — engine handles drift
+		// internally (see orchestrator/workflow/drift-handle-events.ts).
 		case "dispatch_review": {
-			const unitFiles = existsSync(unitsDir)
-				? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-				: []
-			for (const f of unitFiles) {
-				const path = join(unitsDir, f)
-				const fm = readFm(path)
-				const reviews =
-					fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
-				reviews[action.role] = buildReviewRecord(path)
-				writeFm(path, { ...fm, reviews })
+			const reviewDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+			for (const d of reviewDispatches) {
+				const unitFiles = existsSync(unitsDir)
+					? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+					: []
+				for (const f of unitFiles) {
+					const path = join(unitsDir, f)
+					const fm = readFm(path)
+					const reviews =
+						fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
+					reviews[d.role] = buildReviewRecord(path)
+					writeFm(path, { ...fm, reviews })
+				}
 			}
 			break
 		}
 		case "dispatch_approval": {
-			const unitFiles = existsSync(unitsDir)
-				? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-				: []
-			for (const f of unitFiles) {
-				const path = join(unitsDir, f)
-				const fm = readFm(path)
-				const outputs = Array.isArray(fm.outputs) ? fm.outputs : []
-				const approvals =
-					fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
-				approvals[action.role] = buildApprovalRecord(intentDir, outputs)
-				writeFm(path, { ...fm, approvals })
+			const approvalDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+			for (const d of approvalDispatches) {
+				const unitFiles = existsSync(unitsDir)
+					? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+					: []
+				for (const f of unitFiles) {
+					const path = join(unitsDir, f)
+					const fm = readFm(path)
+					const outputs = Array.isArray(fm.outputs) ? fm.outputs : []
+					const approvals =
+						fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
+					approvals[d.role] = buildApprovalRecord(intentDir, outputs)
+					writeFm(path, { ...fm, approvals })
+				}
 			}
 			break
 		}
@@ -458,11 +409,24 @@ test("e2e: drift introduced after stage A signed → FB → fix loop → seal", 
 
 		const seen = []
 		let driftInjected = false
-		let driftSurfaced = false
-		let fbFiled = false
 		let fbClosed = false
-		const _driftSilenced = false
 		const MAX_TICKS = 200
+
+		// Helper: scan stage A's feedback dir for engine-emitted drift FBs.
+		// Under the new model the engine files the FB silently on the
+		// tick following the drift commit — no agent-facing action to
+		// observe, just an on-disk artifact.
+		const driftFbsOnDisk = () => {
+			const dir = join(intentDir, "stages", "a", "feedback")
+			if (!existsSync(dir)) return []
+			return readdirSync(dir)
+				.filter((f) => f.endsWith(".md"))
+				.map((f) => {
+					const fm = readFm(join(dir, f))
+					return { name: f, origin: fm.origin, author: fm.author }
+				})
+				.filter((fb) => fb.origin === "drift" && fb.author === "engine")
+		}
 
 		for (let i = 0; i < MAX_TICKS; i++) {
 			const action = await runTick(slug)
@@ -473,13 +437,23 @@ test("e2e: drift introduced after stage A signed → FB → fix loop → seal", 
 			// Inject out-of-band drift while stage A is still the active
 			// stage (drift sweep is per active stage; once stage A
 			// merges into main the active stage advances to B and A's
-			// drift would be invisible). dispatch_quality_gates is the
-			// last per-unit action before merge_stage and reviews/
-			// approvals are stamped on the unit by then.
+			// drift would be invisible). We inject at the adversarial
+			// `dispatch_approval` fan-out — the unit's reviews (the body
+			// witness the sweep compares against) are stamped by then, and
+			// `quality_gates` is still PENDING after it (the post-execute
+			// order is spec → adversarial → quality_gates → user). That
+			// leaves one more tick where stage A is the active stage, so
+			// the next tick's sweep runs on A with the drift commit present.
+			// Injecting at `dispatch_quality_gates` instead would be too
+			// late: it's the last per-unit approval, so stage A goes
+			// complete the moment it's stamped and the sweep window closes.
 			if (
 				!driftInjected &&
-				action.action === "dispatch_quality_gates" &&
-				action.stage === "a"
+				action.action === "dispatch_approval" &&
+				action.stage === "a" &&
+				(action.dispatches ?? [{ role: action.role }]).every(
+					(d) => d.role !== "spec",
+				)
 			) {
 				applyResponse(intentDir, action, repoRoot, slug)
 				// Stage the unit signing as a real commit so the drift
@@ -501,14 +475,6 @@ test("e2e: drift introduced after stage A signed → FB → fix loop → seal", 
 				driftInjected = true
 				continue
 			}
-			if (action.action === "drift_detected") {
-				driftSurfaced = true
-				if (!fbFiled) {
-					applyResponse(intentDir, action, repoRoot, slug)
-					fbFiled = true
-					continue
-				}
-			}
 			if (action.action === "close_feedback") fbClosed = true
 			if (action.action === "sealed") break
 			applyResponse(intentDir, action, repoRoot, slug)
@@ -523,13 +489,10 @@ test("e2e: drift introduced after stage A signed → FB → fix loop → seal", 
 			driftInjected,
 			`drift never injected (test setup bug). recent: ${seen.slice(-20).join(" → ")}`,
 		)
+		const driftFbs = driftFbsOnDisk()
 		assert.ok(
-			driftSurfaced,
-			`drift_detected never fired despite drift commit. recent: ${seen.slice(-15).join(" → ")}`,
-		)
-		assert.ok(
-			fbFiled,
-			"FB never filed in response to drift_detected (translation step missing)",
+			driftFbs.length >= 1,
+			`engine MUST file at least one drift FB after the drift commit. recent: ${seen.slice(-15).join(" → ")}; fbs: ${JSON.stringify(driftFbs)}`,
 		)
 		assert.ok(
 			fbClosed,

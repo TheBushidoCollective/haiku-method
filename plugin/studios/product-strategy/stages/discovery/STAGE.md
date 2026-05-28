@@ -10,22 +10,22 @@ inputs: []
 
 # Discovery
 
-Map the territory before anything else. Where does the market sit today, who occupies it, where is it moving, and which corners of it are underserved enough to matter? This is a research / distillation stage — every unit is a knowledge topic the downstream stages will lean on.
+The opening stage of product strategy: map the territory before anything else. Where does the market sit today, who occupies it, where is it moving, and which corners of it are underserved enough to matter? This is a research and distillation stage — its output is the landscape every downstream decision leans on.
 
-## Per-unit baton
+## Scope
 
-Each discovery unit walks the three hats in `plan → do → verify` order:
+Market landscape, competitive positioning, and the opportunity space. Discovery decides *what the market is and where the openings are* — not who the users are within it (user-research), how opportunities rank (prioritization), or what gets built when (roadmap). Units are knowledge topics; downstream stages author their own work against the findings.
 
-- **`market-explorer`** (plan / breadth) surveys segments, trends, adjacencies, and emerging shifts for the unit's topic. Produces the raw landscape view.
-- **`competitive-analyst`** (do / depth) takes the landscape and turns it into positioning maps, competitor trajectories, and a named opportunity space.
-- **`verifier`** (verify) validates the artifact's substance, citation chain, and internal consistency, then advances or rejects with a named criterion.
+## What to do
 
-Detailed process lives in each hat's md file — this stage enforces the chain.
+- Survey segments, trends, adjacencies, and emerging shifts for each topic, and source the evidence.
+- Turn the raw landscape into positioning maps and competitor trajectories.
+- Name the opportunity space — the underserved corners worth pursuing — rather than cataloging the whole market.
+- Keep the artifact substantive, cited, and internally consistent so later stages can build on it.
 
-## Inputs and outputs
+## What NOT to do
 
-No upstream stage feeds this stage; it bootstraps the lifecycle. Each unit produces a knowledge artifact at `discovery/MARKET-LANDSCAPE.md` (or its per-topic equivalent) that `user-research` and `prioritization` consume.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, market-explorer, feedback-assessor]` dispatches per finding — the classifier targets the right unit, the market-explorer re-authors the affected slice, the assessor independently decides closure. The gate is `auto` because no human decision is required to advance into `user-research`; the downstream stage's elaboration loop is where the user re-engages. Project overlays at `.haiku/studios/product-strategy/stages/discovery/` may add team-specific source lists, market-sizing conventions, or research-repository links without touching the plugin defaults.
+- Don't research individual users or jobs-to-be-done — that's the user-research stage.
+- Don't score or rank opportunities, or sequence a roadmap; those are downstream decisions.
+- Don't assert a market claim you can't source.
+- Don't commit to a single positioning before the landscape justifies it.

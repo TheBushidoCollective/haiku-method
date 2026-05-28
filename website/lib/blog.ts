@@ -31,13 +31,19 @@ export function getBlogSlugs(): string[] {
 	return [...seen]
 }
 
+// In production (static build) we cache once per process — file
+// contents don't change between renders. In development the cache
+// is poison: every edit to a `.mdx` file leaves the dev server
+// serving the stale entry until Next dev is restarted by hand. Skip
+// the cache in dev so edits always re-read from disk.
+const IS_DEV = process.env.NODE_ENV !== "production"
 const postCache = new Map<string, BlogPost | null>()
 
 export function getBlogPostBySlug(slug: string): BlogPost | null {
 	// Path traversal protection
 	if (slug !== path.basename(slug)) return null
 
-	if (postCache.has(slug)) return postCache.get(slug) ?? null
+	if (!IS_DEV && postCache.has(slug)) return postCache.get(slug) ?? null
 
 	// Prefer .mdx over .md if both exist
 	const mdxPath = path.join(blogDirectory, `${slug}.mdx`)
@@ -79,7 +85,7 @@ export function getBlogPostBySlug(slug: string): BlogPost | null {
 		content,
 		format,
 	}
-	postCache.set(slug, post)
+	if (!IS_DEV) postCache.set(slug, post)
 	return post
 }
 

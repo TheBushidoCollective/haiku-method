@@ -1,6 +1,7 @@
 ---
 name: development
 description: Implement the library against the API contract from inception
+produces: build
 hats: [planner, builder, reviewer]
 fix_hats: [classifier, builder, feedback-assessor]
 review: [external, ask]
@@ -14,20 +15,22 @@ inputs:
 
 # Development
 
-Implement the library against the public API surface defined in inception. Public API stability is a hard constraint — any change that breaks the documented contract requires explicit review and a semver bump that the release stage will surface to consumers. Internal refactoring is free; public signature changes are not.
+Implement the library against the public API surface defined in inception: working code and the tests that prove the contract holds. Public API stability is a hard constraint — internal refactoring is free, but any change to the documented signature requires explicit review and a semver bump the release stage will surface to consumers.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the three hats in `plan → do → verify` order:
+Implementation against the API contract — the source, the tests that prove it, and the internal architecture decisions that fall out along the way. Development decides *how the contract is built* — not what the contract is (inception), how it's published (release), or its threat model (security). Public signatures are honored as given unless a change is explicitly reviewed.
 
-- **`planner`** (plan) reads the API surface and the unit's success criteria, sequences the work so public-facing primitives land before internal helpers, and identifies test strategy up front
-- **`builder`** (do) writes the implementation AND the tests that prove the contract holds, keeping internal symbols clearly marked separately from the public surface
-- **`reviewer`** (verify) walks the implementation against the API surface and the unit's quality gates; advances on a clean match or rejects to the responsible hat with a named criterion
+## What to do
 
-## Inputs and outputs
+- Implement each unit against the API surface and its success criteria, with public-facing primitives landing before internal helpers.
+- Write the tests that prove the contract holds alongside the implementation, keeping the build and tests green as you go.
+- Keep internal symbols clearly separated from the public surface so the boundary stays legible.
+- Match the project's existing patterns and conventions rather than introducing your own.
 
-Inception's `discovery` and `api-surface` artifacts are the input contract. Output is the `code` artifact family — source files, test files, and any internal documentation needed by reviewers. The release stage consumes the built code; the security stage reads it for the supply-chain and misuse-resistance review.
+## What NOT to do
 
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, builder, feedback-assessor]` dispatches per finding. The classifier routes the FB to the right unit; `builder` is the implementer (the per-`fix_hats must be implementer` convention); the assessor independently decides closure. The gate is `[external, ask]` — the user picks between an external merge-request review or a local approval. Project overlays at `.haiku/studios/libdev/stages/development/` may add house-style conventions (project's package manager invocation, lint config, internal-namespace prefix) without modifying the plugin defaults.
+- Don't change a documented public signature without explicit review and the semver bump it implies.
+- Don't reinterpret the API contract to fit the code — a wrong contract is a revisit to inception, not a quiet change here.
+- Don't add scope the success criteria don't call for.
+- Don't advance with failing tests, failing gates, or a criterion left unproven.

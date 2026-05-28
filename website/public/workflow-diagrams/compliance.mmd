@@ -8,13 +8,9 @@ stateDiagram-v2
   assess --> remediate
   remediate --> document
   document --> certify
-  certify --> intent_completion_review
-  intent_completion_review --> intent_completion_gate : review.clean
-  intent_completion_review --> intent_completion_fix : review.findings
-  intent_completion_fix --> intent_completion_gate : feedback.closed
-  intent_completion_fix --> intent_completion_fix : feedback.open
-  intent_completion_gate --> complete : gate.approved
-  intent_completion_gate --> certify : gate.changes_requested
+  certify --> intent_review
+  intent_review --> seal_intent : approvals.signed
+  seal_intent --> complete
 
   state scope {
     [*] --> scope_start_stage
@@ -81,8 +77,10 @@ stateDiagram-v2
     state assess_execute {
       [*] --> assess_execute_auditor
       assess_execute_auditor --> assess_execute_risk_assessor : hat.advance
-      assess_execute_risk_assessor --> assess_execute_done : hat.advance
+      assess_execute_risk_assessor --> assess_execute_verifier : hat.advance
       assess_execute_risk_assessor --> assess_execute_auditor : hat.reject
+      assess_execute_verifier --> assess_execute_done : hat.advance
+      assess_execute_verifier --> assess_execute_risk_assessor : hat.reject
       assess_execute_done --> [*]
     }
     assess_execute --> assess_review

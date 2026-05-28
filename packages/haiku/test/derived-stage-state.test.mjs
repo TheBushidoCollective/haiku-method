@@ -207,6 +207,10 @@ test("phase: units exist but mid-hat → execute", { skip: !HAS_GIT }, () => {
 				matter.stringify("# u1\n", {
 					title: "u1",
 					started_at: at,
+					// Pre-execute spec review is signed (the cursor walks it
+					// before any hat runs), so the stage derives as "execute"
+					// rather than "review".
+					reviews: { spec: { at }, user: { at } },
 					iterations: [
 						{
 							hat: "planner",
@@ -446,8 +450,11 @@ test("gate_outcome: NEW unit lands post-approval → re-opens gate", {
 			null,
 			"new unit with no approvals must re-open the gate",
 		)
-		// Phase should now report "execute" (new unit needs hats run).
-		assert.strictEqual(after.phase, "execute")
+		// Phase now reports "review": the freshly-spawned unit has no
+		// `reviews.*` stamps, and the pre-execute spec review is walked
+		// before any hat runs — so the re-opened stage sits at review,
+		// not execute.
+		assert.strictEqual(after.phase, "review")
 	})
 })
 

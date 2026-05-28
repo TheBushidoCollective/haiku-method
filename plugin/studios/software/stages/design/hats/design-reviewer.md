@@ -1,14 +1,21 @@
+---
+role: verify
+---
 **Focus:** Verify the designer hat's body output for THIS design unit substantively delivers a producable design: real tokens (not raw values), full state coverage, responsive behavior named at each breakpoint, accessibility considered, and consistency with the project's design system anchor. You are the **verify** role for design — the terminal hat in the per-unit hat sequence. Body-only verification per architecture §3.4; the workflow engine owns frontmatter and DAG checks.
 
 The baton you receive is the designer's body — references to the produced mockup artifacts plus the design rationale. Your decision (`advance` vs `reject`) is what the workflow engine trusts to move the unit forward.
+
+## Validate this unit's outputs against its criteria
+
+List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, field: "outputs" }`, then confirm each one satisfies the unit's completion criteria. The outputs are what you validate; the unit's criteria are the bar. Stay scoped to this one unit — sibling units have their own verify passes.
 
 ## Process
 
 ### 1. Read your inputs
 
 - The unit body — completion criteria, designer's notes, links to produced mockup artifacts under `stages/design/artifacts/`
-- `knowledge/DESIGN-SYSTEM-ANCHOR.md` — the source-grounded token / atom inventory the designer-prep hat produced
-- `knowledge/DESIGN-TOKENS.md` and `stages/design/DESIGN-BRIEF.md` — the design-system inputs the designer was expected to honor
+- `.haiku/knowledge/DESIGN-SYSTEM-ANCHOR.md` — the source-grounded token / atom inventory the designer-prep hat produced (long-lived repo knowledge, persists across intents)
+- `.haiku/knowledge/DESIGN-TOKENS.md` and `stages/design/DESIGN-BRIEF.md` — the design-system inputs the designer was expected to honor
 - The intent's decision register — any locked design choice that the unit must conform to
 - Sibling units' completed bodies — consistency across units is part of the verifier's mandate
 
@@ -33,20 +40,12 @@ Apply each criterion. Any single failure is a reject with the criterion named.
 ### 3. Issue verdict
 
 - All criteria pass → call `haiku_unit_advance_hat`.
-- Any criterion fails → call `haiku_unit_reject_hat` with a message naming the specific failed criterion. The cursor rewinds to the responsible hat (typically `designer`) within this unit.
-
-If the failure traces back to a missing input (e.g., the anchor itself is wrong because the designer-prep hat misread source), file feedback against the upstream hat via `haiku_feedback` rather than rejecting this unit — rejection only rewinds within the current unit's chain.
+- Any criterion fails → call `haiku_unit_reject_hat` with a message naming the specific failed criterion. The reject routes to the hat that can fix it: a build defect rewinds to `designer` (the default — the nearest build hat); a defect that traces to a wrong input (e.g. the anchor itself is wrong because `designer-prep` misread source) is a PLAN defect — name `target_hat: "designer-prep"` so the reject rewinds to the planner to re-ground the design, then the designer rebuilds against it. Rejecting in-loop is correct; you do NOT file feedback for an in-stage defect.
 
 ## Anti-patterns (RFC 2119)
 
 - The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. workflow engine territory per architecture §1.1.
-- The agent **MUST NOT** validate against frontmatter schema, `depends_on:` resolution, status fields, or any other FM-driven rule.
-- The agent **MUST NOT** approve designs without checking state coverage for every interactive element
+- The agent **MUST NOT** approve designs without state coverage for every interactive element (hover / focus / disabled / error)
 - The agent **MUST NOT** approve raw hex / magic pixel values — named tokens from the anchor are required
-- The agent **MUST NOT** ignore accessibility — contrast, touch targets, keyboard reachability, and focus indicators are part of every verification
-- The agent **MUST** verify responsive behavior at every declared breakpoint
-- The agent **MUST** cross-reference every component against `DESIGN-SYSTEM-ANCHOR.md`
-- The agent **MUST NOT** reject for stylistic preferences. Substantive gaps only.
-- The agent **MUST** name a specific failed criterion in any rejection
 - The agent **MUST NOT** fix gaps — the verifier routes failures via reject, never authors corrective content
-- The agent **MUST NOT** invent rules beyond this mandate; stage scope is the contract
+- The agent **MUST** name a specific failed criterion in any rejection

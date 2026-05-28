@@ -7,6 +7,7 @@ import {
 	chmodSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
 	unlinkSync,
@@ -932,17 +933,19 @@ body
 
 	test("reads phase derived from per-unit FM (v4)", () => {
 		// v4: phase is derived from per-unit FM, not state.json. The
-		// fixture's units have no iterations[] yet — derivation reports
-		// "execute" because hats are configured but no unit has run
-		// terminal-advance. The test fixture pre-dates v4's per-unit
-		// signal; the assertion follows what v4 actually computes from
-		// the on-disk shape.
+		// fixture's units exist but have no `reviews.*` stamps and no
+		// iterations[] yet. The cursor walks the PRE-execute spec review
+		// (reviews.<role>) BETWEEN elaborate completion and wave-ready hat
+		// dispatch, so a stage whose spec hasn't been signed off derives as
+		// "review" — NOT "execute". (Before 2026-05-19 the derivation
+		// checked execute before review and mislabeled this as "execute";
+		// see derivePhase / parser.ts ordering fix.)
 		const result = handleStateTool("haiku_stage_get", {
 			intent: intentSlug,
 			stage: "inception",
 			field: "phase",
 		})
-		assert.strictEqual(JSON.parse(getTextResult(result)).value, "execute")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "review")
 	})
 
 	test("reads status derived from per-unit FM (v4)", () => {
@@ -990,65 +993,76 @@ body
 
 	console.log("\n=== haiku_unit_get ===")
 
-	test("reads status from unit frontmatter", () => {
-		const result = handleStateTool("haiku_unit_get", {
-			intent: intentSlug,
-			stage: "inception",
-			unit: "unit-01-discovery",
-			field: "status",
-		})
-		assert.strictEqual(getTextResult(result), "active")
-	})
-
-	test("reads bolt count from unit", () => {
-		const result = handleStateTool("haiku_unit_get", {
-			intent: intentSlug,
-			stage: "inception",
-			unit: "unit-01-discovery",
-			field: "bolt",
-		})
-		assert.strictEqual(getTextResult(result), "2")
-	})
-
-	test("reads hat from unit", () => {
-		const result = handleStateTool("haiku_unit_get", {
-			intent: intentSlug,
-			stage: "inception",
-			unit: "unit-01-discovery",
-			field: "hat",
-		})
-		assert.strictEqual(getTextResult(result), "architect")
-	})
-
-	test("reads type from unit", () => {
-		const result = handleStateTool("haiku_unit_get", {
-			intent: intentSlug,
-			stage: "inception",
-			unit: "unit-01-discovery",
-			field: "type",
-		})
-		assert.strictEqual(getTextResult(result), "research")
-	})
-
-	test("reads depends_on as JSON", () => {
+	// v4 (2026-05-20): haiku_unit_get is agent-callable again but SCOPED —
+	// it reads agent-authorable/corrective fields as a STRUCTURED reply
+	// ({ ok, field, found, value }) and refuses FSM-driven fields. It's the
+	// read counterpart to haiku_unit_set's corrective exemption.
+	test("reads an agent-authorable array field (depends_on) as a structured value", () => {
 		const result = handleStateTool("haiku_unit_get", {
 			intent: intentSlug,
 			stage: "inception",
 			unit: "unit-02-elaborate",
 			field: "depends_on",
 		})
-		const deps = JSON.parse(getTextResult(result))
-		assert.deepStrictEqual(deps, ["unit-01-discovery"])
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.ok, true)
+		assert.strictEqual(parsed.found, true)
+		assert.deepStrictEqual(parsed.value, ["unit-01-discovery"])
 	})
 
-	test("returns empty for missing unit", () => {
+	test("reads a scalar field as a structured value", () => {
+		const result = handleStateTool("haiku_unit_get", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-01-discovery",
+			field: "type",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.value, "research")
+		assert.strictEqual(parsed.found, true)
+	})
+
+	test("refuses FSM-driven fields with unit_field_engine_only", () => {
+		for (const field of ["iterations", "reviews", "approvals", "started_at"]) {
+			const result = handleStateTool("haiku_unit_get", {
+				intent: intentSlug,
+				stage: "inception",
+				unit: "unit-01-discovery",
+				field,
+			})
+			const parsed = JSON.parse(getTextResult(result))
+			assert.strictEqual(result.isError, true, `${field} must be refused`)
+			assert.strictEqual(
+				parsed.error,
+				"unit_field_engine_only",
+				`${field} must return unit_field_engine_only; got ${parsed.error}`,
+			)
+		}
+	})
+
+	test("absent field → found:false, value:null (not an error)", () => {
+		const result = handleStateTool("haiku_unit_get", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-02-elaborate",
+			field: "quality_gates",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.ok, true)
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.value, null)
+	})
+
+	test("missing unit → unit_not_found", () => {
 		const result = handleStateTool("haiku_unit_get", {
 			intent: intentSlug,
 			stage: "inception",
 			unit: "unit-99-missing",
-			field: "status",
+			field: "outputs",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(result.isError, true)
+		assert.strictEqual(parsed.error, "unit_not_found")
 	})
 
 	// ── haiku_unit_set ────────────────────────────────────────────────────────
@@ -1064,14 +1078,14 @@ body
 			value: "haiku",
 		})
 		assert.strictEqual(getTextResult(result), "ok")
-		// Verify
+		// Verify via the structured haiku_unit_get reply.
 		const check = handleStateTool("haiku_unit_get", {
 			intent: intentSlug,
 			stage: "inception",
 			unit: "unit-02-elaborate",
 			field: "model",
 		})
-		assert.strictEqual(getTextResult(check), "haiku")
+		assert.strictEqual(JSON.parse(getTextResult(check)).value, "haiku")
 	})
 
 	test("set preserves body content", () => {
@@ -1373,7 +1387,7 @@ body
 	console.log("\n=== haiku_unit_reject_hat ===")
 
 	test("returns error for missing unit", () => {
-		const result = handleStateTool("haiku_unit_reject_hat", {
+		const result = handleStateTool("haiku_unit_reject_hat", { message: "test reject handoff",
 			intent: intentSlug,
 			unit: "unit-99-missing",
 		})
@@ -1476,7 +1490,7 @@ body
 	console.log("\n=== haiku_unit_advance_hat: inputs not declared ===")
 
 	test("blocks advance when unit has no inputs: field at all", () => {
-		const result = handleStateTool("haiku_unit_advance_hat", {
+		const result = handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			unit: "unit-03-no-inputs-field",
 		})
@@ -1491,7 +1505,7 @@ body
 	console.log("\n=== haiku_unit_advance_hat: outputs backpressure ===")
 
 	test("blocks completion when last hat has empty outputs", () => {
-		const result = handleStateTool("haiku_unit_advance_hat", {
+		const result = handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			unit: "unit-01-no-outputs",
 		})
@@ -1501,7 +1515,7 @@ body
 	})
 
 	test("allows completion when last hat has tracked outputs", () => {
-		const result = handleStateTool("haiku_unit_advance_hat", {
+		const result = handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			unit: "unit-02-with-outputs",
 		})
@@ -2168,7 +2182,7 @@ Test stage.
 		// computing 0===1=false for length=2, leaving status=addressed
 		// after assessor's advance.
 		// Call 1: fixer claims (no curHat, isFirst). hat → fixer, status → addressed.
-		const r1 = handleStateTool("haiku_feedback_advance_hat", {
+		const r1 = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 3,
@@ -2183,7 +2197,7 @@ Test stage.
 		// requires a `reply` string. Without it the call returns
 		// `reply_required`. Pass one so this regression test still
 		// exercises closure semantics, not the reply guard.
-		const r2 = handleStateTool("haiku_feedback_advance_hat", {
+		const r2 = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 3,
@@ -2197,20 +2211,44 @@ Test stage.
 			true,
 			"2-hat sequence MUST close on assessor's advance — this is the B4 off-by-one regression",
 		)
+
+		// Regression for the 2026-05-18 "cursor blind to FB closure" loop:
+		// terminal advance MUST stamp `closed_at` so the cursor (which
+		// reads `fm.closed_at` as the canonical closure witness) skips
+		// the FB on subsequent ticks. Without this, every tick re-emits
+		// start_feedback_hat → subagent calls advance_hat → handler
+		// rejects with lifecycle_violation → infinite loop.
+		const fbFile = readdirSync(fbDir).find((f) => /^0*3-/.test(f))
+		assert.ok(fbFile, "expected FB-003 file on disk")
+		const fbFm = parseFrontmatter(
+			readFileSync(join(fbDir, fbFile), "utf8"),
+		).data
+		assert.ok(
+			typeof fbFm.closed_at === "string" && fbFm.closed_at.length > 0,
+			`terminal advance MUST stamp closed_at; got: ${JSON.stringify(fbFm.closed_at)}`,
+		)
+		assert.strictEqual(
+			fbFm.status,
+			"closed",
+			"terminal advance must also keep status: closed for legacy readers",
+		)
 	})
 
-	test("haiku_feedback_advance_hat: response message must NOT promise next_subagent_dispatch_block when the field is absent (engine-bug-30 regression)", () => {
+	test("haiku_feedback_advance_hat: field-and-message agree on the next step (engine-bug-30 regression, 2026-05-19 contract)", () => {
 		// Bug 30: the handler used to return a `next_subagent_dispatch_block`
-		// field sourced from a sidecar file that the v4 cursor never writes
-		// (the sidecar relay belongs to the legacy review_fix / intent_completion_fix
-		// dispatch paths, neither of which is emitted by the v4 cursor). The
-		// field was always null, but the response message still told the agent:
-		//   "The next-hat dispatch block is in the `next_subagent_dispatch_block`
-		//    field — relay it verbatim to your parent."
-		// Result: rally-race handoff broke. Fix: drop the sidecar read, drop
-		// the field, message tells the agent to call haiku_run_next (mirrors
-		// haiku_unit_advance_hat). Pin the new contract: either the field is
-		// present and non-null OR the message no longer references it.
+		// field sourced from a sidecar file that the v4 cursor never writes.
+		// The field was always null, but the response message still told
+		// the agent to "relay it verbatim". Rally-race handoff broke.
+		//
+		// 2026-05-19: the field is back — built inline (no sidecar) by the
+		// engine walking the cursor under `withIntentDispatchLock` and
+		// rendering the next dispatch block using the same code path as
+		// the cursor's dispatch prompt builder. The bug-30 invariant
+		// survives: the message NEVER promises a relay when the field is
+		// null. The pin is now bidirectional:
+		//   - field non-null  → message must direct the agent to relay
+		//   - field null      → message must direct haiku_run_next (or
+		//                       terminate while siblings are mid-chain)
 		// Stand up a fresh FB so this test owns its fixture (the B4 regression
 		// fixture above is already consumed by call 1's advance).
 		writeFileSync(
@@ -2227,7 +2265,7 @@ created_at: 2026-05-13T00:00:00Z
 Body for no-relay-promise regression test.
 `,
 		)
-		const result = handleStateTool("haiku_feedback_advance_hat", {
+		const result = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 5,
@@ -2247,32 +2285,35 @@ Body for no-relay-promise regression test.
 			"feedback-assessor",
 			"non-terminal advance MUST name the next fix-hat",
 		)
-		// The pin: EITHER the response carries a non-null
-		// next_subagent_dispatch_block OR the message does not promise it.
-		const hasBlock =
-			typeof parsed.next_subagent_dispatch_block === "string" &&
-			parsed.next_subagent_dispatch_block.length > 0
-		const messagePromisesBlock = (parsed.message || "").includes(
+		// Field-and-message agreement (bidirectional).
+		const block = parsed.next_subagent_dispatch_block
+		const message = parsed.message || ""
+		const hasBlock = typeof block === "string" && block.length > 0
+		const messagePromisesBlock = message.includes(
 			"next_subagent_dispatch_block",
 		)
 		assert.ok(
 			hasBlock || !messagePromisesBlock,
-			`response message must not promise next_subagent_dispatch_block when the field is null/absent. Got: field=${JSON.stringify(parsed.next_subagent_dispatch_block)}, message=${JSON.stringify(parsed.message)}`,
+			`response message must not promise next_subagent_dispatch_block when the field is null/absent. Got: field=${JSON.stringify(block)}, message=${JSON.stringify(message)}`,
 		)
-		// And the message should point the agent at the canonical next step
-		// — haiku_run_next — so the rally-race progresses through the cursor
-		// rather than relying on a non-existent in-band relay block.
-		assert.ok(
-			/haiku_run_next/.test(parsed.message || ""),
-			`non-terminal advance message must direct the agent to call haiku_run_next. Got: ${JSON.stringify(parsed.message)}`,
-		)
+		if (hasBlock) {
+			assert.ok(
+				messagePromisesBlock || /relay/i.test(message),
+				`when the field carries a block, the message must direct the agent to relay it. Got: ${JSON.stringify(message)}`,
+			)
+		} else {
+			assert.ok(
+				/haiku_run_next|terminate/i.test(message),
+				`when the field is null, the message must direct haiku_run_next (or terminate). Got: ${JSON.stringify(message)}`,
+			)
+		}
 	})
 
 	test("haiku_feedback_advance_hat: terminal advance without `reply` returns reply_required", () => {
 		// Same fixture as B4 above, but skipping `reply` on the terminal
 		// call. The handler must reject with the stable named error so
 		// agents and tests can match on it.
-		const r = handleStateTool("haiku_feedback_advance_hat", {
+		const r = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 4,
@@ -2283,7 +2324,7 @@ Body for no-relay-promise regression test.
 	})
 
 	test("haiku_feedback_advance_hat refuses on already-closed FB (FB-002)", () => {
-		const result = handleStateTool("haiku_feedback_advance_hat", {
+		const result = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 2,
@@ -2298,10 +2339,60 @@ Body for no-relay-promise regression test.
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 2,
-			reason: "test",
+			message: "test",
 		})
 		const parsed = JSON.parse(getTextResult(result))
 		assert.strictEqual(parsed.error, "lifecycle_violation")
+	})
+
+	test("haiku_feedback_reject_hat: bounce-loop guard fires on 2nd rejection by same hat", () => {
+		// Regression for the cosmetic-drift FB bounce loop (surfaced
+		// 2026-05-17 on admin-portal-reimagine/design FB-047). When a
+		// fix-loop hat (e.g. feedback-assessor) rejects an FB and the
+		// engine bounces back to the prior hat (e.g. fixer), the prior
+		// hat re-runs and the rejecter re-rejects with the same impasse.
+		// Without a guard, this burns up to MAX_FIX_LOOP_BOLTS × |fix_hats|
+		// subagent dispatches per FB before the bolt cap notices. Engine
+		// fix: short-circuit on the 2nd rejection by the same hat with a
+		// stable named error pointing the agent at `haiku_feedback_reject`
+		// (terminal close, the right tool for non-actionable findings).
+		writeFileSync(
+			join(fbDir, "06-bounce-loop-guard.md"),
+			`---
+title: Bounce-loop-guard regression FB
+status: pending
+hat: fixer
+bolt: 2
+origin: adversarial-review
+author: completeness
+author_type: agent
+created_at: 2026-05-17T00:00:00Z
+iterations:
+  - bolt: 1
+    hat: feedback-assessor
+    completed_at: 2026-05-17T00:00:01Z
+    result: rejected
+    reason: "no actionable work — finding describes correct behavior"
+---
+
+Body for bounce-loop guard test.
+`,
+		)
+		const result = handleStateTool("haiku_feedback_reject_hat", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: 6,
+			message: "still no actionable work",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(result.isError, true, "guard MUST return isError")
+		assert.strictEqual(parsed.error, "fix_loop_no_progress")
+		assert.strictEqual(parsed.calling_hat, "feedback-assessor")
+		assert.strictEqual(parsed.prior_rejections_by_same_hat, 1)
+		assert.ok(
+			/haiku_feedback_reject\b/.test(parsed.message),
+			`message MUST point the agent at haiku_feedback_reject (terminal). Got: ${parsed.message}`,
+		)
 	})
 
 	// ── V-06: shared isIntentLocked / isIntentArchived helpers ────────────────

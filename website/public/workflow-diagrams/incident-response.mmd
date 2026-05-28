@@ -8,13 +8,9 @@ stateDiagram-v2
   investigate --> mitigate
   mitigate --> resolve
   resolve --> postmortem
-  postmortem --> intent_completion_review
-  intent_completion_review --> intent_completion_gate : review.clean
-  intent_completion_review --> intent_completion_fix : review.findings
-  intent_completion_fix --> intent_completion_gate : feedback.closed
-  intent_completion_fix --> intent_completion_fix : feedback.open
-  intent_completion_gate --> complete : gate.approved
-  intent_completion_gate --> postmortem : gate.changes_requested
+  postmortem --> intent_review
+  intent_review --> seal_intent : approvals.signed
+  seal_intent --> complete
 
   state triage {
     [*] --> triage_start_stage
@@ -134,8 +130,10 @@ stateDiagram-v2
     mitigate_elaborate_loop --> mitigate_review_fix : verifier.fail
     mitigate_elaborate_loop --> mitigate_review_fix : feedback.pending
     state mitigate_execute {
-      [*] --> mitigate_execute_mitigator
+      [*] --> mitigate_execute_mitigation_planner
+      mitigate_execute_mitigation_planner --> mitigate_execute_mitigator : hat.advance
       mitigate_execute_mitigator --> mitigate_execute_verifier : hat.advance
+      mitigate_execute_mitigator --> mitigate_execute_mitigation_planner : hat.reject
       mitigate_execute_verifier --> mitigate_execute_done : hat.advance
       mitigate_execute_verifier --> mitigate_execute_mitigator : hat.reject
       mitigate_execute_done --> [*]
@@ -189,8 +187,10 @@ stateDiagram-v2
     state resolve_execute {
       [*] --> resolve_execute_engineer
       resolve_execute_engineer --> resolve_execute_reviewer : hat.advance
-      resolve_execute_reviewer --> resolve_execute_done : hat.advance
+      resolve_execute_reviewer --> resolve_execute_verifier : hat.advance
       resolve_execute_reviewer --> resolve_execute_engineer : hat.reject
+      resolve_execute_verifier --> resolve_execute_done : hat.advance
+      resolve_execute_verifier --> resolve_execute_reviewer : hat.reject
       resolve_execute_done --> [*]
     }
     resolve_execute --> resolve_review

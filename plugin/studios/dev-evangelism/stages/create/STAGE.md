@@ -15,24 +15,22 @@ outputs:
 
 # Create
 
-Create is the build / execution stage of the dev-evangelism lifecycle. It takes the narrative brief and turns it into the actual content assets — written posts, talk decks, demo projects, video scripts. This is where abstract messaging becomes concrete artifacts that developers can read, watch, and run.
+The build stage of the dev-evangelism lifecycle: turn the narrative brief into the actual content assets — written posts, talk decks, demo projects, video scripts. This is where abstract messaging becomes concrete artifacts developers can read, watch, and run.
 
-Each unit here covers one asset family (one blog post, one talk, one demo project, one video). The stage's two production hats split along a real boundary: the content-creator owns the prose / slide / script asset itself; the demo-builder owns any runnable code or live demo that the asset references or depends on.
+## Scope
 
-## Per-unit baton
+Producing the assets the narrative scoped, with any runnable code the content depends on owned alongside the asset. Create decides *how the story becomes concrete artifacts* — it does not redefine the story (narrative) or distribute the result (publish). Each unit covers one asset family — a post, a talk, a demo project, a video.
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`content-creator`** (plan / do for the asset) reads the narrative brief and authors the written / spoken / scripted asset for this unit — copy, structure, calls-to-action, format-specific shaping
-- **`demo-builder`** (do for runnable proof) builds any code / live demo the content references — working, reproducible from a clean environment, with documented setup
-- **`verifier`** (verify) validates the asset+demo pair against substance / runnability / consistency rules and advances or rejects to the responsible hat
+- Author each asset to the narrative brief's arc and takeaways — copy, structure, calls-to-action shaped to the format.
+- Build any code or live demo the content references so it's working and reproducible from a clean environment, with documented setup.
+- Keep every published claim backed by proof the reader can run or inspect.
+- Confirm each asset actually hits the takeaways the narrative defined.
 
-The baton: narrative brief → asset draft (content-creator) → asset + working demo (demo-builder) → validated asset (verifier).
+## What NOT to do
 
-## Inputs and outputs
-
-Upstream `narrative/story-arc` feeds in. The output is the intent-scope `CONTENT-PACKAGE.md` enumerating every produced asset (with its runnable demo, if any) and confirming each asset hits the narrative's takeaways.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, content-creator, feedback-assessor]` dispatches per finding. The gate is `ask` — content correctness and tone are the highest-stakes decision before public distribution, so a human reviews before publish kicks off.
+- Don't reshape the story arc or messaging — a wrong narrative is a revisit upstream, not a quiet rewrite here.
+- Don't distribute, cross-post, or seed communities — that's the publish stage.
+- Don't ship a demo that only runs on your machine.
+- Don't add assets the narrative didn't scope.

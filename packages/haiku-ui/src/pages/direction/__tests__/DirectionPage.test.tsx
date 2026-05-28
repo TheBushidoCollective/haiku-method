@@ -586,3 +586,51 @@ describe("DirectionPage — intake mode (no archetypes)", () => {
 		expect(body.files[0]?.data_url.startsWith("data:")).toBe(true)
 	})
 })
+
+describe("DirectionPage — context preamble", () => {
+	afterEach(() => {
+		cleanup()
+		document.body.innerHTML = ""
+	})
+
+	const PREAMBLE = "This direction governs the logged-in dashboard shell."
+
+	it("renders the preamble above the archetype cards (select mode)", () => {
+		const session = { ...loadFixture("direction-session.json"), context: PREAMBLE }
+		render(
+			<Harness client={makeMockClient()}>
+				<DirectionPage session={session} sessionId={session.session_id} />
+			</Harness>,
+		)
+		expect(screen.getByText(PREAMBLE)).toBeTruthy()
+	})
+
+	it("renders the preamble in intake mode (no archetypes)", () => {
+		const session: DirectionSessionPayload = {
+			session_id: "intake-context",
+			session_type: "design_direction",
+			status: "pending",
+			title: "Pick or upload",
+			intent_slug: "demo-intent",
+			context: PREAMBLE,
+			archetypes: [],
+			selection: null,
+		}
+		render(
+			<Harness client={makeMockClient()}>
+				<DirectionPage session={session} sessionId="intake-context" />
+			</Harness>,
+		)
+		expect(screen.getByText(PREAMBLE)).toBeTruthy()
+	})
+
+	it("omits the Context card when no preamble is supplied", () => {
+		const session = loadFixture("direction-session.json")
+		render(
+			<Harness client={makeMockClient()}>
+				<DirectionPage session={session} sessionId={session.session_id} />
+			</Harness>,
+		)
+		expect(screen.queryByText("Context")).toBeNull()
+	})
+})

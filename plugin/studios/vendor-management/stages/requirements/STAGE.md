@@ -10,22 +10,22 @@ inputs: []
 
 # Requirements
 
-Define the procurement need and turn it into a structured RFP / RFI / RFQ that vendors can respond to comparably. This stage is the front-end of the vendor lifecycle — every downstream stage (evaluate, negotiate, onboard, monitor) reads from the RFP and the scoring methodology this stage produces.
+The front-end of the vendor lifecycle: define the procurement need and turn it into a structured RFP / RFI / RFQ that vendors can respond to comparably. Every downstream stage reads from the requirements and the scoring methodology this stage produces.
 
-## Per-unit baton
+## Scope
 
-Each unit walks `analyst → specifier → verifier` in `plan → do → verify` order:
+Need definition and solicitation design: gathering and prioritizing stakeholder requirements, then expressing them as a solicitation document with evaluation criteria and a scoring methodology. Requirements decides *what we're asking vendors for and how we'll judge them* — not which vendor wins (evaluate) or what terms get signed (negotiate).
 
-- **`analyst`** (plan) gathers stakeholder needs, classifies them by priority, and produces a structured requirement set
-- **`specifier`** (do) turns the requirement set into the RFP / RFI / RFQ document with evaluation criteria and a scoring methodology
-- **`verifier`** (verify) validates the knowledge artifact for substance, citation, internal consistency, and decision-register accountability
+## What to do
 
-Detailed process lives in each hat's md file — this stage enforces the chain, not the per-hat content.
+- Gather stakeholder needs and classify them by priority so vendors and evaluators share one understanding of what matters.
+- Write requirements precisely enough that vendor responses come back comparable rather than apples-to-oranges.
+- Define the evaluation criteria and scoring methodology now — evaluate will run against exactly what's set here.
+- Make the solicitation answerable: a requirement no vendor could respond to cleanly is a defect.
 
-## Inputs and outputs
+## What NOT to do
 
-This is the first stage of the studio — no upstream inputs. The output is the RFP document (`outputs/RFP-DOCUMENT.md`) plus the requirement set and evaluation methodology it carries, which feed `evaluate`.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, analyst, feedback-assessor]` dispatches per finding — the classifier routes the FB to the right unit, the analyst re-authors the affected requirements, and the assessor independently decides closure. The gate is `ask` — a human stakeholder approves the RFP locally before vendors are contacted. Project overlays at `.haiku/studios/vendor-management/stages/requirements/` may add house-style conventions (procurement-system-specific RFP templates, organization-specific compliance language, regulated-industry sections) without modifying the plugin defaults.
+- Don't score or shortlist vendors — there are no responses yet; that's evaluate.
+- Don't negotiate terms or pricing; that's negotiate.
+- Don't ship criteria the evaluate stage couldn't actually apply.
+- Don't leave a stakeholder need unstated that later stages will be measured against.

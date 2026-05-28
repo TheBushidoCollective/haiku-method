@@ -44,6 +44,84 @@ export function deriveUnitStatus(frontmatter: Record<string, unknown>): string {
 	return "pending"
 }
 
+/** One unit hat-loop iteration as it arrives on the wire. `message` is the
+ *  v9 handoff baton (what the hat did + what the next hat needs); `reason`
+ *  is the pre-v9 legacy field surfaced as a fallback. */
+export interface UnitIterationWire {
+	hat: string
+	result?: string | null
+	started_at?: string
+	completed_at?: string | null
+	commit?: string
+	message?: string
+	reason?: string
+}
+
+/** Hat-history timeline for an expanded unit — the per-hat handoffs the
+ *  engine recorded as the unit walked its hat sequence. Mirrors the
+ *  feedback "Fix history" timeline so units and findings read the same.
+ *  Renders nothing when the unit has no iterations. */
+function UnitHatHistory({
+	iterations,
+}: {
+	iterations: UnitIterationWire[] | undefined
+}) {
+	if (!Array.isArray(iterations) || iterations.length === 0) return null
+	return (
+		<details
+			className="mt-3 text-sm"
+			data-testid="unit-hat-history"
+		>
+			<summary className="cursor-pointer text-stone-600 dark:text-stone-300 font-medium">
+				Hat history ({iterations.length}{" "}
+				{iterations.length === 1 ? "step" : "steps"})
+			</summary>
+			<ol className="mt-2 space-y-2 border-l-2 border-stone-200 dark:border-stone-700 pl-3">
+				{iterations.map((it, idx) => {
+					const resultClass =
+						it.result === "advance"
+							? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"
+							: it.result === "reject"
+								? "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300"
+								: "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300"
+					const handoff = it.message ?? it.reason
+					return (
+						<li
+							// biome-ignore lint/suspicious/noArrayIndexKey: iterations[] is append-only and ordered; the index is the canonical key
+							key={`iter-${idx}`}
+							className="text-stone-700 dark:text-stone-200"
+						>
+							<div className="flex items-center gap-2 flex-wrap">
+								<span className="font-semibold">{it.hat}</span>
+								{it.result && (
+									<span
+										className={`px-1.5 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wider ${resultClass}`}
+									>
+										{it.result}
+									</span>
+								)}
+								{it.commit && (
+									<code
+										className="text-[11px] text-stone-500 dark:text-stone-400 font-mono"
+										title={it.commit}
+									>
+										{it.commit.slice(0, 7)}
+									</code>
+								)}
+							</div>
+							{handoff && (
+								<div className="mt-0.5 text-stone-600 dark:text-stone-300 [overflow-wrap:anywhere]">
+									{handoff}
+								</div>
+							)}
+						</li>
+					)
+				})}
+			</ol>
+		</details>
+	)
+}
+
 /**
  * UnitsTable — tabular stage-grouped unit listing for the intent
  * review's "Units" tab. Each row expands inline to render the full
@@ -247,6 +325,13 @@ export const UnitsTable = forwardRef<
 																)}
 																<UnitOutputsSection
 																	outputs={unitOutputs?.[u.slug] ?? []}
+																/>
+																<UnitHatHistory
+																	iterations={
+																		u.frontmatter.iterations as
+																			| UnitIterationWire[]
+																			| undefined
+																	}
 																/>
 															</div>
 														</div>

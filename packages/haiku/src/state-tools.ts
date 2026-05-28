@@ -43,6 +43,7 @@ import {
 	findCurrentStage,
 	nextHatForUnit,
 } from "./orchestrator/workflow/cursor.js"
+import { INTENT_ROOT_INTERNAL_ENTRIES } from "./stage-internal-entries.js"
 import { sanitizeFeedbackBody } from "./state/sanitize-feedback.js"
 import { readServiceProcesses } from "./view-boot.js"
 
@@ -2871,6 +2872,12 @@ function autoPopulateOutputs(
 		if (intentRel !== null) {
 			if (bookkeeping.has(intentRel)) continue
 			if (bookkeepingPrefixes.some((p) => intentRel.startsWith(p))) continue
+			// Intent-root system journals (action-log.jsonl, write-audit.jsonl,
+			// drift baselines, …) MUST never enter a unit's `outputs:` — the
+			// engine appends to them during the unit's work, so they show up in
+			// the git diff, but they aren't the unit's deliverable. Without this
+			// they leaked into outputs and rendered on the SPA / browse surfaces.
+			if (INTENT_ROOT_INTERNAL_ENTRIES.has(intentRel)) continue
 		}
 		// Record the path in its natural form: intent-relative when inside the
 		// intent dir, repo-relative otherwise.

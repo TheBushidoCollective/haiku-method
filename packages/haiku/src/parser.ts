@@ -835,6 +835,11 @@ async function parseUnitOutputs(
 				continue
 			}
 			for (const declared of outputs) {
+				// System journals (action-log.jsonl, write-audit.jsonl, drift
+				// baselines, …) are never a unit's deliverable. The source fix in
+				// `autoPopulateOutputs` stops new leaks; this drops them on the
+				// SPA surface for intents that leaked them before that landed.
+				if (INTENT_ROOT_INTERNAL_ENTRIES.has(basename(declared))) continue
 				const intentRel = intentRelativeOutputPath(declared, intentDir)
 				const intentAbs = resolve(intentDirAbs, intentRel)
 				const withinIntent =

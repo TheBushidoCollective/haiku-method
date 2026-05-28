@@ -213,6 +213,13 @@ function describeAction(action: CursorAction | null): {
 	}
 	switch (action.kind) {
 		case "elaborate_loop":
+			// First arrival at an OPTIONAL stage surfaces a keep-or-drop
+			// decision (cursor stamps `optional_offer`). It's a gated choice,
+			// not mid-elaboration — render it distinctly so the strip shows
+			// the engine is waiting on the user/agent, not working.
+			if ((action as { optional_offer?: boolean }).optional_offer === true) {
+				return { kind: "elaborate", label: "keep / drop?", gated: true }
+			}
 			return { kind: "elaborate", label: "elaborate", gated: false }
 		case "start_unit_hat":
 			return { kind: "execute", label: "execute", gated: false }

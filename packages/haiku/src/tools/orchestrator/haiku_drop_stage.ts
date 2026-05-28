@@ -39,8 +39,13 @@ import {
 	validateToolInput,
 } from "../../state/schemas/inputs/_validate.js"
 import {
+	deleteStageBranch,
+	ensureOnStageBranch,
+} from "../../git-worktree.js"
+import {
 	findHaikuRoot,
 	gitCommitState,
+	isGitRepo,
 	parseFrontmatter,
 	setFrontmatterField,
 } from "../../state-tools.js"
@@ -131,8 +136,40 @@ export default defineTool({
 		const droppedIdx = planStages.indexOf(stage)
 		const nextStage = planStages[droppedIdx + 1]
 		const nextStages = planStages.filter((s) => s !== stage)
+
+		// Land the drop on INTENT MAIN — the fork source for every future
+		// stage branch (`ensureStageBranch` does `git branch <stage> <main>`).
+		// `intent.stages` is engine-owned FSM state; the keep-or-drop offer
+		// parked the checkout on the optional stage's own branch (the cursor's
+		// post-action branch switch), so a naive write would commit the drop
+		// there and strand it. The per-tick downstream sync only flows
+		// main → stage, and a dropped stage never completes (so it never
+		// merges up), so intent main would never see the drop: the next stage
+		// forks from a main that still lists the dropped stage, the cursor
+		// flip-flops dropped ⇆ next every tick, and the deadlock detector
+		// halts the loop — the "haiku next hangs after a drop" report.
+		//
+		// Guard 3 already proved the stage never started, so its branch holds
+		// no work to preserve. Switch back to intent main, write the drop
+		// there, then reap the abandoned optional-stage branch so it can't
+		// reassert the stale plan through a later sync. No-op in fs mode (no
+		// branches) — the single intent.md is authoritative as-is.
+		if (isGitRepo()) {
+			const mainGuard = ensureOnStageBranch(slug, undefined)
+			if (!mainGuard.ok) {
+				return text(
+					JSON.stringify({
+						error: "drop_stage_branch_switch_failed",
+						message: `Could not switch to intent main to land the drop of '${stage}': ${mainGuard.message}. Resolve the working-tree state (commit or stash any stray changes) and retry.`,
+					}),
+				)
+			}
+		}
 		setFrontmatterField(intentFile, "stages", nextStages)
 		gitCommitState(`haiku: drop optional stage ${stage} from ${slug}`)
+		// Reap the optional stage's now-orphaned branch (we're off it, on
+		// intent main). Best-effort — deleteStageBranch never throws.
+		if (isGitRepo()) deleteStageBranch(slug, stage)
 		emitTelemetry("haiku.stage.dropped", { intent: slug, stage, studio })
 
 		return text(

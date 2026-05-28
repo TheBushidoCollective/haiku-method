@@ -15,11 +15,11 @@ import {
 	deriveActiveStageFromStageTree,
 	deriveStageStateFromUnits,
 	deriveV4ActiveStage,
-	normalizeStageProgression,
 	isCollectibleIntentAsset,
 	isCollectibleStageFile,
 	isV4Intent,
 	mergeKnowledge as mergeKnowledgeShared,
+	normalizeStageProgression,
 	parseElaborationVerified,
 	parseFeedback,
 	parseIntentApprovals,
@@ -111,6 +111,84 @@ export class GitHubProvider implements BrowseProvider {
 		})
 	}
 
+	/** Raw GraphQL POST. Relay queries are static — they can't fan out across a
+	 *  variable number of branch refs in one request — so the lean list loader
+	 *  builds a per-branch-aliased query string and posts it here. */
+	private async rawGraphql<T>(
+		query: string,
+		variables?: Record<string, unknown>,
+	): Promise<T | undefined> {
+		try {
+			const res = await fetch("https://api.github.com/graphql", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					...this.graphqlHeaders(),
+				},
+				body: JSON.stringify({ query, variables: variables ?? {} }),
+			})
+			if (!res.ok) return undefined
+			const json = (await res.json()) as { data?: T }
+			return json.data
+		} catch {
+			return undefined
+		}
+	}
+
+	/** LEAN per-main-branch batch for the LIST view. For each `haiku/<slug>/main`
+	 *  branch, reads ONLY its `intent.md` text + the immediate subdir names under
+	 *  `.haiku/intents/<slug>/stages/` (the stage-dir count) — as per-branch
+	 *  ALIASES in one raw GraphQL request (chunked). Replaces the per-main
+	 *  readFile + per-stage unit probe. (GitHub PR data is already inline in the
+	 *  branch-list query, so no extra PR fetch is needed.) */
+	private async batchMainBranchData(
+		mains: Array<{ slug: string; branch: string }>,
+	): Promise<Map<string, { rawText: string | null; stageDirs: string[] }>> {
+		const out = new Map<
+			string,
+			{ rawText: string | null; stageDirs: string[] }
+		>()
+		type RepoFields = Record<
+			string,
+			{
+				text?: string | null
+				entries?: Array<{ name?: string | null; type?: string | null }>
+			} | null
+		>
+		const CHUNK = 10
+		for (let i = 0; i < mains.length; i += CHUNK) {
+			const chunk = mains.slice(i, i + CHUNK)
+			const fields = chunk
+				.map((m, j) => {
+					const md = JSON.stringify(
+						`${m.branch}:.haiku/intents/${m.slug}/intent.md`,
+					)
+					const st = JSON.stringify(
+						`${m.branch}:.haiku/intents/${m.slug}/stages`,
+					)
+					return (
+						`a${j}_md: object(expression: ${md}) { ... on Blob { text } }\n` +
+						`a${j}_st: object(expression: ${st}) { ... on Tree { entries { name type } } }`
+					)
+				})
+				.join("\n")
+			const query = `query GHBatchMains($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields} } }`
+			const data = await this.rawGraphql<{ repository?: RepoFields }>(query, {
+				owner: this.owner,
+				name: this.repo,
+			})
+			const repo = data?.repository
+			chunk.forEach((m, j) => {
+				const rawText = repo?.[`a${j}_md`]?.text ?? null
+				const stageDirs = (repo?.[`a${j}_st`]?.entries ?? [])
+					.filter((e) => e?.type === "tree" && typeof e?.name === "string")
+					.map((e) => e.name as string)
+				out.set(m.slug, { rawText, stageDirs })
+			})
+		}
+		return out
+	}
+
 	/** Build a git expression like "main:.haiku/intents" */
 	private expr(path: string): string {
 		const ref = this.branch || "HEAD"
@@ -188,80 +266,6 @@ export class GitHubProvider implements BrowseProvider {
 			.filter((e) => e.type === "blob")
 			.map((e) => e.name)
 			.sort()
-	}
-
-	/** Cheaply detect which declared stages have at least one unit file
-	 *  on disk. Returns a Set of stage names with non-empty `units/`
-	 *  dirs. Used by listIntents() to derive a v4 active-stage candidate
-	 *  without per-unit FM reads. One GraphQL call per intent (tree
-	 *  listing of `.haiku/intents/<slug>/stages` on the intent main
-	 *  branch). When the stages directory is missing entirely, returns
-	 *  an empty set. */
-	private async probeStagesWithUnits(
-		slug: string,
-		ref: string,
-		stages: ReadonlyArray<string>,
-	): Promise<Set<string>> {
-		const stagesExpr = `${ref}:.haiku/intents/${slug}/stages`
-		const _cacheKey = `gh:${this.owner}/${this.repo}:listFiles:${stagesExpr}:withUnits`
-		type StageTreeData = {
-			repository: {
-				object: {
-					entries?: ReadonlyArray<{
-						name: string
-						type: string
-						object?: {
-							entries?: ReadonlyArray<{
-								name: string
-								type: string
-								object?: {
-									entries?: ReadonlyArray<{
-										name: string
-										type: string
-									}> | null
-								} | null
-							}> | null
-						} | null
-					}> | null
-				} | null
-			} | null
-		}
-		// Reuse GetIntentQuery's deep traversal — it already includes
-		// stages → stage → subdir → files. Pull just the stagesTree slice.
-		const data = await this.cachedQuery<operationsGetIntentQuery$data>(
-			GetIntentQuery,
-			{
-				owner: this.owner,
-				name: this.repo,
-				intentExpr: `${ref}:.haiku/intents/${slug}/intent.md`,
-				intentTreeExpr: `${ref}:.haiku/intents/${slug}`,
-				stagesExpr,
-				knowledgeExpr: `${ref}:.haiku/intents/${slug}/knowledge`,
-				operationsExpr: `${ref}:.haiku/intents/${slug}/operations`,
-				reflectionExpr: `${ref}:.haiku/intents/${slug}/reflection.md`,
-			},
-			`gh:${this.owner}/${this.repo}:getIntent:${slug}:${ref}`,
-		)
-		const stagesEntries = data?.repository?.stagesTree?.entries ?? []
-		const declaredStages = new Set(stages)
-		const stagesWithUnits = new Set<string>()
-		for (const stageDir of stagesEntries) {
-			if (stageDir.type !== "tree" || !declaredStages.has(stageDir.name))
-				continue
-			const subdirs = stageDir.object?.entries ?? []
-			const unitsDir = subdirs.find(
-				(e) => e.name === "units" && e.type === "tree",
-			)
-			const files = unitsDir?.object?.entries ?? []
-			const hasMd = files.some(
-				(f) => f.type === "blob" && f.name.endsWith(".md"),
-			)
-			if (hasMd) stagesWithUnits.add(stageDir.name)
-		}
-		// Silence the unused type alias — kept for documentation of the
-		// nested shape we're traversing.
-		void (null as unknown as StageTreeData)
-		return stagesWithUnits
 	}
 
 	/** Read a file from a specific branch (bypasses this.branch). */
@@ -383,80 +387,62 @@ export class GitHubProvider implements BrowseProvider {
 			intentsBySlug.set(entry.name, intent)
 		}
 
-		// Step 3: For each haiku/{slug}/main branch, read ONLY the matching intent
-		// and merge it over the HEAD baseline. Branch version is more current for
-		// active work and carries branch/PR metadata.
+		// Step 3: ONE raw aliased request reads intent.md + the stages-dir set
+		// for EVERY main branch at once (chunked) — replacing the per-main
+		// readFile + per-stage unit probe. PR metadata is already inline in the
+		// branch-list query (free), so we keep it. Active stage + progress
+		// derive from the stage-dir set (the lean equivalent of the probe).
 		const mainBranches = branchNodes.filter((node) =>
 			node?.name.endsWith("/main"),
 		)
-
-		const branchReadPromises = mainBranches.map(async (node) => {
-			if (!node) return
+		const prMetaBySlug = new Map<
+			string,
+			{ prUrl: string | null; prStatus: string | null; prNumber: number | null }
+		>()
+		const mainSlugs: Array<{ slug: string; branch: string }> = []
+		for (const node of mainBranches) {
+			if (!node) continue
 			const slug = node.name.replace(/\/main$/, "")
-			const branchName = `haiku/${node.name}`
-
+			const branch = `haiku/${node.name}`
 			const pr = node.associatedPullRequests.nodes?.[0]
-			const prMeta = pr
-				? {
-						prUrl: pr.url,
-						prStatus: pr.state.toLowerCase(),
-						prNumber: pr.number,
-					}
-				: { prUrl: null, prStatus: null, prNumber: null }
+			prMetaBySlug.set(slug, {
+				prUrl: pr?.url ?? null,
+				prStatus: pr?.state.toLowerCase() ?? null,
+				prNumber: pr?.number ?? null,
+			})
+			mainSlugs.push({ slug, branch })
+		}
 
-			const rawText = await this.readFileFromBranch(
-				branchName,
-				`.haiku/intents/${slug}/intent.md`,
-			)
-			if (!rawText) return
-
-			const intent = this.parseIntentFromRaw(slug, rawText, {
-				branch: branchName,
+		const batch = await this.batchMainBranchData(mainSlugs)
+		for (const { slug, branch } of mainSlugs) {
+			const data = batch.get(slug)
+			if (!data?.rawText) continue
+			const prMeta = prMetaBySlug.get(slug) ?? {
+				prUrl: null,
+				prStatus: null,
+				prNumber: null,
+			}
+			const intent = this.parseIntentFromRaw(slug, data.rawText, {
+				branch,
 				...prMeta,
 			})
-			// v4 active-stage refinement — when intent.md has no
-			// `active_stage` (v4 dropped it), look at the stages tree
-			// (cheap directory listing — no per-unit reads) and pick the
-			// last stage that has any unit files. Falls back to stages[0]
-			// when the agent hasn't touched any stage yet.
-			const isV4 = isV4Intent(intent.raw)
-			if (isV4 && intent.studioStages.length > 0) {
-				const stagesWithUnits = await this.probeStagesWithUnits(
-					slug,
-					branchName,
-					intent.studioStages,
-				)
+			if (isV4Intent(intent.raw) && intent.studioStages.length > 0) {
 				intent.activeStage = deriveActiveStageFromStageTree(
 					intent.studioStages,
-					stagesWithUnits,
+					new Set(data.stageDirs),
 				)
-				// Recompute progress to match the refined active stage — v4
-				// intent.md has no active_stage, so the initial parse left
-				// stagesComplete at 0 and the list-view progress bar (gated on
-				// stagesComplete > 0) stayed hidden for in-flight intents.
 				if (intent.status !== "completed") {
 					const idx = intent.studioStages.indexOf(intent.activeStage)
 					if (idx >= 0) intent.stagesComplete = idx
 				}
 			}
 			intentsBySlug.set(slug, intent)
-			this.intentBranchMap.set(slug, branchName)
-			this.intentMetaMap.set(slug, { branch: branchName, ...prMeta })
-		})
-
-		// Stream default-branch intents immediately so the UI renders progressively
-		for (const [, intent] of intentsBySlug) {
-			onProgress?.(intent)
+			this.intentBranchMap.set(slug, branch)
+			this.intentMetaMap.set(slug, { branch, ...prMeta })
 		}
-
-		// Branch reads may update existing entries — re-emit after they resolve
-		await Promise.all(branchReadPromises)
 
 		const allIntents = Array.from(intentsBySlug.values())
-		for (const intent of allIntents) {
-			if (intent.branch) onProgress?.(intent)
-		}
-
+		for (const intent of allIntents) onProgress?.(intent)
 		return allIntents
 	}
 

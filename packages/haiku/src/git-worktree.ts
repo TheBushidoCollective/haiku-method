@@ -1904,40 +1904,33 @@ export function mergeStageBranchForward(
 		}
 	}
 
-	// Standard engine-merge contract: run the merge, classify any
-	// failure as conflict-vs-other, return structured `isConflict` /
-	// `conflictFiles` so callers can dispatch a resolver subagent or
-	// surface a precise error.
+	// Engine-protected merge contract — SAME driver as unit / fix-chain /
+	// downstream-sync merges. A plain `git merge` here conflicted on
+	// `intent.md` whenever the stage branch and intent main carried
+	// divergent engine-owned frontmatter (e.g. different approval
+	// timestamps from parallel stamping), handing the agent a
+	// `mid_merge_blocking_tick` on a file the engine solely writes
+	// (Bug 2, worker-new-badge 2026-05-28). `engineProtectedMergeInCwd`
+	// re-asserts intent-root engine state from the TARGET (HEAD =
+	// intent main, the authoritative side for cross-stage approvals)
+	// after the merge, while stage-only files still merge forward; only
+	// genuine conflicts on agent (non-engine) content surface.
 	const mergeFn = (cwd?: string): { conflictFiles: string[] } => {
 		const cwdArgs = cwd ? ["-C", cwd] : []
-		try {
-			run([
-				"git",
-				...cwdArgs,
-				"merge",
-				fromBranch,
-				"--no-ff",
-				"--no-edit",
-				"-m",
-				`haiku: merge forward ${fromStage} → ${toStage}`,
-			])
-			return { conflictFiles: [] }
-		} catch (mergeErr) {
-			const conflicts = tryRun([
-				"git",
-				...cwdArgs,
-				"diff",
-				"--name-only",
-				"--diff-filter=U",
-			])
-				.split("\n")
-				.filter(Boolean)
-			if (conflicts.length === 0) {
-				tryRun(["git", ...cwdArgs, "merge", "--abort"])
-				throw mergeErr
-			}
-			return { conflictFiles: conflicts }
+		const r = engineProtectedMergeInCwd(
+			cwdArgs,
+			fromBranch,
+			slug,
+			`haiku: merge forward ${fromStage} → ${toStage}`,
+		)
+		if (r.ok) return { conflictFiles: [] }
+		if (r.conflictFiles && r.conflictFiles.length > 0) {
+			return { conflictFiles: r.conflictFiles }
 		}
+		// Hard non-conflict failure (e.g. dirty tree, pre-merge refusal) —
+		// abort any partial merge and throw so the outer catch surfaces it.
+		tryRun(["git", ...cwdArgs, "merge", "--abort"])
+		throw new Error(r.message || `merge ${fromBranch} → ${toBranch} failed`)
 	}
 
 	// Three primary-checkout positions, mirroring `mergeStageBranchIntoMain`:

@@ -360,6 +360,13 @@ export const ReviewSessionPayloadSchema = z
 		 *  Same wire shape as outputs — surfaced in the SPA's "Other"
 		 *  tab. Reported 2026-05-13. */
 		other_files: z.array(OutputArtifactSchema).optional(),
+		/** Intent-ROOT "other" files — anything at `.haiku/intents/<slug>/`
+		 *  that isn't a known category dir, the intent spec, or a system
+		 *  journal (action-log/write-audit are excluded by design — they're
+		 *  never shown in the SPA). Surfaced in the intent-completion
+		 *  review's "Other" tab; each carries `stage: ""` (the intent-scope
+		 *  marker). Distinct from per-stage `other_files`. */
+		intent_other_files: z.array(OutputArtifactSchema).optional(),
 		/** Per-unit output preview entries keyed by unit slug. Built
 		 *  server-side at session creation so the SPA doesn't have to
 		 *  per-row-fetch each output's bytes. */

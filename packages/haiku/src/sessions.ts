@@ -342,6 +342,19 @@ export interface ReviewSession {
 		relativePath?: string
 		intentRelativePath?: string
 	}>
+	/** Intent-ROOT stray files (intent-scope "Other"). Same shape as
+	 *  `otherFiles`; `stage` is "". System journals (action-log /
+	 *  write-audit) are excluded by the parser — never surfaced in the SPA. */
+	intentOtherFiles?: Array<{
+		stage: string
+		name: string
+		type: string
+		language?: string
+		directory?: string
+		content?: string
+		relativePath?: string
+		intentRelativePath?: string
+	}>
 	/** Per-unit output preview entries keyed by unit slug. The SPA's
 	 *  Units tab renders each entry as a click-out link with a hover
 	 *  popover preview. Built server-side at session creation so the

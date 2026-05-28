@@ -90,7 +90,11 @@ export function OutputArtifactsTab({
 						return (
 							<div key={stage}>
 								<h3 className="text-sm font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-3 mt-6 first:mt-0">
-									{stage.charAt(0).toUpperCase() + stage.slice(1)}
+									{/* Intent-scope entries carry stage "" — label them
+									    "Intent root" rather than render a blank header. */}
+									{stage
+										? stage.charAt(0).toUpperCase() + stage.slice(1)
+										: "Intent root"}
 								</h3>
 								{stageArtifacts.map((a, _i) => {
 									const globalIndex = artifacts.indexOf(a)

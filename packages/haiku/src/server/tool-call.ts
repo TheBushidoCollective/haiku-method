@@ -24,6 +24,7 @@ import {
 	parseAllUnits,
 	parseCriteria,
 	parseIntent,
+	parseIntentRootFiles,
 	parseKnowledgeFiles,
 	parseStageArtifacts,
 	parseStageFiles,
@@ -575,6 +576,9 @@ export async function handleToolCall(
 		const stageArtifacts = await parseStageArtifacts(intentDirAbs)
 		const { outputs: outputArtifacts, other: otherFiles } =
 			await parseStageFiles(intentDirAbs)
+		// Intent-ROOT stray files (intent-scope "Other") — excludes system
+		// journals (action-log/write-audit) by design.
+		const intentOtherFiles = await parseIntentRootFiles(intentDirAbs)
 		// Rewrite every relativePath (not just images) to a tunnel URL so
 		// click-out links work for HTML, file, and image types alike. The
 		// parser produces intent-dir-relative paths; the helper returns
@@ -582,7 +586,7 @@ export async function handleToolCall(
 		// reaches via `withAuthQuery`. Preserve the original
 		// intent-relative path on `intentRelativePath` so the SPA can
 		// look the artifact up in `output_declared_by`.
-		for (const oa of [...outputArtifacts, ...otherFiles]) {
+		for (const oa of [...outputArtifacts, ...otherFiles, ...intentOtherFiles]) {
 			if (oa.relativePath) {
 				oa.intentRelativePath = oa.relativePath
 				oa.relativePath = buildStageArtifactUrl(
@@ -597,6 +601,7 @@ export async function handleToolCall(
 			stageArtifacts,
 			outputArtifacts,
 			otherFiles,
+			intentOtherFiles,
 		})
 
 		// (Legacy server-rendered review HTML removed — the live route
@@ -1479,6 +1484,9 @@ export async function prepareGateReviewSession(
 	const stageArtifacts = await parseStageArtifacts(intentDirAbs)
 	const { outputs: outputArtifacts, other: otherFiles } =
 		await parseStageFiles(intentDirAbs)
+	// Intent-ROOT stray files (intent-scope "Other") — excludes system
+	// journals (action-log/write-audit) by design.
+	const intentOtherFiles = await parseIntentRootFiles(intentDirAbs)
 
 	// Rewrite every relativePath (not just images) to a tunnel URL so
 	// click-out links work for HTML, file, and image types alike.
@@ -1486,7 +1494,7 @@ export async function prepareGateReviewSession(
 	// `intentRelativePath` so the SPA can look the artifact up in
 	// `output_declared_by`. Same rewrite applies to the new "other"
 	// (stray-files) bucket so reviewers can open them too.
-	for (const oa of [...outputArtifacts, ...otherFiles]) {
+	for (const oa of [...outputArtifacts, ...otherFiles, ...intentOtherFiles]) {
 		if (oa.relativePath) {
 			oa.intentRelativePath = oa.relativePath
 			oa.relativePath = buildStageArtifactUrl(
@@ -1502,6 +1510,7 @@ export async function prepareGateReviewSession(
 		stageArtifacts,
 		outputArtifacts,
 		otherFiles,
+		intentOtherFiles,
 	})
 
 	void mermaid

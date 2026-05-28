@@ -7,6 +7,17 @@
 
 import { BrowseMarkdown } from "./BrowseMarkdown"
 
+// Markdown styling for a handoff baton. Tones down the default `prose`
+// blockquote (which renders oversized italic text wrapped in curly quotation
+// marks — it looked weird for a one-line `>` aside in a baton) into a quiet
+// left-ruled note, and drops the auto-inserted quote glyphs.
+const BATON_MARKDOWN_CLASS =
+	"prose prose-sm prose-stone max-w-none [overflow-wrap:anywhere] dark:prose-invert " +
+	"prose-blockquote:border-l-2 prose-blockquote:border-stone-300 prose-blockquote:pl-3 " +
+	"prose-blockquote:font-normal prose-blockquote:not-italic prose-blockquote:text-stone-500 " +
+	"dark:prose-blockquote:border-stone-600 dark:prose-blockquote:text-stone-400 " +
+	"[&_blockquote_p:first-of-type]:before:content-none [&_blockquote_p:last-of-type]:after:content-none"
+
 /** One hat-loop iteration from a unit or feedback frontmatter
  *  (VCS-parsed). Units use `result: advance | reject`; feedback uses
  *  `advanced | closed | reopened | rejected`. */
@@ -109,7 +120,7 @@ export function HatHistory({ iterations }: { iterations?: unknown }) {
 											commit={it.commit}
 										/>
 									</summary>
-									<div className="mt-2 prose prose-sm prose-stone max-w-none [overflow-wrap:anywhere] dark:prose-invert">
+									<div className={`mt-2 ${BATON_MARKDOWN_CLASS}`}>
 										<BrowseMarkdown>{handoff}</BrowseMarkdown>
 									</div>
 								</details>
@@ -161,7 +172,7 @@ export function FixHistory({ iterations }: { iterations?: unknown }) {
 											bolt={it.bolt}
 										/>
 									</summary>
-									<div className="mt-1 prose prose-sm prose-stone max-w-none [overflow-wrap:anywhere] dark:prose-invert">
+									<div className={`mt-1 ${BATON_MARKDOWN_CLASS}`}>
 										<BrowseMarkdown>{handoff}</BrowseMarkdown>
 									</div>
 								</details>

@@ -1470,26 +1470,21 @@ function LazyOutputPreview({
 	}, [open, provider, path, slug, intentBranch])
 
 	return (
-		<div className="rounded-lg border border-stone-200 dark:border-stone-700">
+		<>
 			<button
 				type="button"
-				onClick={() => setOpen((v) => !v)}
-				className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left"
+				onClick={() => setOpen(true)}
+				className="flex w-full items-center justify-between gap-2 rounded-lg border border-stone-200 px-4 py-2.5 text-left transition hover:border-teal-300 dark:border-stone-700 dark:hover:border-teal-700"
 			>
 				<span className="truncate font-mono text-xs text-stone-600 dark:text-stone-400">
 					{path}
 				</span>
-				<span className="flex items-center gap-2">
-					<span className="text-[10px] text-stone-400">
-						{unitNames.length === 1
-							? unitNames[0]
-							: `${unitNames.length} units`}
-					</span>
-					<span className="text-stone-400">{open ? "▾" : "▸"}</span>
+				<span className="text-[10px] text-stone-400">
+					{unitNames.length === 1 ? unitNames[0] : `${unitNames.length} units`}
 				</span>
 			</button>
 			{open && (
-				<div className="border-t border-stone-100 p-4 dark:border-stone-800">
+				<OutputFileModal name={path} onClose={() => setOpen(false)}>
 					{state.loading && <p className="text-xs text-stone-400">Loading…</p>}
 					{!state.loading && state.error && (
 						<p className="text-xs text-stone-400">{state.error}</p>
@@ -1502,8 +1497,67 @@ function LazyOutputPreview({
 							host={host}
 						/>
 					)}
-				</div>
+				</OutputFileModal>
 			)}
+		</>
+	)
+}
+
+/** Centered modal shell for a previewed unit-output file — Escape / backdrop
+ *  close. Mirrors the unit view's DocModal so outputs open the same way on both
+ *  the stage and unit surfaces. */
+function OutputFileModal({
+	name,
+	onClose,
+	children,
+}: {
+	name: string
+	onClose: () => void
+	children: React.ReactNode
+}) {
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") onClose()
+		}
+		document.addEventListener("keydown", onKey)
+		document.body.style.overflow = "hidden"
+		return () => {
+			document.removeEventListener("keydown", onKey)
+			document.body.style.overflow = ""
+		}
+	}, [onClose])
+	return (
+		<div
+			className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onClose()
+			}}
+			role="dialog"
+			aria-modal="true"
+			aria-label={`File viewer: ${name}`}
+		>
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: inner container stops backdrop-close propagation */}
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation is click-capture suppression */}
+			<div
+				className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xl dark:border-stone-700 dark:bg-stone-900"
+				onClick={(e) => e.stopPropagation()}
+			>
+				<div className="flex items-center justify-between border-b border-stone-200 px-5 py-3 dark:border-stone-700">
+					<h3 className="truncate font-mono text-sm font-semibold text-stone-900 dark:text-stone-100">
+						{name}
+					</h3>
+					<button
+						type="button"
+						onClick={onClose}
+						className="ml-4 rounded p-1 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+						aria-label="Close"
+					>
+						&#10005;
+					</button>
+				</div>
+				<div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+			</div>
 		</div>
 	)
 }

@@ -30,11 +30,11 @@ review-agents-include:
 
 # Development
 
-Turn the product stage's specification into working software: code and passing tests that satisfy the acceptance criteria and land on the project's main branch.
+Turn the upstream specification into working software: code and passing tests that satisfy the work's completion criteria and land on the project's main branch. For an application that ran the product and design stages, that spec is their acceptance criteria, contracts, and design artifacts; for a library or CLI that dropped them, it's the unit's own completion criteria plus the inception knowledge — read whatever upstream inputs the dispatch actually resolved.
 
 ## Scope
 
-Implementation against the spec — the code, the tests that prove it, and the architecture decisions that fall out along the way. Not redefining what to build (that's product), not redesigning surfaces (that's design).
+Implementation against the spec — the code, the tests that prove it, and the architecture decisions that fall out along the way. Not redefining what to build (that's the product stage, where it ran), not redesigning surfaces (that's design, where it ran).
 
 ## What to do
 

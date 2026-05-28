@@ -20,7 +20,7 @@ List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, fi
 ### 1. Gather evidence
 
 - The unit body — completion criteria, planner's plan, builder's `As-built` notes.
-- The product stage's `ACCEPTANCE-CRITERIA.md` and matching `.feature` files.
+- The unit's declared upstream inputs the dispatch resolved for it — the spec it builds against (acceptance criteria, `.feature` files, data contracts) and any design artifacts, where this intent kept those stages. Read what's present; a dropped optional stage won't appear, so review against the spec that actually exists, not one this prose assumes.
 - The unit's diff vs. its stage branch: `git diff <stage-branch>...<unit-branch>`.
 - The full test output, fresh — don't trust the builder's "tests pass" claim. Re-run.
 - `git log` on the unit branch — see the RED → GREEN → REFACTOR commit shape.

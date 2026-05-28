@@ -7,11 +7,7 @@ The plan is **tactical, not strategic**: file paths, function signatures, sequen
 ### 1. Read your inputs in order
 
 - The unit body — completion criteria, success criteria, any pre-existing notes
-- The product stage's `ACCEPTANCE-CRITERIA.md` for this slice
-- The product stage's `.feature` files that map to this unit's criteria
-- The product stage's `DATA-CONTRACTS.md` rows that this unit touches
-- The design stage's `DESIGN-BRIEF.md` + `DESIGN-TOKENS.md` (and `design-artifacts/` if the unit touches UI)
-- The inception stage's `DISCOVERY.md` for the relevant knowledge surfaces
+- **Your declared upstream inputs** — the dispatch lists the resolved upstream artifacts for this unit (the spec, acceptance criteria, data contracts, design brief and tokens, the knowledge surfaces, whatever this stage declares). Read each one that's present. The list is the source of truth: a stage this intent dropped (an optional `design` / `product` for a library, say) simply won't appear — don't go hunting for an artifact that isn't there, and don't assume one exists because this prose once named it.
 - Sibling units' completed plans + outputs, where `depends_on:` points at them
 - The project's actual code — `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod` to know the stack, and a `git log -- <relevant paths>` to know recent intent in the area you'll touch
 

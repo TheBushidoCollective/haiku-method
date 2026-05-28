@@ -80,6 +80,66 @@ export function resolveIntentStages(
 	return studioStages
 }
 
+/** Read the intent's CANONICAL stage plan — `intent.stages` as it exists on
+ *  intent main (`haiku/<slug>/main`), the fork source every stage branch is
+ *  cut from. A diverged stage-branch checkout can carry a stale plan (e.g. the
+ *  old buggy `haiku_drop_stage` that wrote the drop to the stage branch instead
+ *  of main); main is authoritative. In filesystem mode (no branches) or when
+ *  main can't be read, falls back to the working-tree intent.md so behavior is
+ *  identical for healthy intents. */
+export function resolveCanonicalIntentStages(
+	slug: string,
+	studio: string,
+	workingTreeFm: Record<string, unknown>,
+): string[] {
+	// Lazy require avoids a static cycle (git-worktree → state-tools → …).
+	const { readIntentFileAtMain } = require("../git-worktree.js") as {
+		readIntentFileAtMain: (s: string) => string | null
+	}
+	const mainRaw = readIntentFileAtMain(slug)
+	if (mainRaw) {
+		const mainFm = parseFrontmatter(mainRaw).data
+		return resolveIntentStages(mainFm, studio)
+	}
+	return resolveIntentStages(workingTreeFm, studio)
+}
+
+/** Derive the active stage from the CANONICAL (intent-main) plan, walking it
+ *  against on-disk stage-completion. This is the branch-agnostic analog of
+ *  `findCurrentStage`: it reads the plan from main so a diverged stage-branch
+ *  checkout can't produce a contradictory active stage, but it still judges
+ *  completion from the working-tree (fast-forwarded) stage dirs the same way
+ *  the cursor does. Returns null when every canonical stage is complete (the
+ *  intent is at completion) or the plan is empty. */
+export function findCurrentStageFromMain(
+	slug: string,
+	studio: string,
+): string | null {
+	const iDir = intentDir(slug)
+	const intentFile = join(iDir, "intent.md")
+	const workingTreeFm = existsSync(intentFile)
+		? parseFrontmatter(readFileSync(intentFile, "utf8")).data
+		: {}
+	const stages = resolveCanonicalIntentStages(slug, studio, workingTreeFm)
+	if (stages.length === 0) return null
+	const mode =
+		typeof workingTreeFm.mode === "string" && workingTreeFm.mode.length > 0
+			? (workingTreeFm.mode as string)
+			: "continuous"
+	const { isStageComplete } = require("./workflow/cursor.js") as {
+		isStageComplete: (
+			dir: string,
+			studio: string,
+			stage: string,
+			mode: string,
+		) => boolean
+	}
+	for (const stage of stages) {
+		if (!isStageComplete(iDir, studio, stage, mode)) return stage
+	}
+	return null
+}
+
 /** Filter cross-stage references (a stage's `inputs:` entries) to those whose
  *  source stage is still in the intent's plan — the auto-ignore that lets an
  *  optional stage be dropped without orphaning a downstream dependency.

@@ -1,6 +1,7 @@
 ---
 name: onboard
 description: Integrate vendor and complete setup
+optional: true
 hats: [integrator, coordinator, verifier]
 fix_hats: [classifier, integrator, feedback-assessor]
 review: auto

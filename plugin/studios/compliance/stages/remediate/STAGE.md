@@ -1,6 +1,7 @@
 ---
 name: remediate
 description: Implement controls, fix gaps, update configurations and policies
+optional: true
 hats: [remediation-engineer, policy-writer, verifier]
 fix_hats: [classifier, remediation-engineer, feedback-assessor]
 review: ask

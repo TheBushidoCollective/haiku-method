@@ -1,6 +1,7 @@
 ---
 name: offer
 description: Develop compensation package and extend offer
+optional: true
 hats: [compensator, closer, verifier]
 fix_hats: [classifier, compensator, feedback-assessor]
 review: external

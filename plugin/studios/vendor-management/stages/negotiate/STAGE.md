@@ -1,6 +1,7 @@
 ---
 name: negotiate
 description: Negotiate terms and review contract provisions
+optional: true
 hats: [negotiator, legal-reviewer, verifier]
 fix_hats: [classifier, negotiator, feedback-assessor]
 review: external

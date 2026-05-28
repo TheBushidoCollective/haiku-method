@@ -1,6 +1,7 @@
 ---
 name: close
 description: Conduct retrospective, capture lessons learned, and handoff
+optional: true
 hats: [closer, archivist, verifier]
 fix_hats: [classifier, closer, archivist, feedback-assessor]
 review: ask

@@ -1,6 +1,7 @@
 ---
 name: close
 description: Period close, reconciliation, and financial sign-off
+optional: true
 hats: [controller, reconciler, verifier]
 fix_hats: [classifier, controller, feedback-assessor]
 review: external

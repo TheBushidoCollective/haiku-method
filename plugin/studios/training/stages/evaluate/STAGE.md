@@ -1,6 +1,7 @@
 ---
 name: evaluate
 description: Measure training effectiveness and analyze feedback
+optional: true
 hats: [evaluator, analyst, verifier]
 fix_hats: [classifier, evaluator, feedback-assessor]
 review: ask

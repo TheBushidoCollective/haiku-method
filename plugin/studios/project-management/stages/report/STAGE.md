@@ -1,6 +1,7 @@
 ---
 name: report
 description: Create stakeholder updates and project dashboards
+optional: true
 hats: [reporter, communicator, verifier]
 fix_hats: [classifier, reporter, communicator, feedback-assessor]
 review: ask

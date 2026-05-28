@@ -1,6 +1,7 @@
 ---
 name: certify
 description: Prepare for and support external audit, address findings
+optional: true
 hats: [audit-liaison, finding-resolver, verifier]
 fix_hats: [classifier, audit-liaison, feedback-assessor]
 review: [external, await]

@@ -1,6 +1,7 @@
 ---
 name: execute
 description: Finalize documents and coordinate signatures
+optional: true
 hats: [closer, administrator, verifier]
 fix_hats: [classifier, closer, feedback-assessor]
 review: await

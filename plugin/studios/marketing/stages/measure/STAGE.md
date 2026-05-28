@@ -1,6 +1,7 @@
 ---
 name: measure
 description: Track KPIs, analyze performance, and generate insights and recommendations
+optional: true
 hats: [analyst, report-writer, verifier]
 fix_hats: [classifier, analyst, feedback-assessor]
 review: auto

@@ -1,6 +1,7 @@
 ---
 name: audit
 description: Assess existing documentation, identify gaps, and prioritize what to write or update
+optional: true
 hats: [auditor, gap-analyst, verifier]
 fix_hats: [classifier, auditor, feedback-assessor]
 review: auto

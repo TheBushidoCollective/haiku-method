@@ -1,6 +1,7 @@
 ---
 name: certify
 description: Quality sign-off and release readiness assessment
+optional: true
 hats: [certifier, reviewer, verifier]
 fix_hats: [classifier, certifier, feedback-assessor]
 review: external

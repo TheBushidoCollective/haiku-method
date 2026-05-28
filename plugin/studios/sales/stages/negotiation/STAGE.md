@@ -1,6 +1,7 @@
 ---
 name: negotiation
 description: Handle objections, negotiate terms, and align stakeholders
+optional: true
 hats: [negotiator, legal-reviewer, verifier]
 fix_hats: [classifier, negotiator, feedback-assessor]
 review: [ask, await]

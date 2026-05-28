@@ -1,6 +1,7 @@
 ---
 name: review
 description: Adversarial quality review of the deliverable
+optional: true
 hats: [review-planner, synthesizer, reviewer, critic, fact-checker]
 fix_hats: [classifier, synthesizer, feedback-assessor]
 review: ask

@@ -1,6 +1,7 @@
 ---
 name: close
 description: Execute the deal, handoff to customer success, and document learnings
+optional: true
 hats: [closer, handoff-coordinator, verifier]
 fix_hats: [classifier, closer, feedback-assessor]
 review: [external, await]

@@ -1,6 +1,7 @@
 ---
 name: release
 description: Storefront submission, platform certification, and patch pipeline
+optional: true
 hats: [release-engineer, platform-cert-specialist, verifier]
 fix_hats: [classifier, release-engineer, feedback-assessor]
 review: await

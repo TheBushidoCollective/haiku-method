@@ -1,6 +1,7 @@
 ---
 name: draft
 description: Create legal documents and contracts
+optional: true
 hats: [drafter, editor, verifier]
 fix_hats: [classifier, drafter, feedback-assessor]
 review: ask

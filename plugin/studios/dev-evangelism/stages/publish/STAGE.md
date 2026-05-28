@@ -1,6 +1,7 @@
 ---
 name: publish
 description: Distribute content across channels
+optional: true
 hats: [distributor, community-manager, verifier]
 fix_hats: [classifier, distributor, feedback-assessor]
 review: auto

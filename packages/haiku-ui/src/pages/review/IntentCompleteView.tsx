@@ -56,6 +56,16 @@ export interface IntentCompleteViewProps {
 	 *  explicit URL — common when the user opens the PR via `gh pr
 	 *  create` or the GitHub UI directly. */
 	discoveredReviewUrl?: DiscoveredReviewUrl | null
+	/** Terminal seal state from the cursor (`current_state.seal_status`).
+	 *  `"sealed"` → the work landed on the default branch and the intent is
+	 *  write-locked. `"pending_seal"` → built + signed + reflected but the
+	 *  hub branch hasn't merged into the default branch yet, so the intent
+	 *  is HELD (the engine never merges; the human/host does). Null on older
+	 *  payloads → fall back to the deprecated `status` frontmatter shim. */
+	sealStatus?: "sealed" | "pending_seal" | null
+	/** When `sealStatus === "pending_seal"`, the default branch the work is
+	 *  waiting to land on (e.g. `main`). */
+	awaitingMergeInto?: string | null
 	/** Output artifacts across every stage. Surfaced as a click-out
 	 *  list at the final intent gate so reviewers can walk through
 	 *  the deliverables before approving the merge. */
@@ -84,6 +94,8 @@ export function IntentCompleteView({
 	stageOrder,
 	deliveryReviewUrl,
 	discoveredReviewUrl,
+	sealStatus,
+	awaitingMergeInto,
 	outputArtifacts,
 	outputDeclaredBy,
 }: IntentCompleteViewProps): React.ReactElement {
@@ -104,11 +116,18 @@ export function IntentCompleteView({
 	)
 	const phase = (intentFrontmatter.phase as string | undefined) ?? ""
 	const status = intentFrontmatter.status ?? ""
-	const isFullyComplete = status === "completed"
-	const headlineLabel = isFullyComplete
+	// Prefer the cursor's authoritative seal_status; fall back to the
+	// deprecated v3 `status` shim only when the wire didn't carry it.
+	const isSealed =
+		sealStatus === "sealed" || (sealStatus == null && status === "completed")
+	const isPendingSeal = sealStatus === "pending_seal"
+	const headlineLabel = isSealed
 		? "Intent complete"
-		: "All stages reviewed"
+		: isPendingSeal
+			? "Pending seal"
+			: "All stages reviewed"
 	const intentMainBranch = `haiku/${intentSlug}/main`
+	const mergeTarget = awaitingMergeInto || "the repo's default branch"
 
 	return (
 		<div
@@ -117,7 +136,11 @@ export function IntentCompleteView({
 		>
 			<header className="rounded-lg border-2 border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-900/20 px-6 py-5">
 				<div className="flex flex-wrap items-center gap-2 mb-2">
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-teal-700 text-white">
+					<span
+						className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider text-white ${
+							isPendingSeal ? "bg-violet-600" : "bg-teal-700"
+						}`}
+					>
 						{headlineLabel}
 					</span>
 					{phase && (
@@ -141,13 +164,13 @@ export function IntentCompleteView({
 						.
 					</p>
 				)}
-				{!isFullyComplete && (
+				{!isSealed && (
 					<p className="text-sm text-stone-700 dark:text-stone-300 mt-2">
 						Awaiting merge of{" "}
-						<code className="font-mono">{intentMainBranch}</code> into the
-						repo's mainline. The merge is the only remaining action — no further{" "}
-						<code className="font-mono">haiku_run_next</code> tick needed to
-						seal.
+						<code className="font-mono">{intentMainBranch}</code> into{" "}
+						<code className="font-mono">{mergeTarget}</code>. The intent is built,
+						signed, and reflected — but it won't seal until that merge lands. The
+						engine never merges it for you; merging is the human/host's call.
 					</p>
 				)}
 			</header>

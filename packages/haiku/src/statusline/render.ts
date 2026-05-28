@@ -29,6 +29,10 @@ export type StatuslinePhaseKind =
 	| "gate"
 	| "complete"
 	| "sealed"
+	// Terminal-but-held: built, signed, reflected — waiting for the work to
+	// land on the default branch before it seals. Rendered gated (the human
+	// owns the merge).
+	| "pending_seal"
 	| "blocked"
 	// Engine self-maintenance the agent isn't driving: merging a fix-chain,
 	// resolving conflicts, reconciling upstream, repairing clobbered state.
@@ -273,6 +277,7 @@ const C = {
 	gate: "\x1b[38;5;170m", // magenta
 	complete: "\x1b[38;5;71m", // green
 	sealed: "\x1b[38;5;71m", // green
+	pending_seal: "\x1b[38;5;177m", // light violet — held, awaiting merge
 	blocked: "\x1b[38;5;203m", // red
 	recovering: "\x1b[38;5;44m", // cyan — engine self-maintenance (merge/repair)
 	setup: "\x1b[38;5;245m", // grey (intent-level setup phases)

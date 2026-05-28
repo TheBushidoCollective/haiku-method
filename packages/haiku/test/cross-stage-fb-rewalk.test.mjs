@@ -33,6 +33,7 @@ import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import matter from "gray-matter"
 import {
+	deliverIntent,
 	initTestRepo,
 	makeFeedback,
 	makeIntent,
@@ -86,6 +87,13 @@ async function withRepo(slug, fn) {
 // Kept inline so the two tests can evolve independently when their
 // hat-sequence expectations diverge.
 function applyResponse(intentDir, action, repoRoot, slug) {
+	// Merge gate (2026-05-28): when the engine holds at pending_seal, the
+	// human/host delivers the hub branch onto the default branch so the next
+	// tick can seal. The engine never performs this merge itself.
+	if (action.action === "pending_seal") {
+		deliverIntent({ repoRoot, slug })
+		return
+	}
 	const at = new Date().toISOString()
 	const stage = action.stage
 	if (!stage) {

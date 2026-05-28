@@ -577,7 +577,7 @@ export function payloadFor(
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
 					what: opts.isLast
-						? "every stage merged → cursor walks intent-scope approvals (`spec`, `continuity`, `cross-stage-consistency`, then each studio `intent-review-agents/` role — software: `runtime-verifier`, `delivery-verifier` — then `user`) and emits `intent_review { role }` per missing role, then `seal_intent`, then `sealed`."
+						? "every stage merged → cursor walks intent-scope approvals (`spec`, `continuity`, `cross-stage-consistency`, then each studio `intent-review-agents/` role — software: `runtime-verifier`, `delivery-verifier` — then `user`) and emits `intent_review { role }` per missing role. All signed → if `haiku/{slug}/main` hasn't landed on the default branch, `pending_seal` HOLDS (engine never merges); once merged, `seal_intent` → `sealed`."
 						: "stage merged into intent main; cursor's next tick walks the next stage (the new `firstUnmergedStage`).",
 				},
 				{
@@ -588,7 +588,7 @@ export function payloadFor(
 			],
 			action: opts.isLast ? "seal_intent" : "complete_stage",
 			summary: opts.isLast
-				? "final stage merged → walk intent-scope approvals → seal_intent → sealed"
+				? "final stage merged → walk intent-scope approvals → pending_seal (held until merged to default) → seal_intent → sealed"
 				: `merge stage \`${stageLower}\` into intent main → next stage (${opts.nextStageName ?? "?"})`,
 			payload: opts.isLast
 				? {

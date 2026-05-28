@@ -62,7 +62,7 @@ prompts/
     review/                       intent_review (per-role serial walk;
                                   engine roles render from sibling
                                   intent_review/engine-bodies/<role>.eta.md)
-    seal/                         seal_intent, intent_complete, intent_approved
+    seal/                         seal_intent, pending_seal, intent_complete, intent_approved
     repair/                       safe_intent_repair, revise_unit_specs,
                                   external_review_requested
 

@@ -249,6 +249,17 @@ export const IntentCurrentStateSchema = z
 		 *  `milestones.length` when every milestone is done. */
 		progress_index: z.number().int().nonnegative().optional(),
 		progress_total: z.number().int().nonnegative().optional(),
+		/** Terminal seal state — present only once every stage has merged
+		 *  (the intent is past all stages). `"sealed"` once the terminal
+		 *  write-lock is stamped; `"pending_seal"` when the work is built,
+		 *  signed, and reflected but its hub branch hasn't yet landed on the
+		 *  repo's default branch (held awaiting merge — the engine never
+		 *  merges; the human or the host does). Omitted while any stage is
+		 *  still in flight. */
+		seal_status: z.enum(["sealed", "pending_seal"]).optional(),
+		/** When `seal_status === "pending_seal"`, the default branch the work
+		 *  is waiting to land on (e.g. `main`). */
+		awaiting_merge_into: z.string().optional(),
 	})
 	.describe(
 		"Unified current-state snapshot — derived fresh per request from per-unit frontmatter and branch-merge state. The single source of truth for 'where is this intent right now?'.",

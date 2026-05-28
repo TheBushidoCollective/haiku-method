@@ -142,6 +142,7 @@ export function snapshotMilestoneIndex(
 		case "record_reflection":
 			return find((key) => key === "reflection")
 		case "seal_intent":
+		case "pending_seal":
 		case "sealed":
 			return find((key) => key === "seal")
 		default:

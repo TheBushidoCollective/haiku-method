@@ -613,6 +613,10 @@ function ReviewLayoutLoaded({
 									stageOrder={stageNamesOrdered}
 									deliveryReviewUrl={deliveryReviewUrl}
 									discoveredReviewUrl={discoveredReviewUrl}
+									sealStatus={session.current_state?.seal_status ?? null}
+									awaitingMergeInto={
+										session.current_state?.awaiting_merge_into ?? null
+									}
 									outputArtifacts={session.output_artifacts}
 									outputDeclaredBy={session.output_declared_by}
 								/>

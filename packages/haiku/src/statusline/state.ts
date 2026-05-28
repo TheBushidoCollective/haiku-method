@@ -217,7 +217,7 @@ function describeAction(action: CursorAction | null): {
 			// decision (cursor stamps `optional_offer`). It's a gated choice,
 			// not mid-elaboration — render it distinctly so the strip shows
 			// the engine is waiting on the user/agent, not working.
-			if ((action as { optional_offer?: boolean }).optional_offer === true) {
+			if (action.optional_offer === true) {
 				return { kind: "elaborate", label: "keep / drop?", gated: true }
 			}
 			return { kind: "elaborate", label: "elaborate", gated: false }

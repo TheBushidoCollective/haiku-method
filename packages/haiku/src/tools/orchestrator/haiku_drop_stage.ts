@@ -21,6 +21,7 @@
 
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { deleteStageBranch, ensureOnStageBranch } from "../../git-worktree.js"
 import {
 	resolveIntentStages,
 	resolveStageOptional,
@@ -38,10 +39,6 @@ import {
 	jsonSchemaOf,
 	validateToolInput,
 } from "../../state/schemas/inputs/_validate.js"
-import {
-	deleteStageBranch,
-	ensureOnStageBranch,
-} from "../../git-worktree.js"
 import {
 	findHaikuRoot,
 	gitCommitState,

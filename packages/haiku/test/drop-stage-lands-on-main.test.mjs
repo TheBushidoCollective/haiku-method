@@ -20,8 +20,8 @@ import { execFileSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
-import { fileURLToPath } from "node:url"
 import { test } from "node:test"
+import { fileURLToPath } from "node:url"
 
 const SRC = new URL("../src/", import.meta.url).pathname
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -95,10 +95,17 @@ test("haiku_drop_stage lands the drop on intent main and reaps the stage branch"
 		assert.equal(getCurrentBranch(), `haiku/${slug}/design`)
 		assert.equal(findCurrentStage(slug, "software"), "design")
 
-		const dropTool = (await import(`${SRC}tools/orchestrator/haiku_drop_stage.ts`))
-			.default
-		const res = parseToolJson(await dropTool.handle({ intent: slug, stage: "design" }))
-		assert.equal(res.action, "stage_dropped", `unexpected: ${JSON.stringify(res)}`)
+		const dropTool = (
+			await import(`${SRC}tools/orchestrator/haiku_drop_stage.ts`)
+		).default
+		const res = parseToolJson(
+			await dropTool.handle({ intent: slug, stage: "design" }),
+		)
+		assert.equal(
+			res.action,
+			"stage_dropped",
+			`unexpected: ${JSON.stringify(res)}`,
+		)
 		assert.deepEqual(res.stages, ["development"])
 
 		// 1. The drop landed on intent MAIN (the fork source), and the

@@ -191,6 +191,39 @@ await test("unit outputs surface even when stages/<stage>/artifacts/ does not ex
 	)
 })
 
+await test("system journals (action-log.jsonl / write-audit.jsonl) never surface as outputs", async () => {
+	// The engine appends to intent-root journals during a unit's work, so they
+	// can land in `outputs:` (via git-diff auto-populate on pre-fix intents).
+	// They are NOT deliverables and must be dropped from the SPA output surface
+	// (2026-05-28). Source fix is in autoPopulateOutputs; this pins the
+	// defensive display filter.
+	const intentDir = mkdtempSync(join(tmp, "intent-journals-"))
+	const units = join(intentDir, "stages", "development", "units")
+	mkdirSync(units, { recursive: true })
+	mkdirSync(join(intentDir, "product"), { recursive: true })
+	writeFileSync(join(intentDir, "action-log.jsonl"), '{"e":1}\n')
+	writeFileSync(join(intentDir, "write-audit.jsonl"), "{}\n")
+	writeFileSync(join(intentDir, "product", "REAL.md"), "# real deliverable\n")
+	writeFileSync(
+		join(units, "unit-01-x.md"),
+		"---\ntitle: x\noutputs:\n  - action-log.jsonl\n  - write-audit.jsonl\n  - product/REAL.md\n---\n# unit body",
+	)
+	const artifacts = await parseOutputArtifacts(intentDir)
+	const names = artifacts.map((a) => a.name)
+	assert.ok(
+		!names.some((n) => n.endsWith("action-log.jsonl")),
+		`action-log.jsonl must NOT surface as an output; got ${JSON.stringify(names)}`,
+	)
+	assert.ok(
+		!names.some((n) => n.endsWith("write-audit.jsonl")),
+		`write-audit.jsonl must NOT surface as an output; got ${JSON.stringify(names)}`,
+	)
+	assert.ok(
+		names.includes("product/REAL.md"),
+		`the real deliverable must still surface; got ${JSON.stringify(names)}`,
+	)
+})
+
 await test("unit outputs are attributed to their unit's stage", async () => {
 	const intentDir = setupIntentWithUnitOutputs()
 	const artifacts = await parseOutputArtifacts(intentDir)

@@ -43,6 +43,8 @@ import {
 	findCurrentStage,
 	nextHatForUnit,
 } from "./orchestrator/workflow/cursor.js"
+import { isAwaitingMerge } from "./orchestrator/workflow/intent-delivery.js"
+import { INTENT_ROOT_INTERNAL_ENTRIES } from "./stage-internal-entries.js"
 import { sanitizeFeedbackBody } from "./state/sanitize-feedback.js"
 import { readServiceProcesses } from "./view-boot.js"
 
@@ -2871,6 +2873,12 @@ function autoPopulateOutputs(
 		if (intentRel !== null) {
 			if (bookkeeping.has(intentRel)) continue
 			if (bookkeepingPrefixes.some((p) => intentRel.startsWith(p))) continue
+			// Intent-root system journals (action-log.jsonl, write-audit.jsonl,
+			// drift baselines, …) MUST never enter a unit's `outputs:` — the
+			// engine appends to them during the unit's work, so they show up in
+			// the git diff, but they aren't the unit's deliverable. Without this
+			// they leaked into outputs and rendered on the SPA / browse surfaces.
+			if (INTENT_ROOT_INTERNAL_ENTRIES.has(intentRel)) continue
 		}
 		// Record the path in its natural form: intent-relative when inside the
 		// intent dir, repo-relative otherwise.
@@ -9207,11 +9215,19 @@ export function handleStateTool(
 				const sealedAt =
 					typeof data.sealed_at === "string" && data.sealed_at.length > 0
 				const activeStage = studio ? findCurrentStage(slug, studio) : null
-				// Both "sealed_at set" and "every stage merged" surface as
-				// "completed" to callers. The distinction (sealed vs.
-				// pre-seal-complete) is internal to the engine.
-				const derivedStatus =
-					sealedAt || activeStage === null ? "completed" : "active"
+				// A sealed stamp is only "completed" once the work has landed on
+				// the default branch — otherwise it's "pending_seal" (held). Same
+				// for an all-stages-merged-but-unsealed intent: "pending_seal" if
+				// the hub branch hasn't merged, else "completed". A stage still
+				// active → "active". LOCAL-only merge probe (no gh/glab) — this is
+				// a per-intent list display; a transient pending_seal on a
+				// squash-merged-not-yet-ticked intent is acceptable.
+				let derivedStatus: string
+				if (sealedAt || activeStage === null)
+					derivedStatus = isAwaitingMerge(slug, { localOnly: true })
+						? "pending_seal"
+						: "completed"
+				else derivedStatus = "active"
 				const base: Record<string, unknown> = {
 					slug,
 					studio: data.studio,
@@ -12087,7 +12103,12 @@ export function handleStateTool(
 				if (filterStudio && studio !== filterStudio) continue
 				if (!byStudio.has(studio)) byStudio.set(studio, [])
 				// v3↔v4 dual-path: v4 has no status field on intent.md.
-				// sealed_at presence → "completed"; absence → "active".
+				// sealed_at presence → "completed"; absence → "active". This is
+				// a throughput grouping (not a phase indicator), so it stays
+				// sealed_at-only — an all-merged-but-unsealed intent (incl.
+				// pending-seal) counts as in-flight "active" here; the
+				// pending-seal distinction is surfaced by haiku_intent_list and
+				// the SPA current_state, not by this report.
 				const isV4 = typeof data.plugin_version === "string"
 				const v3Status = (data.status as string) || ""
 				const v4Status = isV4

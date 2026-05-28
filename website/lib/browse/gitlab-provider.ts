@@ -3,7 +3,6 @@ import { createRelayEnvironment } from "./graphql/environment"
 import type { operationsBatchBlobsQuery$data } from "./graphql/gitlab/__generated__/operationsBatchBlobsQuery.graphql"
 import BatchBlobsQuery from "./graphql/gitlab/__generated__/operationsBatchBlobsQuery.graphql"
 import type { operationsIntentTreeQuery$data } from "./graphql/gitlab/__generated__/operationsIntentTreeQuery.graphql"
-import IntentTreeQuery from "./graphql/gitlab/__generated__/operationsIntentTreeQuery.graphql"
 import type { operationsListBranchNamesQuery$data } from "./graphql/gitlab/__generated__/operationsListBranchNamesQuery.graphql"
 import ListBranchNamesQuery from "./graphql/gitlab/__generated__/operationsListBranchNamesQuery.graphql"
 import ListFilesQueryArtifact from "./graphql/gitlab/__generated__/operationsListFilesQuery.graphql"
@@ -19,8 +18,8 @@ import {
 	deriveV4ActiveStage,
 	isCollectibleStageFile,
 	isV4Intent,
-	normalizeStageProgression,
 	mergeKnowledge as mergeKnowledgeShared,
+	normalizeStageProgression,
 	parseElaborationVerified,
 	parseFeedback,
 	parseIntentApprovals,
@@ -123,6 +122,136 @@ export class GitLabProvider implements BrowseProvider {
 		})
 	}
 
+	/** Raw GraphQL POST. Relay queries are STATIC (compiled at build time), so
+	 *  they can't fan out across a variable number of branch refs in one
+	 *  request. The lean list loader needs exactly that — one request that
+	 *  reads `intent.md` + the `stages/` tree for N `haiku/<slug>/main` branches
+	 *  via per-branch aliases — so it builds the query string dynamically + posts
+	 *  it here. Returns `data` (or undefined on a network/transport error;
+	 *  per-alias field errors surface as null nodes the caller tolerates). */
+	private async rawGraphql<T>(
+		query: string,
+		variables?: Record<string, unknown>,
+	): Promise<T | undefined> {
+		try {
+			const res = await fetch(`https://${this.host}/api/graphql`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					...this.graphqlHeaders(),
+				},
+				body: JSON.stringify({ query, variables: variables ?? {} }),
+			})
+			if (!res.ok) {
+				console.warn(
+					`[haiku-browse] raw GraphQL HTTP ${res.status} ${res.statusText}`,
+				)
+				return undefined
+			}
+			const json = (await res.json()) as {
+				data?: T
+				errors?: Array<{ message: string }>
+			}
+			// GraphQL errors come back 200 with `errors[]` + (often) null data.
+			// Surface them — a silently-dropped intent in the list view is
+			// otherwise indistinguishable from "no such intent".
+			if (json.errors?.length) {
+				console.warn(
+					"[haiku-browse] raw GraphQL errors:",
+					json.errors.map((e) => e.message).join("; "),
+				)
+			}
+			return json.data
+		} catch (err) {
+			console.warn("[haiku-browse] raw GraphQL fetch failed:", err)
+			return undefined
+		}
+	}
+
+	/** LEAN per-main-branch batch for the LIST view. For each `haiku/<slug>/main`
+	 *  branch, reads ONLY (a) its `intent.md` and (b) the immediate subdir names
+	 *  under `.haiku/intents/<slug>/stages/` (the stage-dir count) — both as
+	 *  per-branch ALIASES in a single raw GraphQL request (chunked). Replaces
+	 *  the old O(3N) fan-out (per-branch readFile + MR fetch + per-stage probe);
+	 *  MR/PR status now loads lazily in the detail view. */
+	private async batchMainBranchData(
+		mains: Array<{ slug: string; branch: string }>,
+	): Promise<Map<string, { rawText: string | null; stageDirs: string[] }>> {
+		const out = new Map<
+			string,
+			{ rawText: string | null; stageDirs: string[] }
+		>()
+		type RepoFields = Record<
+			string,
+			{
+				nodes?: Array<{ rawTextBlob?: string | null }>
+				trees?: { nodes?: Array<{ name?: string | null }> }
+			} | null
+		>
+		for (let i = 0; i < mains.length; i += CHUNK_SIZE) {
+			const chunk = mains.slice(i, i + CHUNK_SIZE)
+			const fields = chunk
+				.map((m, j) => {
+					const ref = JSON.stringify(m.branch)
+					const md = JSON.stringify(`.haiku/intents/${m.slug}/intent.md`)
+					const st = JSON.stringify(`.haiku/intents/${m.slug}/stages`)
+					return (
+						`a${j}_md: blobs(ref: ${ref}, paths: [${md}], first: 1) { nodes { rawTextBlob } }\n` +
+						`a${j}_st: tree(ref: ${ref}, path: ${st}, recursive: false) { trees(first: 50) { nodes { name } } }`
+					)
+				})
+				.join("\n")
+			const query = `query GLBatchMains($fp: ID!) { project(fullPath: $fp) { repository { ${fields} } } }`
+			const data = await this.rawGraphql<{
+				project?: { repository?: RepoFields }
+			}>(query, { fp: this.projectPath })
+			const repo = data?.project?.repository
+			// Per-branch fallback: if the aliased batch yielded no intent.md for
+			// a branch (transport error, a per-alias field error, or an empty
+			// node), fall back to the proven single-ref reads so the intent
+			// still surfaces. Correctness first; the batch is the fast path.
+			await Promise.all(
+				chunk.map(async (m, j) => {
+					let rawText = repo?.[`a${j}_md`]?.nodes?.[0]?.rawTextBlob ?? null
+					let stageDirs = (repo?.[`a${j}_st`]?.trees?.nodes ?? [])
+						.map((n) => n?.name)
+						.filter((n): n is string => typeof n === "string" && n.length > 0)
+					if (!rawText) {
+						rawText = await this.readFileFromRef(
+							m.branch,
+							`.haiku/intents/${m.slug}/intent.md`,
+						)
+						const treeData =
+							await this.cachedQuery<operationsListIntentsTreeQuery$data>(
+								ListIntentsTreeQuery,
+								{
+									fullPath: this.projectPath,
+									path: `.haiku/intents/${m.slug}/stages`,
+									ref: m.branch,
+								},
+								`gl:${this.host}:${this.projectPath}:stagesDirs:${m.slug}:${m.branch}`,
+							)
+						stageDirs = (
+							treeData?.project?.repository?.tree?.trees?.nodes ?? []
+						)
+							.map((n) => n?.name)
+							.filter((n): n is string => typeof n === "string" && n.length > 0)
+						if (!rawText) {
+							// Batch AND fallback both missed — the intent silently
+							// falls back to its default-branch baseline. Surface it so
+							// a vanished/half-loaded intent is debuggable.
+							console.warn(
+								`[haiku-browse] intent.md unreadable for ${m.slug}@${m.branch} (batch + fallback both null); using default-branch baseline`,
+							)
+						}
+					}
+					out.set(m.slug, { rawText, stageDirs })
+				}),
+			)
+		}
+		return out
+	}
+
 	/** Ref parameter for GraphQL queries. null means HEAD (server default). */
 	private get ref(): string | null {
 		return this.branch || null
@@ -133,11 +262,11 @@ export class GitLabProvider implements BrowseProvider {
 	 *  CSS/images load inside the sandboxed (opaque-origin) iframe, which
 	 *  can't reach parent-origin blob URLs or attach an auth header. Mirrors
 	 *  the artifact rawUrl scheme used at session build (files/:path/raw). */
-	async resolveAssetUrl(path: string): Promise<string | null> {
+	async resolveAssetUrl(path: string, ref?: string): Promise<string | null> {
 		try {
 			const encodedPath = encodeURIComponent(path)
-			const ref = this.branch || "HEAD"
-			const url = `https://${this.host}/api/v4/projects/${this.encodedProject}/repository/files/${encodedPath}/raw?ref=${encodeURIComponent(ref)}`
+			const refName = ref || this.branch || "HEAD"
+			const url = `https://${this.host}/api/v4/projects/${this.encodedProject}/repository/files/${encodedPath}/raw?ref=${encodeURIComponent(refName)}`
 			const res = await fetch(url, { headers: this.restHeaders() })
 			if (!res.ok) return null
 			return blobToDataUrl(await res.blob(), mimeFromPath(path))
@@ -164,8 +293,9 @@ export class GitLabProvider implements BrowseProvider {
 		return result as T | undefined
 	}
 
-	async readFile(path: string): Promise<string | null> {
-		const cacheKey = `gl:${this.host}:${this.projectPath}:readFile:${path}`
+	async readFile(path: string, ref?: string): Promise<string | null> {
+		const refName = ref ?? this.ref
+		const cacheKey = `gl:${this.host}:${this.projectPath}:readFile:${refName ?? "HEAD"}:${path}`
 		type ReadData = {
 			project: {
 				repository: {
@@ -180,7 +310,7 @@ export class GitLabProvider implements BrowseProvider {
 		}
 		const data = await this.cachedQuery<ReadData>(
 			ReadFileQuery,
-			{ fullPath: this.projectPath, paths: [path], ref: this.ref },
+			{ fullPath: this.projectPath, paths: [path], ref: refName },
 			cacheKey,
 		)
 		const nodes = data?.project?.repository?.blobs?.nodes
@@ -307,67 +437,40 @@ export class GitLabProvider implements BrowseProvider {
 		// Scan mode: discover intents across all haiku/* branches + default branch
 		const intentsBySlug = new Map<string, HaikuIntent>()
 
-		// Step 1: List haiku/* branches via GraphQL
-		const branchesCacheKey = `gl:${this.host}:${this.projectPath}:listHaikuBranches`
-		const branchesData =
-			await this.cachedQuery<operationsListBranchNamesQuery$data>(
+		// Step 1: List the intent branches via GraphQL — PAGINATED. `branchNames`
+		// caps at `limit` per call (100), and a busy monorepo has far more than
+		// 100 `haiku/*` branches (every unit branch counts), so a single page
+		// silently dropped intents whose `*/main` branch sorted past the cutoff
+		// (worker-new-badge, 2026-05-28). The lean list only needs the `*/main`
+		// branches, so narrow the glob to `haiku/*/main` (far fewer results) AND
+		// page through until a short page signals the end.
+		const PAGE = 100
+		const mainBranches: string[] = []
+		for (let offset = 0; ; offset += PAGE) {
+			const page = await this.cachedQuery<operationsListBranchNamesQuery$data>(
 				ListBranchNamesQuery,
 				{
 					fullPath: this.projectPath,
-					searchPattern: "haiku/*",
-					offset: 0,
-					limit: 100,
+					searchPattern: "haiku/*/main",
+					offset,
+					limit: PAGE,
 				},
-				branchesCacheKey,
+				`gl:${this.host}:${this.projectPath}:listMainBranches:${offset}`,
 			)
-
-		const branchNames = branchesData?.project?.repository?.branchNames ?? []
-		if (branchNames.length > 0) {
-			console.log(
-				`[haiku-browse] Found ${branchNames.length} haiku branches:`,
-				branchNames,
-			)
-		} else {
-			console.log(
-				`[haiku-browse] No haiku branches found via branchNames query`,
-			)
+			const names = page?.project?.repository?.branchNames ?? []
+			for (const name of names) {
+				const parts = name.split("/")
+				if (parts.length >= 2 && parts[parts.length - 1] === "main") {
+					mainBranches.push(name)
+				}
+			}
+			if (names.length < PAGE) break
 		}
 
-		// Capture stage-level branches (haiku/{slug}/{stageName}, where stageName != "main")
-		const stageBranchNames = branchNames.filter((name: string) => {
-			const parts = name.split("/")
-			return (
-				parts.length >= 3 &&
-				parts[0] === "haiku" &&
-				parts[parts.length - 1] !== "main"
-			)
-		})
-
-		// Fetch MR data for stage branches in parallel
-		const stageBranchPromises = stageBranchNames.map(
-			async (branchName: string) => {
-				const parts = branchName.split("/")
-				const slug = parts.slice(1, -1).join("/")
-				const stageName = parts[parts.length - 1]
-				if (!slug || !stageName) return
-
-				const { prUrl, prStatus, prNumber } =
-					await this.fetchMrForBranch(branchName)
-
-				this.stageBranchMap.set(`${slug}/${stageName}`, {
-					branch: branchName,
-					prUrl,
-					prStatus,
-					prNumber,
-				})
-			},
-		)
-
-		// Filter to haiku/*/main branches and extract slugs
-		const mainBranches = branchNames.filter((name: string) => {
-			const parts = name.split("/")
-			return parts.length >= 2 && parts[parts.length - 1] === "main"
-		})
+		// LEAN list-view load: NO per-stage-branch MR fan-out and NO per-stage
+		// unit probes — those were the O(N) slowness. MR/PR status + per-stage
+		// detail load lazily in the detail view. The list needs only:
+		// title/studio/mode/status + branch + stage-dir-count over total stages.
 
 		// Step 2: Load ALL intents from default branch — the canonical catalog
 		const defaultIntents = await this.listIntentsFromRef(null)
@@ -375,73 +478,42 @@ export class GitLabProvider implements BrowseProvider {
 			intentsBySlug.set(intent.slug, intent)
 		}
 
-		// Step 3: For each haiku/{slug}/main branch, read ONLY the matching intent
-		// and merge it over the default branch baseline. Branch version is more
-		// current for active work and carries branch/MR metadata.
-		const branchReadPromises = mainBranches.map(async (branchName) => {
-			const parts = branchName.split("/")
-			const slug = parts.slice(1, -1).join("/")
-			if (!slug) return
-
-			const rawText = await this.readFileFromRef(
-				branchName,
-				`.haiku/intents/${slug}/intent.md`,
-			)
-			if (!rawText) return
-
-			// Fetch the most recent MR for this branch in ANY state (opened, merged, closed).
-			const { prUrl, prStatus, prNumber } =
-				await this.fetchMrForBranch(branchName)
-
-			const intent = this.parseIntentFromRaw(slug, rawText, {
-				branch: branchName,
-				prUrl,
-				prStatus,
-				prNumber,
+		// Step 3: ONE raw aliased request reads intent.md + the stages-dir set
+		// for EVERY main branch at once (chunked) — replacing the old O(3N)
+		// per-branch readFile + MR fetch + per-stage unit probe. The active
+		// stage + progress are derived from the stage-dir set (the lean
+		// equivalent of the per-stage probe). Branch version overrides the
+		// default-branch baseline (it's more current for active work).
+		const mainSlugs = mainBranches
+			.map((branchName) => {
+				const parts = branchName.split("/")
+				const slug = parts.slice(1, -1).join("/")
+				return slug ? { slug, branch: branchName } : null
 			})
-			// v4+ active-stage refinement (see github-provider.ts).
-			const isV4 = isV4Intent(intent.raw)
-			if (isV4 && intent.studioStages.length > 0) {
-				const stagesWithUnits = await this.probeStagesWithUnits(
-					slug,
-					branchName,
-					intent.studioStages,
-				)
+			.filter((m): m is { slug: string; branch: string } => m !== null)
+
+		const batch = await this.batchMainBranchData(mainSlugs)
+		for (const { slug, branch } of mainSlugs) {
+			const data = batch.get(slug)
+			if (!data?.rawText) continue
+			const intent = this.parseIntentFromRaw(slug, data.rawText, { branch })
+			if (isV4Intent(intent.raw) && intent.studioStages.length > 0) {
 				intent.activeStage = deriveActiveStageFromStageTree(
 					intent.studioStages,
-					stagesWithUnits,
+					new Set(data.stageDirs),
 				)
-				// Recompute progress to match the refined active stage — v4
-				// intent.md has no active_stage, so the initial parse left
-				// stagesComplete at 0 and hid the list-view progress bar.
 				if (intent.status !== "completed") {
 					const idx = intent.studioStages.indexOf(intent.activeStage)
 					if (idx >= 0) intent.stagesComplete = idx
 				}
 			}
 			intentsBySlug.set(slug, intent)
-			this.intentBranchMap.set(slug, branchName)
-			this.intentMetaMap.set(slug, {
-				branch: branchName,
-				prUrl,
-				prStatus,
-				prNumber,
-			})
-		})
-
-		// Stream default-branch intents immediately so the UI renders progressively
-		for (const [, intent] of intentsBySlug) {
-			onProgress?.(intent)
+			this.intentBranchMap.set(slug, branch)
+			this.intentMetaMap.set(slug, { branch })
 		}
-
-		// Branch reads may update existing entries — re-emit after they resolve
-		await Promise.all([...branchReadPromises, ...stageBranchPromises])
 
 		const allIntents = Array.from(intentsBySlug.values())
-		for (const intent of allIntents) {
-			if (intent.branch) onProgress?.(intent)
-		}
-
+		for (const intent of allIntents) onProgress?.(intent)
 		return allIntents
 	}
 
@@ -519,42 +591,6 @@ export class GitLabProvider implements BrowseProvider {
 
 	// ── Three-level merge helpers ────────────────────────────────────────
 
-	/** Cheaply probe which declared stages have at least one unit file
-	 *  on disk. Recursive tree-list scoped to the intent's stages dir on
-	 *  a single ref (intent main branch). No per-file reads — just the
-	 *  blob paths from the tree. Used by listIntents() to derive a v4
-	 *  active-stage candidate. */
-	private async probeStagesWithUnits(
-		slug: string,
-		ref: string,
-		stages: ReadonlyArray<string>,
-	): Promise<Set<string>> {
-		const stagesPath = `.haiku/intents/${slug}/stages`
-		const cacheKey = `gl:${this.host}:${this.projectPath}:probeStages:${slug}:${ref}`
-		const treeData = await this.cachedQuery<operationsIntentTreeQuery$data>(
-			IntentTreeQuery,
-			{ fullPath: this.projectPath, path: stagesPath, ref },
-			cacheKey,
-		)
-		const blobs = (
-			treeData?.project?.repository?.tree?.blobs?.nodes ?? []
-		).filter((b): b is { name: string; path: string } => b?.path != null)
-		const declared = new Set(stages)
-		const out = new Set<string>()
-		for (const blob of blobs) {
-			if (!blob.path.startsWith(`${stagesPath}/`)) continue
-			const rest = blob.path.slice(stagesPath.length + 1)
-			const parts = rest.split("/")
-			if (parts.length < 3) continue
-			const [stageName, subdir, fileName] = parts
-			if (!declared.has(stageName)) continue
-			if (subdir !== "units") continue
-			if (!fileName?.endsWith(".md")) continue
-			out.add(stageName)
-		}
-		return out
-	}
-
 	/** Data returned by fetchIntentTreeFromRef — all blobs, trees, and resolved assets for one ref. */
 	private static readonly EMPTY_REF_DATA: GitLabIntentRefData = {
 		blobByPath: new Map(),
@@ -571,13 +607,40 @@ export class GitLabProvider implements BrowseProvider {
 		const basePath = `.haiku/intents/${slug}`
 		const refLabel = ref || "HEAD"
 
-		// Step 1: Recursive tree listing
+		// Step 1: Recursive tree listing. Raw GraphQL (not the Relay artifact) on
+		// purpose: GitLab's TreeEntry `id` is content-addressed (the blob SHA), so
+		// two identical files at different paths (e.g. a DESIGN-BRIEF.md copied into
+		// both `knowledge/` and `stages/design/`) return the SAME id with different
+		// `path`. The Relay artifact auto-injects `id` for the Node-typed entries,
+		// and the normalizer then warns "conflicting field ... same id" and lets one
+		// path clobber the other. We only read `name`/`path` into plain objects (no
+		// Relay store use), so request exactly those — no id, no normalization.
+		// Cache the listing in glCache (TTL + cleared by clearBranchCache, which
+		// already purges `intentTree` keys) so re-mounting the detail view for the
+		// same intent doesn't re-fetch — rawGraphql bypasses Relay's store, so it
+		// has no cache of its own.
 		const treeCacheKey = `gl:${this.host}:${this.projectPath}:intentTree:${slug}:${refLabel}`
-		const treeData = await this.cachedQuery<operationsIntentTreeQuery$data>(
-			IntentTreeQuery,
-			{ fullPath: this.projectPath, path: basePath, ref },
-			treeCacheKey,
-		)
+		const cachedTree = glCache.get(treeCacheKey)
+		let treeData: operationsIntentTreeQuery$data | undefined
+		if (cachedTree && Date.now() - cachedTree.ts < GL_CACHE_TTL) {
+			treeData = cachedTree.data as operationsIntentTreeQuery$data
+		} else {
+			treeData = await this.rawGraphql<operationsIntentTreeQuery$data>(
+				`query($fullPath: ID!, $path: String!, $ref: String) {
+					project(fullPath: $fullPath) {
+						repository {
+							tree(path: $path, ref: $ref, recursive: true) {
+								blobs(first: 500) { nodes { name path } }
+								trees(first: 100) { nodes { name path } }
+							}
+						}
+					}
+				}`,
+				{ fullPath: this.projectPath, path: basePath, ref },
+			)
+			if (treeData)
+				glCache.set(treeCacheKey, { data: treeData, ts: Date.now() })
+		}
 
 		const allBlobs = (
 			treeData?.project?.repository?.tree?.blobs?.nodes ?? []
@@ -758,9 +821,7 @@ export class GitLabProvider implements BrowseProvider {
 
 		// Per-stage user-facing BRIEF + agent OBSERVATIONS.
 		const briefText = data.blobByPath.get(`${stagePath}/BRIEF.md`)
-		const observationsText = data.blobByPath.get(
-			`${stagePath}/observations.md`,
-		)
+		const observationsText = data.blobByPath.get(`${stagePath}/observations.md`)
 
 		return {
 			name: stageName,

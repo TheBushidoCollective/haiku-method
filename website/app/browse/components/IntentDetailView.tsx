@@ -27,6 +27,8 @@ import { RESOLUTION_BADGES, SEVERITY_BADGES } from "./feedback-badges"
 import { FixHistory } from "./IterationHistory"
 import { IntentKanban } from "./KanbanView"
 import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
+import { SignOffGroup } from "./SignOffGroup"
+import type { QualityGate } from "./studio-defs"
 import { UnitDetailView } from "./UnitDetailView"
 
 function titleCase(s: string): string {
@@ -233,8 +235,10 @@ export function IntentDetailView({
 				intentSlug={intent.slug}
 				intentTitle={intent.title}
 				intentMode={intent.mode}
+				studio={intent.studio}
 				schemaIsV4={isV4Intent(intent.raw)}
 				provider={provider}
+				intentBranch={intent.branch}
 				assets={intent.assets}
 				host={host || undefined}
 				feedback={unitFeedback}
@@ -517,6 +521,7 @@ export function IntentDetailView({
 										provider={provider}
 										providerName={provider.name}
 										slug={intent.slug}
+										intentBranch={intent.branch}
 										studio={intent.studio}
 										host={host || undefined}
 										project={location?.project || ""}
@@ -569,7 +574,11 @@ export function IntentDetailView({
 							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
 								Intent Approvals
 							</h2>
-							<IntentApprovalsCard approvals={intent.intentApprovals} />
+							<IntentApprovalsCard
+								approvals={intent.intentApprovals}
+								studio={intent.studio}
+								qualityGates={collectIntentQualityGates(intent)}
+							/>
 						</section>
 					)}
 
@@ -1171,7 +1180,6 @@ function ArtifactThumbnail({
 	return null
 }
 
-
 /** Group a stage's artifacts by their top-level directory (`proof`, `artifacts`,
  *  …). Files that sit directly at the stage root (no slash in the name) land in
  *  the `(other)` group. Groups are sorted by name with `(other)` last so the
@@ -1321,11 +1329,13 @@ function UnitOutputsSection({
 	host,
 	provider,
 	slug,
+	intentBranch,
 }: {
 	units: HaikuUnit[]
 	host?: string
 	provider?: BrowseProvider
 	slug: string
+	intentBranch?: string
 }) {
 	// path → set of unit names that declare it
 	const byOutput = new Map<string, string[]>()
@@ -1366,6 +1376,7 @@ function UnitOutputsSection({
 					host={host}
 					provider={provider}
 					slug={slug}
+					intentBranch={intentBranch}
 				/>
 			))}
 		</div>
@@ -1383,12 +1394,14 @@ function LazyOutputPreview({
 	host,
 	provider,
 	slug,
+	intentBranch,
 }: {
 	path: string
 	unitNames: string[]
 	host?: string
 	provider?: BrowseProvider
 	slug: string
+	intentBranch?: string
 }) {
 	const [open, setOpen] = useState(false)
 	const [state, setState] = useState<{
@@ -1421,7 +1434,7 @@ function LazyOutputPreview({
 				if (isTextFile(path)) {
 					let text: string | null = null
 					for (const c of candidates) {
-						text = await provider.readFile(c)
+						text = await provider.readFile(c, intentBranch)
 						if (text != null) break
 					}
 					setState({
@@ -1437,7 +1450,7 @@ function LazyOutputPreview({
 					let url: string | null = null
 					if (provider.resolveAssetUrl) {
 						for (const c of candidates) {
-							url = await provider.resolveAssetUrl(c)
+							url = await provider.resolveAssetUrl(c, intentBranch)
 							if (url != null) break
 						}
 					}
@@ -1460,32 +1473,25 @@ function LazyOutputPreview({
 				})
 			}
 		})()
-	}, [open, provider, path, slug])
+	}, [open, provider, path, slug, intentBranch])
 
 	return (
-		<div className="rounded-lg border border-stone-200 dark:border-stone-700">
+		<>
 			<button
 				type="button"
-				onClick={() => setOpen((v) => !v)}
-				className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left"
+				onClick={() => setOpen(true)}
+				className="flex w-full items-center justify-between gap-2 rounded-lg border border-stone-200 px-4 py-2.5 text-left transition hover:border-teal-300 dark:border-stone-700 dark:hover:border-teal-700"
 			>
 				<span className="truncate font-mono text-xs text-stone-600 dark:text-stone-400">
 					{path}
 				</span>
-				<span className="flex items-center gap-2">
-					<span className="text-[10px] text-stone-400">
-						{unitNames.length === 1
-							? unitNames[0]
-							: `${unitNames.length} units`}
-					</span>
-					<span className="text-stone-400">{open ? "▾" : "▸"}</span>
+				<span className="text-[10px] text-stone-400">
+					{unitNames.length === 1 ? unitNames[0] : `${unitNames.length} units`}
 				</span>
 			</button>
 			{open && (
-				<div className="border-t border-stone-100 p-4 dark:border-stone-800">
-					{state.loading && (
-						<p className="text-xs text-stone-400">Loading…</p>
-					)}
+				<OutputFileModal name={path} onClose={() => setOpen(false)}>
+					{state.loading && <p className="text-xs text-stone-400">Loading…</p>}
 					{!state.loading && state.error && (
 						<p className="text-xs text-stone-400">{state.error}</p>
 					)}
@@ -1497,95 +1503,122 @@ function LazyOutputPreview({
 							host={host}
 						/>
 					)}
-				</div>
+				</OutputFileModal>
 			)}
+		</>
+	)
+}
+
+/** Centered modal shell for a previewed unit-output file — Escape / backdrop
+ *  close. Mirrors the unit view's DocModal so outputs open the same way on both
+ *  the stage and unit surfaces. */
+function OutputFileModal({
+	name,
+	onClose,
+	children,
+}: {
+	name: string
+	onClose: () => void
+	children: React.ReactNode
+}) {
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") onClose()
+		}
+		document.addEventListener("keydown", onKey)
+		document.body.style.overflow = "hidden"
+		return () => {
+			document.removeEventListener("keydown", onKey)
+			document.body.style.overflow = ""
+		}
+	}, [onClose])
+	return (
+		<div
+			className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onClose()
+			}}
+			role="dialog"
+			aria-modal="true"
+			aria-label={`File viewer: ${name}`}
+		>
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: inner container stops backdrop-close propagation */}
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation is click-capture suppression */}
+			<div
+				className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xl dark:border-stone-700 dark:bg-stone-900"
+				onClick={(e) => e.stopPropagation()}
+			>
+				<div className="flex items-center justify-between border-b border-stone-200 px-5 py-3 dark:border-stone-700">
+					<h3 className="truncate font-mono text-sm font-semibold text-stone-900 dark:text-stone-100">
+						{name}
+					</h3>
+					<button
+						type="button"
+						onClick={onClose}
+						className="ml-4 rounded p-1 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+						aria-label="Close"
+					>
+						&#10005;
+					</button>
+				</div>
+				<div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+			</div>
 		</div>
 	)
 }
 
-/** Surfaces the engine's intent-completion approval roles. Each entry
- *  is a `{ role, signed, at }` triple read off `intent.md.approvals.*`.
- *  We label `intent_quality_gates` as derived (it's the union of every
- *  unit's `quality_gates:` declarations, never declared on intent.md).
- *  Studio-specific roles render with their raw key; viewers can hover
- *  for a tooltip explaining the role exists in the studio's
- *  `review-agents/` directory. */
+/** Union of every unit's executable quality gates across the intent — the set
+ *  the engine runs once at intent scope for the `intent_quality_gates` role.
+ *  Deduped by command so the same gate declared on many units shows once. */
+function collectIntentQualityGates(intent: HaikuIntentDetail): QualityGate[] {
+	const byCommand = new Map<string, QualityGate>()
+	for (const stage of intent.stages) {
+		for (const unit of stage.units) {
+			const gates = unit.raw.quality_gates
+			if (!Array.isArray(gates)) continue
+			for (const g of gates) {
+				if (
+					g &&
+					typeof g === "object" &&
+					typeof (g as { command?: unknown }).command === "string"
+				) {
+					const gate = g as QualityGate
+					if (!byCommand.has(gate.command)) byCommand.set(gate.command, gate)
+				}
+			}
+		}
+	}
+	return [...byCommand.values()]
+}
+
+/** Surfaces the engine's intent-completion approval roles via the shared
+ *  sign-off list, so each role opens the same modal as the unit view: engine
+ *  roles show their intent-completion prompt, `user` the gate description,
+ *  `intent_quality_gates` the command union, studio intent-review agents their
+ *  mandate. The engine writes these to `intent.md.approvals` as each gate fires. */
 function IntentApprovalsCard({
 	approvals,
+	studio,
+	qualityGates,
 }: {
 	approvals: ReadonlyArray<{ role: string; signed: boolean; at: string | null }>
+	studio: string
+	qualityGates: QualityGate[]
 }) {
-	const ENGINE_ROLES: Record<string, { label: string; tooltip: string }> = {
-		spec: {
-			label: "Spec",
-			tooltip:
-				"Intent-completion spec review — engine-built, mirrors the per-stage spec gate.",
-		},
-		continuity: {
-			label: "Continuity",
-			tooltip:
-				"Cross-stage continuity check — verifies that promises declared in earlier stages were honored.",
-		},
-		user: {
-			label: "User",
-			tooltip: "User approval — the human signs off on the intent as a whole.",
-		},
-		intent_quality_gates: {
-			label: "Intent quality gates",
-			tooltip:
-				"Derived role — the engine runs the union of every unit's `quality_gates:` declarations once at intent scope. Not declared on intent.md.",
-		},
-	}
 	return (
-		<div className="rounded-lg border border-stone-200 dark:border-stone-700 px-4 py-3 space-y-2">
-			{approvals.map((a) => {
-				const meta = ENGINE_ROLES[a.role]
-				const isDerived = a.role === "intent_quality_gates"
-				return (
-					<div key={a.role} className="flex items-center justify-between gap-3">
-						<div className="flex items-center gap-2">
-							<span
-								className={`rounded-full w-2 h-2 ${
-									a.signed
-										? "bg-green-500 dark:bg-green-400"
-										: "bg-stone-300 dark:bg-stone-600"
-								}`}
-								aria-hidden="true"
-							/>
-							<span
-								className="text-sm font-medium text-stone-800 dark:text-stone-200"
-								title={meta?.tooltip ?? `Studio-defined role: ${a.role}`}
-							>
-								{meta?.label ?? a.role}
-							</span>
-							{isDerived && (
-								<span className="rounded bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider text-stone-500 dark:text-stone-400">
-									derived
-								</span>
-							)}
-						</div>
-						<div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
-							{a.signed ? (
-								<>
-									<span className="rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 text-[10px] font-medium">
-										signed
-									</span>
-									{a.at && (
-										<time dateTime={a.at} className="font-mono">
-											{a.at.slice(0, 10)}
-										</time>
-									)}
-								</>
-							) : (
-								<span className="rounded bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 px-1.5 py-0.5 text-[10px] font-medium">
-									pending
-								</span>
-							)}
-						</div>
-					</div>
-				)
-			})}
-		</div>
+		<SignOffGroup
+			title="Approvals"
+			entries={approvals.map((a) => ({
+				role: a.role,
+				signed: a.signed,
+				signedAt: a.at,
+			}))}
+			studio={studio}
+			stageName=""
+			scope="intent"
+			qualityGates={qualityGates}
+		/>
 	)
 }
 
@@ -1642,6 +1675,7 @@ function StageDetail({
 	provider,
 	providerName,
 	slug,
+	intentBranch,
 	studio,
 	host,
 	project,
@@ -1652,6 +1686,9 @@ function StageDetail({
 	provider: BrowseProvider
 	providerName: string
 	slug: string
+	/** Branch the intent lives on (`haiku/<slug>/main`); lazy output reads
+	 *  target it so an unmerged intent's deliverables resolve. */
+	intentBranch?: string
 	/** Studio slug — links the stage to its definition in the studio browser. */
 	studio: string
 	host?: string
@@ -1667,7 +1704,9 @@ function StageDetail({
 	const stageRoot = `.haiku/intents/${slug}/stages/${stage.name}`
 	const artifactBaseDir = (name: string): string => {
 		const slash = name.lastIndexOf("/")
-		return slash >= 0 ? `${stageRoot}/${name.slice(0, slash + 1)}` : `${stageRoot}/`
+		return slash >= 0
+			? `${stageRoot}/${name.slice(0, slash + 1)}`
+			: `${stageRoot}/`
 	}
 	const hasUnits = stage.units.length > 0
 	const hasArtifacts = (stage.artifacts?.length ?? 0) > 0
@@ -1932,6 +1971,7 @@ function StageDetail({
 				host={host}
 				provider={provider}
 				slug={slug}
+				intentBranch={intentBranch}
 			/>
 			{/* Per-stage OBSERVATIONS — the agent's free-form reflection
 			    written at stage close. Shown last; it's a retrospective. */}
@@ -2342,7 +2382,10 @@ function FeedbackList({
 		"low",
 	]
 	const sevCounts = Object.fromEntries(
-		SEVERITIES.map((s) => [s, statusVisible.filter((f) => f.severity === s).length]),
+		SEVERITIES.map((s) => [
+			s,
+			statusVisible.filter((f) => f.severity === s).length,
+		]),
 	) as Record<"blocker" | "high" | "medium" | "low", number>
 	const hasSeverities = SEVERITIES.some((s) => sevCounts[s] > 0)
 	return (
@@ -2490,9 +2533,9 @@ function FeedbackCard({
 							{resolutionBadge.label}
 						</span>
 					)}
-					{fb.origin && (
+					{(fb.author ?? fb.origin) && (
 						<span className="rounded bg-stone-50 dark:bg-stone-900 px-1.5 py-0.5 text-[10px] font-mono text-stone-500 dark:text-stone-400">
-							{fb.origin}
+							{fb.author ?? fb.origin}
 						</span>
 					)}
 					<span

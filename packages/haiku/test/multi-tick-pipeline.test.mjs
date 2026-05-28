@@ -41,7 +41,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import matter from "gray-matter"
-import { initTestRepo, makeIntent, makeStudio } from "./_v4-fixtures.mjs"
+import {
+	deliverIntent,
+	initTestRepo,
+	makeIntent,
+	makeStudio,
+} from "./_v4-fixtures.mjs"
 
 const HAS_GIT = (() => {
 	try {
@@ -301,6 +306,14 @@ test("multi-tick: 3-stage continuous intent walks from elaborate to sealed", {
 				if (action.action === "sealed") {
 					finalAction = action
 					break
+				}
+
+				// Merge gate (2026-05-28): the engine holds at pending_seal
+				// until the hub branch lands on the default branch. Simulate
+				// the human/host merging the delivery so the next tick seals.
+				if (action.action === "pending_seal") {
+					deliverIntent({ repoRoot, slug })
+					continue
 				}
 
 				// React to the action. Each branch mutates disk so the next

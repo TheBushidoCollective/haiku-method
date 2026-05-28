@@ -31,7 +31,7 @@ const RESERVED_KEYWORDS = new Set(["intent", "board"])
  *   → "/browse/github.com/org/repo/intent/add-login/"
  *
  *   buildBrowseUrl({ host: "github.com", project: "org/repo", intent: "add-login", stage: "dev", unit: "unit-01" })
- *   → "/browse/github.com/org/repo/intent/add-login/stage/dev/unit-01/"
+ *   → "/browse/github.com/org/repo/intent/add-login/stage/dev/unit/unit-01/"
  */
 export function buildBrowseUrl(loc: BrowseLocation): string {
 	const base = `/browse/${loc.host}/${loc.project}`
@@ -42,7 +42,9 @@ export function buildBrowseUrl(loc: BrowseLocation): string {
 		if (loc.stage) {
 			path = `${base}/intent/${loc.intent}/stage/${loc.stage}/`
 			if (loc.unit) {
-				path = `${base}/intent/${loc.intent}/stage/${loc.stage}/${loc.unit}/`
+				// `unit/` keyword mirrors `intent/` and `stage/` — each level of the
+				// path is keyword-delimited rather than positional.
+				path = `${base}/intent/${loc.intent}/stage/${loc.stage}/unit/${loc.unit}/`
 			}
 		}
 	} else if (loc.view === "board") {
@@ -122,13 +124,23 @@ export function parseBrowsePath(segments: string[]): BrowseLocation | null {
 		if (remaining.length >= 1) loc.intent = remaining[0]
 		// Parse stage: either "stage/{name}" keyword format or legacy "{name}" positional format
 		if (remaining.length >= 3 && remaining[1] === "stage") {
-			// New format: intent/{slug}/stage/{stage}[/{unit}]
+			// New format: intent/{slug}/stage/{stage}[/unit/{unit}]
 			loc.stage = remaining[2]
-			if (remaining.length >= 4) loc.unit = remaining[3]
+			if (remaining.length >= 5 && remaining[3] === "unit") {
+				// Keyword form: …/stage/{stage}/unit/{unit}
+				loc.unit = remaining[4]
+			} else if (remaining.length >= 4 && remaining[3] !== "unit") {
+				// Legacy positional: …/stage/{stage}/{unit}
+				loc.unit = remaining[3]
+			}
 		} else if (remaining.length >= 2 && remaining[1] !== "stage") {
-			// Legacy format: intent/{slug}/{stage}[/{unit}]
+			// Legacy format: intent/{slug}/{stage}[/{unit}] (pre-stage-keyword)
 			loc.stage = remaining[1]
-			if (remaining.length >= 3) loc.unit = remaining[2]
+			if (remaining.length >= 4 && remaining[2] === "unit") {
+				loc.unit = remaining[3]
+			} else if (remaining.length >= 3 && remaining[2] !== "unit") {
+				loc.unit = remaining[2]
+			}
 		}
 		return loc
 	}

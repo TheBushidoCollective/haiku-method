@@ -268,7 +268,11 @@ export function IntentKanban({ intent, onSelectUnit }: IntentKanbanProps) {
 												{titleCase(unit.stageName)}
 											</span>
 											{unit.hat && <span>Hat: {titleCase(unit.hat)}</span>}
-											{unit.bolt > 0 && <span>Bolt {unit.bolt}</span>}
+											{unit.bolt > 0 && (
+												<span>
+													{unit.bolt} iter{unit.bolt === 1 ? "" : "s"}
+												</span>
+											)}
 										</div>
 										{total > 0 && (
 											<div className="mt-2">

@@ -20,7 +20,12 @@ export type {
 // between the MCP engine and the website browse UI.
 export { deriveStageStatePure } from "./derived-stage-state"
 // Formatting utilities
-export { formatDate, formatDuration, titleCase } from "./format"
+export {
+	formatDate,
+	formatDuration,
+	formatDurationMs,
+	titleCase,
+} from "./format"
 // Frontmatter YAML utilities (duplicate-key recovery)
 export {
 	dedupeFrontmatterKeys,

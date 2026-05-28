@@ -19,7 +19,12 @@ export type {
 } from "@haiku/shared"
 
 // Re-export shared utilities from @haiku/shared
-export { formatDate, formatDuration, titleCase } from "@haiku/shared"
+export {
+	formatDate,
+	formatDuration,
+	formatDurationMs,
+	titleCase,
+} from "@haiku/shared"
 
 // Website-specific types and utilities remain here
 
@@ -32,15 +37,20 @@ export interface BrowseProvider {
 	getIntent(
 		slug: string,
 	): Promise<import("@haiku/shared").HaikuIntentDetail | null>
-	/** Read a raw file from the workspace */
-	readFile(path: string): Promise<string | null>
+	/** Read a raw file from the workspace. `ref` (optional) reads from a
+	 *  specific branch/commit instead of the provider's default — the detail
+	 *  view passes the intent's `haiku/<slug>/main` branch so an unmerged
+	 *  intent's artifacts/code resolve from where they actually live, not the
+	 *  default branch (where they don't exist yet). */
+	readFile(path: string, ref?: string): Promise<string | null>
 	/** Resolve an intent-relative file path to a directly-usable URL (a blob
 	 *  URL for local files, an authed-fetched blob URL for git providers) so
 	 *  it can load inside a sandboxed `srcDoc` iframe with no base URL and no
 	 *  auth header. Returns null when the file is missing/unreadable. Used to
-	 *  render an HTML output's relative assets (CSS, images). Optional —
+	 *  render an HTML output's relative assets (CSS, images). `ref` (optional)
+	 *  targets a specific branch — same rationale as readFile. Optional —
 	 *  providers without it fall back to non-asset-resolved rendering. */
-	resolveAssetUrl?(path: string): Promise<string | null>
+	resolveAssetUrl?(path: string, ref?: string): Promise<string | null>
 	/** List files matching a pattern in a directory */
 	listFiles(dir: string): Promise<string[]>
 	/** Write a file to the workspace via commit (optional — not all providers support writes) */
@@ -204,14 +214,27 @@ export function parseUnit(
 		refs: (data.refs as string[]) || [],
 		inputs: (data.inputs as string[]) || [],
 		outputs: (data.outputs as string[]) || [],
-		bolt: (data.bolt as number) || 0,
-		hat: (data.hat as string) || "",
+		// v4 dropped the top-level `bolt`/`hat` FM fields — both derive from the
+		// append-only iterations log now. `bolt` = number of hat dispatches;
+		// `hat` = the most recent (current for an in-flight unit, terminal for a
+		// completed one). Reading `data.bolt`/`data.hat` would always be 0/"".
+		bolt: Array.isArray(data.iterations) ? data.iterations.length : 0,
+		hat: lastIterationHat(data.iterations),
 		startedAt: (data.started_at as string) || null,
 		completedAt: (data.completed_at as string) || null,
 		criteria: parseCriteria(content),
 		content,
 		raw: data,
 	}
+}
+
+/** The most recent iteration's hat — the current hat for an in-flight unit, the
+ *  terminal hat for a completed one. "" when there are no iterations. */
+function lastIterationHat(iterations: unknown): string {
+	if (!Array.isArray(iterations) || iterations.length === 0) return ""
+	const last = iterations[iterations.length - 1]
+	const hat = (last as { hat?: unknown })?.hat
+	return typeof hat === "string" ? hat : ""
 }
 
 export function parseCriteria(

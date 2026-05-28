@@ -1,5 +1,6 @@
 "use client"
 
+import matter from "gray-matter"
 import { useEffect, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -15,12 +16,19 @@ import type {
 	HaikuFeedback,
 	HaikuUnit,
 } from "@/lib/browse/types"
-import { formatDate, formatDuration } from "@/lib/browse/types"
+import {
+	formatDate,
+	formatDuration,
+	formatDurationMs,
+} from "@/lib/browse/types"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
+import { FilePreview, isTextFile } from "./FilePreview"
 import { RESOLUTION_BADGES } from "./feedback-badges"
 import { FixHistory, HatHistory } from "./IterationHistory"
 import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
+import { SignOffGroup } from "./SignOffGroup"
+import type { QualityGate } from "./studio-defs"
 
 function titleCase(s: string): string {
 	return s
@@ -35,6 +43,22 @@ function splitUnitName(name: string): { badge: string | null; title: string } {
 	const m = name.match(/^unit-(\d+)-(.+)$/)
 	if (m) return { badge: `Unit ${m[1]}`, title: titleCase(m[2]) }
 	return { badge: null, title: titleCase(name) }
+}
+
+/** Serialize unit frontmatter to YAML (its on-disk format) for the raw-FM
+ *  accordion. Uses gray-matter's stringify (already the website's YAML lib)
+ *  and strips the `---` fences so it reads as a plain YAML doc. Falls back to
+ *  pretty JSON if a value can't be dumped. */
+function frontmatterYaml(raw: Record<string, unknown>): string {
+	try {
+		return matter
+			.stringify("", raw)
+			.replace(/^---\n/, "")
+			.replace(/\n---\s*$/, "")
+			.trimEnd()
+	} catch {
+		return JSON.stringify(raw, null, 2)
+	}
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -54,11 +78,18 @@ interface Props {
 	/** Intent mode (autopilot drops the user gate) — drives the expected
 	 *  review/approval role set in the sign-offs section. */
 	intentMode: string
+	/** Studio slug — links each non-engine review/approval role to its studio
+	 *  definition on the stage page. */
+	studio: string
 	/** Whether the intent is v4+ (has the review/approval model). v3 units
 	 *  predate it — the sign-offs section then shows only what's stamped
 	 *  rather than fabricating a matrix of never-signed gates. */
 	schemaIsV4: boolean
 	provider: BrowseProvider
+	/** Branch the intent lives on (`haiku/<slug>/main`); artifact reads target
+	 *  it so an unmerged intent's inputs/outputs resolve from where they live,
+	 *  not the default branch. */
+	intentBranch?: string
 	assets?: HaikuAsset[]
 	host?: string
 	feedback?: HaikuFeedback[]
@@ -73,7 +104,9 @@ export function UnitDetailView({
 	stageName,
 	intentSlug,
 	intentMode,
+	studio,
 	provider,
+	intentBranch,
 	assets = [],
 	host,
 	feedback = [],
@@ -145,39 +178,48 @@ export function UnitDetailView({
 				</p>
 			</header>
 
-			{/* Quick Stats */}
+			{/* Quick Stats — only tiles that carry real signal for this unit.
+			    Criteria shows only when the unit declared checkbox criteria;
+			    Iterations (hat dispatches) only when the unit has run; Hat (the
+			    current hat) only while in-flight — a completed unit's hats live
+			    in the Hat history stepper below. */}
 			<div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-						Criteria
-					</div>
-					<div className="mt-1 text-2xl font-bold">
-						{checkedCount}
-						<span className="text-stone-400">/{totalCriteria}</span>
-					</div>
-					{totalCriteria > 0 && (
+				{totalCriteria > 0 && (
+					<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
+						<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
+							Criteria
+						</div>
+						<div className="mt-1 text-2xl font-bold">
+							{checkedCount}
+							<span className="text-stone-400">/{totalCriteria}</span>
+						</div>
 						<div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800">
 							<div
 								className={`h-full rounded-full transition-all ${progress === 100 ? "bg-green-500" : "bg-teal-500"}`}
 								style={{ width: `${progress}%` }}
 							/>
 						</div>
-					)}
-				</div>
-				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-						Bolt
 					</div>
-					<div className="mt-1 text-2xl font-bold">{unit.bolt || 0}</div>
-				</div>
-				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-						Hat
+				)}
+				{unit.bolt > 0 && (
+					<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
+						<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
+							Iterations
+						</div>
+						<div className="mt-1 text-2xl font-bold">{unit.bolt}</div>
+						<div className="mt-0.5 text-xs text-stone-400">hat dispatches</div>
 					</div>
-					<div className="mt-1 text-lg font-semibold">
-						{unit.hat ? titleCase(unit.hat) : "—"}
+				)}
+				{unit.status === "active" && unit.hat && (
+					<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
+						<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
+							Current Hat
+						</div>
+						<div className="mt-1 text-lg font-semibold">
+							{titleCase(unit.hat)}
+						</div>
 					</div>
-				</div>
+				)}
 				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
 					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
 						Status
@@ -186,20 +228,37 @@ export function UnitDetailView({
 						{titleCase(unit.status)}
 					</div>
 				</div>
-				{unit.startedAt && (
-					<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-						<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-							{unit.completedAt ? "Duration" : "Elapsed"}
-						</div>
-						<div className="mt-1 text-lg font-semibold">
-							{formatDuration(unit.startedAt, unit.completedAt)}
-						</div>
-						<div className="mt-0.5 text-xs text-stone-400">
-							{formatDate(unit.startedAt)}
-							{unit.completedAt ? ` — ${formatDate(unit.completedAt)}` : ""}
-						</div>
-					</div>
-				)}
+				{unit.startedAt &&
+					(() => {
+						const active = unitActiveMs(unit.raw)
+						const wall = formatDuration(unit.startedAt, unit.completedAt)
+						return (
+							<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
+								<div
+									className="text-xs font-medium uppercase tracking-wider text-stone-400"
+									title={
+										active != null
+											? "Sum of each hat-dispatch's duration — excludes idle gaps between dispatches."
+											: undefined
+									}
+								>
+									{active != null
+										? "Active"
+										: unit.completedAt
+											? "Duration"
+											: "Elapsed"}
+								</div>
+								<div className="mt-1 text-lg font-semibold">
+									{active != null ? formatDurationMs(active) : wall}
+								</div>
+								<div className="mt-0.5 text-xs text-stone-400">
+									{active != null && wall ? `${wall} elapsed · ` : ""}
+									{formatDate(unit.startedAt)}
+									{unit.completedAt ? ` — ${formatDate(unit.completedAt)}` : ""}
+								</div>
+							</div>
+						)
+					})()}
 			</div>
 
 			{/* Completion Criteria */}
@@ -264,6 +323,8 @@ export function UnitDetailView({
 				unit={unit}
 				intentMode={intentMode}
 				schemaIsV4={schemaIsV4}
+				studio={studio}
+				stageName={stageName}
 			/>
 
 			{/* Feedback targeting this unit */}
@@ -306,6 +367,7 @@ export function UnitDetailView({
 					paths={unit.inputs}
 					intentSlug={intentSlug}
 					provider={provider}
+					intentBranch={intentBranch}
 				/>
 			)}
 
@@ -316,6 +378,7 @@ export function UnitDetailView({
 					paths={unit.outputs}
 					intentSlug={intentSlug}
 					provider={provider}
+					intentBranch={intentBranch}
 				/>
 			)}
 
@@ -325,6 +388,7 @@ export function UnitDetailView({
 					refs={unit.refs}
 					intentSlug={intentSlug}
 					provider={provider}
+					intentBranch={intentBranch}
 					assets={assets}
 					host={host}
 				/>
@@ -404,15 +468,19 @@ export function UnitDetailView({
 			{/* Hat history — per-hat handoffs as the unit walked its sequence */}
 			<HatHistory iterations={unit.raw.iterations} />
 
-			{/* Frontmatter Debug (collapsed) */}
+			{/* Frontmatter Debug (collapsed) — rendered as syntax-highlighted YAML
+			    (the on-disk format) rather than raw JSON. */}
 			{Object.keys(unit.raw).length > 0 && (
 				<details className="mt-8">
 					<summary className="cursor-pointer text-xs text-stone-400 hover:text-stone-600">
 						Raw frontmatter
 					</summary>
-					<pre className="mt-2 overflow-x-auto rounded-lg bg-stone-50 p-4 text-xs text-stone-600 dark:bg-stone-900 dark:text-stone-400">
-						{JSON.stringify(unit.raw, null, 2)}
-					</pre>
+					<div className="mt-2">
+						<FilePreview
+							name="frontmatter.yaml"
+							content={frontmatterYaml(unit.raw)}
+						/>
+					</div>
 				</details>
 			)}
 		</div>
@@ -465,9 +533,9 @@ function UnitFeedbackCard({ fb }: { fb: HaikuFeedback }) {
 							{resolutionBadge.label}
 						</span>
 					)}
-					{fb.origin && (
+					{(fb.author ?? fb.origin) && (
 						<span className="rounded bg-stone-50 dark:bg-stone-900 px-1.5 py-0.5 text-[10px] font-mono text-stone-500 dark:text-stone-400">
-							{fb.origin}
+							{fb.author ?? fb.origin}
 						</span>
 					)}
 					<span
@@ -508,34 +576,18 @@ function UnitFeedbackCard({ fb }: { fb: HaikuFeedback }) {
 	)
 }
 
-const TEXT_EXTENSIONS = new Set([
-	"md",
-	"json",
-	"yaml",
-	"yml",
-	"txt",
-	"toml",
-	"csv",
-	"xml",
-	"html",
-	"feature",
-])
-
-function isTextFile(path: string): boolean {
-	const ext = path.split(".").pop()?.toLowerCase() || ""
-	return TEXT_EXTENSIONS.has(ext)
-}
-
 function RefsSection({
 	refs,
 	intentSlug,
 	provider,
+	intentBranch,
 	assets,
 	host,
 }: {
 	refs: string[]
 	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 	assets: HaikuAsset[]
 	host?: string
 }) {
@@ -573,6 +625,7 @@ function RefsSection({
 								ref_={ref}
 								intentSlug={intentSlug}
 								provider={provider}
+								intentBranch={intentBranch}
 							/>
 						)
 					}
@@ -637,10 +690,12 @@ function TextRefItem({
 	ref_,
 	intentSlug,
 	provider,
+	intentBranch,
 }: {
 	ref_: string
 	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const [content, setContent] = useState<string | null>(null)
 	const [showModal, setShowModal] = useState(false)
@@ -655,6 +710,7 @@ function TextRefItem({
 		if (content === null) {
 			const raw = await provider.readFile(
 				`.haiku/intents/${intentSlug}/${ref_}`,
+				intentBranch,
 			)
 			setContent(raw || "(empty)")
 		}
@@ -774,9 +830,10 @@ function DocModal({
 					) : filePath.endsWith(".feature") ? (
 						<GherkinView content={content} />
 					) : (
-						<pre className="overflow-x-auto text-xs text-stone-600 dark:text-stone-400">
-							{content}
-						</pre>
+						// Source / config / text — FilePreview syntax-highlights code
+						// (its CODE_LANG map drives hljs) and falls back to a plain
+						// block for anything unmapped.
+						<FilePreview name={filePath} content={content} />
 					)}
 				</div>
 			</div>
@@ -956,16 +1013,43 @@ function readSignOffs(
 	return expectedRoles.map((role) => slotSignOff(role, record[role]))
 }
 
-/** Human label for a review/approval role. Raw role names read fine; we just
- *  tidy the multi-word engine roles and the special gates. */
-function roleLabel(role: string): string {
-	if (role === "user") return "User"
-	if (role === "quality_gates") return "Quality Gates"
-	if (role === "cross-stage-consistency") return "Cross-stage Consistency"
-	return role
-		.split(/[-_]/)
-		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-		.join(" ")
+/** Collect a unit's executable quality gates from frontmatter — the
+ *  `{name, command, dir?}` objects (prose strings are skipped). Surfaced in the
+ *  sign-off modal for the `quality_gates` role. */
+function unitQualityGates(raw: Record<string, unknown>): QualityGate[] {
+	const gates = raw.quality_gates
+	if (!Array.isArray(gates)) return []
+	return gates.flatMap((g) =>
+		g &&
+		typeof g === "object" &&
+		typeof (g as { command?: unknown }).command === "string"
+			? [g as QualityGate]
+			: [],
+	)
+}
+
+/** Active working time on a unit: the sum of each hat-dispatch's own duration
+ *  (iteration `completed_at − started_at`). Excludes the idle gaps between
+ *  dispatches — waiting on the user, queueing, time between bolts — that inflate
+ *  a naive start→end wall clock. Null when no iteration carries both stamps. */
+function unitActiveMs(raw: Record<string, unknown>): number | null {
+	const its = raw.iterations
+	if (!Array.isArray(its)) return null
+	let sum = 0
+	let counted = 0
+	for (const it of its) {
+		if (!it || typeof it !== "object") continue
+		const s = (it as { started_at?: unknown }).started_at
+		const e = (it as { completed_at?: unknown }).completed_at
+		if (typeof s === "string" && typeof e === "string") {
+			const d = new Date(e).getTime() - new Date(s).getTime()
+			if (Number.isFinite(d) && d >= 0) {
+				sum += d
+				counted++
+			}
+		}
+	}
+	return counted > 0 ? sum : null
 }
 
 /**
@@ -981,10 +1065,14 @@ function SignOffsSection({
 	unit,
 	intentMode,
 	schemaIsV4,
+	studio,
+	stageName,
 }: {
 	unit: HaikuUnit
 	intentMode: string
 	schemaIsV4: boolean
+	studio: string
+	stageName: string
 }) {
 	const isAutopilot = intentMode === "autopilot"
 	const reviewsRaw = recordOf(unit.raw.reviews)
@@ -1006,6 +1094,7 @@ function SignOffsSection({
 	const reviews = readSignOffs(reviewsRaw, reviewRoles)
 	const approvals = readSignOffs(approvalsRaw, approvalRoles)
 	if (reviews.length === 0 && approvals.length === 0) return null
+	const qualityGates = unitQualityGates(unit.raw)
 	return (
 		<section className="mb-8">
 			<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
@@ -1013,76 +1102,27 @@ function SignOffsSection({
 			</h2>
 			<div className="grid gap-4 sm:grid-cols-2">
 				{reviews.length > 0 && (
-					<SignOffGroup title="Reviews" entries={reviews} />
+					<SignOffGroup
+						title="Reviews"
+						entries={reviews}
+						studio={studio}
+						stageName={stageName}
+						scope="review"
+						qualityGates={qualityGates}
+					/>
 				)}
 				{approvals.length > 0 && (
-					<SignOffGroup title="Approvals" entries={approvals} />
+					<SignOffGroup
+						title="Approvals"
+						entries={approvals}
+						studio={studio}
+						stageName={stageName}
+						scope="approve"
+						qualityGates={qualityGates}
+					/>
 				)}
 			</div>
 		</section>
-	)
-}
-
-function SignOffGroup({
-	title,
-	entries,
-}: {
-	title: string
-	entries: Array<{ role: string; signed: boolean; signedAt: string | null }>
-}) {
-	return (
-		<div className="rounded-xl border border-stone-200 dark:border-stone-700">
-			<div className="border-b border-stone-100 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-stone-400 dark:border-stone-800">
-				{title}
-			</div>
-			<ul className="divide-y divide-stone-100 dark:divide-stone-800">
-				{entries.map(({ role, signed, signedAt }) => (
-					<li
-						key={role}
-						className="flex items-center justify-between gap-3 px-4 py-2.5"
-					>
-						<div className="flex items-center gap-2 min-w-0">
-							<span
-								className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
-									signed
-										? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
-										: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
-								}`}
-							>
-								{signed ? (
-									<svg
-										className="h-3 w-3"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke="currentColor"
-										aria-hidden="true"
-									>
-										<title>signed</title>
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={3}
-											d="M5 13l4 4L19 7"
-										/>
-									</svg>
-								) : (
-									<span
-										className="h-1.5 w-1.5 rounded-full bg-current"
-										aria-hidden="true"
-									/>
-								)}
-							</span>
-							<span className="truncate text-sm text-stone-700 dark:text-stone-300">
-								{roleLabel(role)}
-							</span>
-						</div>
-						<span className="flex-shrink-0 text-xs text-stone-400">
-							{signedAt ? formatDate(signedAt) : signed ? "signed" : "pending"}
-						</span>
-					</li>
-				))}
-			</ul>
-		</div>
 	)
 }
 
@@ -1118,6 +1158,46 @@ function dirOf(path: string): string {
 	return path.includes("/") ? path.substring(0, path.lastIndexOf("/")) : ""
 }
 
+/** A unit's declared input/output path is EITHER repo-root-relative (a code
+ *  file the unit produced, e.g. `web/.../X.tsx`) OR intent-relative (a knowledge
+ *  artifact, e.g. `stages/<stage>/artifacts/plan.md`). Try as-is first (repo
+ *  root), then resolved under the intent dir — same resolution the stage view's
+ *  LazyOutputPreview uses, so both surfaces resolve both shapes. */
+function artifactCandidates(path: string, intentSlug: string): string[] {
+	if (path.startsWith(".haiku/")) return [path]
+	return [path, `.haiku/intents/${intentSlug}/${path}`]
+}
+
+/** Read the first candidate that resolves, from the intent's branch. */
+async function readArtifact(
+	provider: BrowseProvider,
+	path: string,
+	intentSlug: string,
+	ref?: string,
+): Promise<string | null> {
+	for (const c of artifactCandidates(path, intentSlug)) {
+		const text = await provider.readFile(c, ref)
+		if (text != null) return text
+	}
+	return null
+}
+
+/** Resolve the first candidate that yields a usable asset URL, from the
+ *  intent's branch. */
+async function resolveArtifactUrl(
+	provider: BrowseProvider,
+	path: string,
+	intentSlug: string,
+	ref?: string,
+): Promise<string | null> {
+	if (!provider.resolveAssetUrl) return null
+	for (const c of artifactCandidates(path, intentSlug)) {
+		const url = await provider.resolveAssetUrl(c, ref)
+		if (url != null) return url
+	}
+	return null
+}
+
 /**
  * A unit's intent-relative artifact paths (`.haiku/intents/<slug>/<path>`),
  * made viewable — used for both `inputs` (consumed) and `outputs` (produced).
@@ -1132,12 +1212,14 @@ function ArtifactsSection({
 	paths,
 	intentSlug,
 	provider,
+	intentBranch,
 }: {
 	/** Singular section noun, e.g. "Output" / "Input". */
 	noun: string
 	paths: string[]
 	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const intentPrefix = `.haiku/intents/${intentSlug}/`
 	const classified = paths.map((path) => ({
@@ -1164,16 +1246,18 @@ function ArtifactsSection({
 								<OutputImageCard
 									key={o.path}
 									path={o.path}
-									repoPath={`${intentPrefix}${o.path}`}
+									intentSlug={intentSlug}
 									provider={provider}
+									intentBranch={intentBranch}
 								/>
 							) : (
 								<OutputHtmlCard
 									key={o.path}
 									path={o.path}
-									repoPath={`${intentPrefix}${o.path}`}
+									intentSlug={intentSlug}
 									baseDir={`${intentPrefix}${dirOf(o.path)}${dirOf(o.path) ? "/" : ""}`}
 									provider={provider}
+									intentBranch={intentBranch}
 								/>
 							),
 						)}
@@ -1191,15 +1275,17 @@ function ArtifactsSection({
 								<OutputTextItem
 									key={o.path}
 									path={o.path}
-									repoPath={`${intentPrefix}${o.path}`}
+									intentSlug={intentSlug}
 									provider={provider}
+									intentBranch={intentBranch}
 								/>
 							) : (
 								<OutputDownloadItem
 									key={o.path}
 									path={o.path}
-									repoPath={`${intentPrefix}${o.path}`}
+									intentSlug={intentSlug}
 									provider={provider}
+									intentBranch={intentBranch}
 								/>
 							),
 						)}
@@ -1214,24 +1300,26 @@ function ArtifactsSection({
  *  private git repo) and previews it; click to view fullscreen. */
 function OutputImageCard({
 	path,
-	repoPath,
+	intentSlug,
 	provider,
+	intentBranch,
 }: {
 	path: string
-	repoPath: string
+	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const [url, setUrl] = useState<string | null>(null)
 	const [full, setFull] = useState(false)
 	useEffect(() => {
 		let cancelled = false
-		provider.resolveAssetUrl?.(repoPath).then((u) => {
+		resolveArtifactUrl(provider, path, intentSlug, intentBranch).then((u) => {
 			if (!cancelled) setUrl(u)
 		})
 		return () => {
 			cancelled = true
 		}
-	}, [repoPath, provider])
+	}, [path, intentSlug, provider, intentBranch])
 	return (
 		<>
 			<button
@@ -1275,14 +1363,16 @@ function OutputImageCard({
  *  relative assets resolved; click to view fullscreen. */
 function OutputHtmlCard({
 	path,
-	repoPath,
+	intentSlug,
 	baseDir,
 	provider,
+	intentBranch,
 }: {
 	path: string
-	repoPath: string
+	intentSlug: string
 	baseDir: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const [html, setHtml] = useState<string | null>(null)
 	const [full, setFull] = useState(false)
@@ -1294,7 +1384,12 @@ function OutputHtmlCard({
 		// the host flags an HTML file as binary/large, leaving the frame
 		// blank. Fall back to readFile only if the raw path is unavailable.
 		const load = async (): Promise<string | null> => {
-			const url = await provider.resolveAssetUrl?.(repoPath)
+			const url = await resolveArtifactUrl(
+				provider,
+				path,
+				intentSlug,
+				intentBranch,
+			)
 			if (url) {
 				try {
 					return await (await fetch(url)).text()
@@ -1302,7 +1397,7 @@ function OutputHtmlCard({
 					/* fall through to readFile */
 				}
 			}
-			return provider.readFile(repoPath)
+			return readArtifact(provider, path, intentSlug, intentBranch)
 		}
 		load().then((c) => {
 			if (!cancelled) setHtml(c)
@@ -1310,7 +1405,7 @@ function OutputHtmlCard({
 		return () => {
 			cancelled = true
 		}
-	}, [repoPath, provider])
+	}, [path, intentSlug, provider, intentBranch])
 	return (
 		<>
 			<button
@@ -1373,19 +1468,24 @@ function OutputHtmlCard({
 /** Text output — reads the source and opens it in the shared doc modal. */
 function OutputTextItem({
 	path,
-	repoPath,
+	intentSlug,
 	provider,
+	intentBranch,
 }: {
 	path: string
-	repoPath: string
+	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const [content, setContent] = useState<string | null>(null)
 	const [open, setOpen] = useState(false)
 	const isMarkdown = path.endsWith(".md")
 	const handleOpen = async () => {
 		if (content === null) {
-			setContent((await provider.readFile(repoPath)) || "(empty)")
+			setContent(
+				(await readArtifact(provider, path, intentSlug, intentBranch)) ||
+					"(empty)",
+			)
 		}
 		setOpen(true)
 	}
@@ -1435,23 +1535,25 @@ function OutputTextItem({
 /** Binary / unrecognized output — resolve to a data URL for download. */
 function OutputDownloadItem({
 	path,
-	repoPath,
+	intentSlug,
 	provider,
+	intentBranch,
 }: {
 	path: string
-	repoPath: string
+	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const [url, setUrl] = useState<string | null>(null)
 	useEffect(() => {
 		let cancelled = false
-		provider.resolveAssetUrl?.(repoPath).then((u) => {
+		resolveArtifactUrl(provider, path, intentSlug, intentBranch).then((u) => {
 			if (!cancelled) setUrl(u)
 		})
 		return () => {
 			cancelled = true
 		}
-	}, [repoPath, provider])
+	}, [path, intentSlug, provider, intentBranch])
 	const inner = (
 		<>
 			<svg

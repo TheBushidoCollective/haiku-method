@@ -1674,12 +1674,28 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 						</div>
 						<div className="step-arrow">→</div>
 						<div className="post-step">
+							<div className="step-title">⏳ pending_seal (held)</div>
+							<div className="step-desc">
+								every approval signed + reflection done, but{" "}
+								<code>haiku/{"{slug}"}/main</code> hasn't landed on the repo's
+								default branch yet → cursor emits <code>pending_seal</code> and
+								HOLDS (no <code>sealed_at</code>). The engine never merges
+								(honors "never merge unless asked"). On{" "}
+								<code>/haiku:haiku-pickup</code> the{" "}
+								<code>delivery-verifier</code> re-audits the open change request
+								and files feedback for new review comments. Inapplicable in
+								filesystem mode / when already merged → skips straight to seal.
+							</div>
+						</div>
+						<div className="step-arrow">→</div>
+						<div className="post-step">
 							<div className="step-title">✅ seal_intent → sealed</div>
 							<div className="step-desc">
-								every intent-scope approval signed → cursor emits{" "}
-								<code>seal_intent</code>; engine performs final rebase under{" "}
-								<code>withIntentMainLock</code>, stamps <code>sealed_at</code>;
-								next tick emits <code>sealed</code>.
+								once <code>haiku/{"{slug}"}/main</code> is an ancestor of the
+								default branch (merged locally or via a merged PR/MR) the cursor
+								emits <code>seal_intent</code>; engine performs final rebase
+								under <code>withIntentMainLock</code>, stamps{" "}
+								<code>sealed_at</code>; next tick emits <code>sealed</code>.
 							</div>
 						</div>
 					</div>

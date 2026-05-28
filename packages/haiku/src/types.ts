@@ -124,6 +124,17 @@ export interface IntentCurrentState {
 	 *  `milestones.length` when every milestone is done. */
 	progress_index?: number
 	progress_total?: number
+	/** Terminal seal state — present only once every stage has merged
+	 *  (the intent is past all stages). `"sealed"` once `sealed_at` is
+	 *  stamped; `"pending_seal"` when the work is built, signed, and
+	 *  reflected but its `haiku/<slug>/main` hub branch hasn't yet landed
+	 *  on the repo's default branch (held awaiting merge — the engine
+	 *  never merges; the human/host does). Omitted while any stage is
+	 *  still in flight. */
+	seal_status?: "sealed" | "pending_seal"
+	/** When `seal_status === "pending_seal"`, the default branch the work
+	 *  is waiting to land on (e.g. `main`). */
+	awaiting_merge_into?: string
 }
 
 export interface DiscoveryFrontmatter {

@@ -12,7 +12,36 @@ import yaml from "js-yaml"
 
 const ROOT = join(import.meta.dirname, "..")
 const STUDIOS_DIR = join(ROOT, "plugin/studios")
+const PROMPTS_DIR = join(ROOT, "plugin/prompts")
 const OUT = join(import.meta.dirname, "public/prototype-stage-content.json")
+
+// Engine-owned review/approval roles (spec, continuity, cross-stage-consistency)
+// have no studio `review-agents/*.md` — their mandate lives in the engine prompt
+// bodies. The browse sign-off modal renders these, so bundle them keyed by the
+// phase walk (review = pre-execute, approve = post-execute, intent = completion)
+// and the role. File names use `cross_stage_consistency`; the sign-off role key
+// is `cross-stage-consistency`, so normalize.
+const ENGINE_BODY_DIRS = {
+	review: "stage/review/dispatch_review/engine-bodies",
+	approve: "stage/approve/dispatch_approval/engine-bodies",
+	intent: "intent/review/intent_review/engine-bodies",
+}
+function readEngineBodies() {
+	const out = {}
+	for (const [scope, rel] of Object.entries(ENGINE_BODY_DIRS)) {
+		const dir = join(PROMPTS_DIR, rel)
+		const roles = {}
+		if (existsSync(dir)) {
+			for (const f of readdirSync(dir).filter((n) => n.endsWith(".eta.md"))) {
+				const role = f.replace(/\.eta\.md$/, "").replace(/_/g, "-")
+				const raw = tryRead(join(dir, f))
+				if (raw) roles[role] = { body: raw, path: `plugin/prompts/${rel}/${f}` }
+			}
+		}
+		out[scope] = roles
+	}
+	return out
+}
 
 function tryRead(p) {
 	try {
@@ -120,6 +149,10 @@ function buildStudio(dir) {
 			join(studioDir, "operations"),
 			`${repoPrefix}/operations`,
 		),
+		intentReviewAgents: listMdFiles(
+			join(studioDir, "intent-review-agents"),
+			`${repoPrefix}/intent-review-agents`,
+		),
 		templates: listMdFiles(
 			join(studioDir, "templates"),
 			`${repoPrefix}/templates`,
@@ -223,6 +256,14 @@ const payload = {
 	defaultStudio: "software",
 	studioList,
 	studios,
+	engineReviewBodies: readEngineBodies(),
+	// Global-tier intent-review-agents (e.g. delivery-verifier) every studio
+	// inherits — the sign-off modal resolves these when a studio tier doesn't
+	// override by name.
+	globalIntentReviewAgents: listMdFiles(
+		join(ROOT, "plugin/intent-review-agents"),
+		"plugin/intent-review-agents",
+	),
 }
 
 writeFileSync(OUT, JSON.stringify(payload, null, 2))

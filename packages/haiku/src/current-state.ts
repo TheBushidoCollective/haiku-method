@@ -163,14 +163,16 @@ export function getCurrentState(
 	if (cursorStage === null) {
 		const sealedAt =
 			typeof intent.sealed_at === "string" && intent.sealed_at.length > 0
-		if (sealedAt) {
+		const delivery = intentDeliveryState(slug, { localOnly: true })
+		if (delivery.applicable && !delivery.merged) {
+			// Held: the work hasn't landed on the default branch — whether or
+			// not a sealed stamp was already written. The merge gate reading
+			// at the display layer ("while the cursor signal may say sealed,
+			// if the branch isn't merged the status is pending seal").
+			seal_status = "pending_seal"
+			awaiting_merge_into = delivery.defaultBranch
+		} else if (sealedAt) {
 			seal_status = "sealed"
-		} else {
-			const delivery = intentDeliveryState(slug, { localOnly: true })
-			if (delivery.applicable && !delivery.merged) {
-				seal_status = "pending_seal"
-				awaiting_merge_into = delivery.defaultBranch
-			}
 		}
 	}
 

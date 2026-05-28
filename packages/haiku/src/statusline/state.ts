@@ -29,6 +29,7 @@ import {
 	findCurrentStage,
 	isStageComplete,
 } from "../orchestrator/workflow/cursor.js"
+import { isAwaitingMerge } from "../orchestrator/workflow/intent-delivery.js"
 import {
 	actionIsFanOut,
 	deriveProgressRoleSteps,
@@ -124,8 +125,13 @@ function pickActiveIntent(haikuRoot: string): string | null {
 		const fm = readFm(join(intentsDir, slug, "intent.md"))
 		if (!fm) return false
 		if (fm.archived === true) return false
-		if (typeof fm.sealed_at === "string" && fm.sealed_at.length > 0)
-			return false
+		if (typeof fm.sealed_at === "string" && fm.sealed_at.length > 0) {
+			// A sealed stamp isn't "done" until the work has landed on the
+			// default branch. A sealed-but-unmerged intent is still live
+			// (held in pending-seal) — keep showing it. LOCAL-only probe so
+			// the status line stays fast.
+			return isAwaitingMerge(slug, { localOnly: true })
+		}
 		return true
 	})
 	if (live.length === 1) return live[0]
@@ -584,14 +590,21 @@ export function resolveStatuslineState(): StatuslineState | null {
 		typeof intentFm.sealed_at === "string" &&
 		(intentFm.sealed_at as string).length > 0
 	) {
+		// A sealed stamp is only truly "sealed" once the work has landed on
+		// the default branch. If the hub branch is still ahead (unmerged),
+		// the intent is HELD in pending-seal — render that, not "sealed",
+		// even though the cursor stamped sealed_at (the merge gate reading at
+		// the display layer; the engine never merges). LOCAL-only probe to
+		// keep the status line fast.
+		const awaitingMerge = isAwaitingMerge(slug, { localOnly: true })
 		return {
 			intent: slug,
 			studio,
 			stages: stageList.map((name) => ({ name, status: "done" as const })),
 			activeStage: "",
-			phaseLabel: "sealed",
-			phaseKind: "sealed",
-			gated: false,
+			phaseLabel: awaitingMerge ? "pending seal" : "sealed",
+			phaseKind: awaitingMerge ? "pending_seal" : "sealed",
+			gated: awaitingMerge,
 			aggregate: "",
 			phaseTrack: null,
 			itemBars: null,

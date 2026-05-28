@@ -9215,16 +9215,15 @@ export function handleStateTool(
 				const sealedAt =
 					typeof data.sealed_at === "string" && data.sealed_at.length > 0
 				const activeStage = studio ? findCurrentStage(slug, studio) : null
-				// `sealed_at` set → "completed". Every stage merged but NOT
-				// sealed → either "pending_seal" (git-backed, the hub branch
-				// hasn't landed on the default branch — held awaiting merge) or
-				// "completed" (filesystem mode / already merged → it seals on the
-				// next tick). LOCAL-only merge probe here (no gh/glab) — this is
+				// A sealed stamp is only "completed" once the work has landed on
+				// the default branch — otherwise it's "pending_seal" (held). Same
+				// for an all-stages-merged-but-unsealed intent: "pending_seal" if
+				// the hub branch hasn't merged, else "completed". A stage still
+				// active → "active". LOCAL-only merge probe (no gh/glab) — this is
 				// a per-intent list display; a transient pending_seal on a
 				// squash-merged-not-yet-ticked intent is acceptable.
 				let derivedStatus: string
-				if (sealedAt) derivedStatus = "completed"
-				else if (activeStage === null)
+				if (sealedAt || activeStage === null)
 					derivedStatus = isAwaitingMerge(slug, { localOnly: true })
 						? "pending_seal"
 						: "completed"

@@ -56,6 +56,7 @@ import {
 import { withIntentMainLock } from "../../locks.js"
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { resolveIntentStages } from "../../orchestrator.js"
+import { stageRequiresExternalReview } from "../studio.js"
 import { sealIntentState } from "../../state-integrity.js"
 import {
 	appendStageIteration,
@@ -114,11 +115,19 @@ const PER_STAGE_PR_MODES = new Set(["discrete", "discrete-hybrid"])
  *  stamps the `stage_prs` map so the gate can flip it ready later and the
  *  dispatch builder can hand the verifier the right upload target.
  *  Idempotent: a revisit re-enters workflowStartStage, so skip when this
- *  stage already has a recorded PR URL. */
+ *  stage already has a recorded PR URL.
+ *
+ *  Mode shaping: `discrete` opens a PR for EVERY stage. `discrete-hybrid`
+ *  opens one ONLY for stages whose review gate is external (the others run
+ *  continuous and keep their work on the intent-main PR). */
 function openStageDraftPrIfDelivery(slug: string, stage: string): void {
-	const intentFile = join(intentDir(slug), "intent.md")
-	const mode = (readFrontmatter(intentFile).mode as string) || ""
+	const fm = readFrontmatter(join(intentDir(slug), "intent.md"))
+	const mode = (fm.mode as string) || ""
 	if (!PER_STAGE_PR_MODES.has(mode)) return
+	if (mode === "discrete-hybrid") {
+		const studio = (fm.studio as string) || ""
+		if (!studio || !stageRequiresExternalReview(studio, stage)) return
+	}
 	if (!isGitRepo() || detectPrTool() === null) return
 	if (readStagePr(slug, stage)?.url) return
 	try {

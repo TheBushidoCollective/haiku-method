@@ -31,7 +31,7 @@ H·AI·K·U is always git-backed when a `.git/` directory is present. This contr
 
 When git creates a draft PR at intent-create time, the PR URL is stamped on `intent.md` frontmatter as `external_refs.git_pr` and `draft_pr_status`. The draft flips `ready` automatically at intent completion. You don't write these fields manually — the engine does — but you can read them to surface PR state to the user.
 
-In **discrete / discrete-hybrid** mode the engine also opens a per-stage draft PR at stage start (base = `haiku/<slug>/main`) and records it in the `stage_prs` map on `intent.md` FM; the stage gate flips that draft to ready (merging it is the approval). That stage PR is where the stage's runtime-verification proof gets uploaded. Continuous / autopilot / quick keep everything on the single intent-main draft PR.
+The engine also opens a per-stage draft PR at stage start (base = `haiku/<slug>/main`) and records it in the `stage_prs` map on `intent.md` FM; the stage gate flips that draft to ready (merging it is the approval). That stage PR is where the stage's runtime-verification proof gets uploaded. `discrete` opens one per stage; `discrete-hybrid` opens one only for stages whose `review:` gate is/includes `external` (the rest run continuous and keep work on the intent-main PR). Continuous / autopilot / quick keep everything on the single intent-main draft PR.
 
 ## Proof asset uploads (runtime-verification evidence)
 

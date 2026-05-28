@@ -42,6 +42,7 @@ const { RUNTIME_OBSERVATION_ROLES, PR_INTERACTION_ROLES } = await import(
 )
 const { setStagePrField, readStagePr, readStagePrs, ensureHaikuGitignored } =
 	await import(`${SRC}state-tools.ts`)
+const { stageRequiresExternalReview } = await import(`${SRC}orchestrator/studio.ts`)
 const { INTENT_FIELDS } = await import(`${SRC}workflow-fields.ts`)
 const { actionPromptBuilders } = await import(`${SRC}orchestrator/prompts/index.ts`)
 
@@ -150,6 +151,32 @@ test("runtime-verifier is in BOTH runtime-observation AND pr-interaction sets", 
 	assert.ok(
 		!RUNTIME_OBSERVATION_ROLES.has("delivery-verifier"),
 		"delivery-verifier is NOT a runtime-observation role",
+	)
+})
+
+console.log("\n=== discrete-hybrid external-review stage gating ===")
+
+test("stageRequiresExternalReview reads STAGE.md review gate (software)", () => {
+	// [external, ask] → external; ask / auto → not external.
+	assert.strictEqual(
+		stageRequiresExternalReview("software", "development"),
+		true,
+		"development is [external, ask] → external",
+	)
+	assert.strictEqual(
+		stageRequiresExternalReview("software", "design"),
+		true,
+		"design is [external, ask] → external",
+	)
+	assert.strictEqual(
+		stageRequiresExternalReview("software", "inception"),
+		false,
+		"inception is `ask` → not external",
+	)
+	assert.strictEqual(
+		stageRequiresExternalReview("software", "operations"),
+		false,
+		"operations is `auto` → not external",
 	)
 })
 

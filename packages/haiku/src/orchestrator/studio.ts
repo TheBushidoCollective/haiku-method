@@ -163,6 +163,22 @@ export function resolveStageOptional(studio: string, stage: string): boolean {
 	return readStageFrontmatter(studio, stage).optional === true
 }
 
+/** Whether a stage's review gate routes to EXTERNAL review (STAGE.md
+ *  `review: external`, or a compound list like `[external, ask]` that
+ *  includes it). In `discrete-hybrid` mode this is what marks a stage as
+ *  "gets its own PR" — only external-review stages open a per-stage draft
+ *  PR; the continuous stages keep their work on the intent-main PR. In
+ *  plain `discrete` mode every stage gets one regardless. */
+export function stageRequiresExternalReview(
+	studio: string,
+	stage: string,
+): boolean {
+	const review = readStageFrontmatter(studio, stage).review
+	if (typeof review === "string") return review === "external"
+	if (Array.isArray(review)) return review.includes("external")
+	return false
+}
+
 /** Downstream in-plan stages that reference `stage` via their `inputs:` or
  *  `review-agents-include:`. Drives the "what you're severing" summary shown
  *  when an optional stage is offered for drop — so the decision isn't blind to

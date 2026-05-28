@@ -11646,18 +11646,18 @@ export function handleStateTool(
 			const studios = listStudios()
 				.filter((s) => s.data.deprecated !== true)
 				.map((s) => ({
-				name: s.name,
-				slug: s.slug,
-				aliases: s.aliases,
-				dir: s.dir,
-				description: s.description,
-				category: s.category,
-				stages: s.stages,
-				source: s.source,
-				path: s.path,
-				studio_md: s.studioFile,
-				body: s.body.slice(0, 200),
-			}))
+					name: s.name,
+					slug: s.slug,
+					aliases: s.aliases,
+					dir: s.dir,
+					description: s.description,
+					category: s.category,
+					stages: s.stages,
+					source: s.source,
+					path: s.path,
+					studio_md: s.studioFile,
+					body: s.body.slice(0, 200),
+				}))
 			return reply({ studios })
 		}
 		case "haiku_studio_get": {

@@ -48,9 +48,10 @@ export function v9ToV10(ctx: MigrationContext): MigrationStepDetails {
 	//    deny-list semantics inline. resolveIntentStages no longer applies
 	//    skip_stages (Phase 3 removed it), so materializing through it would
 	//    silently re-add stages a legacy intent had skipped. Replicate the
-	//    pre-removal filter here: studio stages, minus skip_stages, intersected
-	//    with any explicit allow-list. Only a legacy intent that never got a
-	//    materialized `stages` (pre-haiku_select_mode era) reaches this branch.
+	//    pre-removal filter here: studio stages, minus skip_stages. This branch
+	//    only fires when there's no materialized `stages` yet (pre-haiku_select_mode
+	//    era), so there's no existing allow-list to intersect with — the deny-list
+	//    (skip_stages) is the only filter that applies.
 	const hasStages =
 		Array.isArray(data.stages) && (data.stages as unknown[]).length > 0
 	if (!hasStages && typeof data.studio === "string" && data.studio) {
@@ -60,13 +61,7 @@ export function v9ToV10(ctx: MigrationContext): MigrationStepDetails {
 					(s): s is string => typeof s === "string",
 				)
 			: []
-		const allow =
-			Array.isArray(data.stages) && (data.stages as unknown[]).length > 0
-				? new Set(data.stages as string[])
-				: null
-		const materialized = studioStages.filter(
-			(s) => (!allow || allow.has(s)) && !skip.includes(s),
-		)
+		const materialized = studioStages.filter((s) => !skip.includes(s))
 		if (materialized.length > 0) {
 			data.stages = materialized
 			changed = true

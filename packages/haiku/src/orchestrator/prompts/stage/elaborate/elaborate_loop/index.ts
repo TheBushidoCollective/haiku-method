@@ -42,7 +42,11 @@ type ElaborateLoopAction = {
 	verifier_nonces?: Record<string, string>
 	prompt_file?: string
 	optional_offer?: boolean
-	dependents?: Array<{ stage: string; inputs: string[]; reviewAgents: string[] }>
+	dependents?: Array<{
+		stage: string
+		inputs: string[]
+		reviewAgents: string[]
+	}>
 	[key: string]: unknown
 }
 
@@ -172,7 +176,9 @@ export default definePromptBuilder((ctx) => {
 						.map((d) => {
 							const parts: string[] = []
 							if (d.inputs.length > 0)
-								parts.push(`inputs ${d.inputs.map((i) => `\`${i}\``).join(", ")}`)
+								parts.push(
+									`inputs ${d.inputs.map((i) => `\`${i}\``).join(", ")}`,
+								)
 							if (d.reviewAgents.length > 0)
 								parts.push(
 									`review agents ${d.reviewAgents.map((a) => `\`${a}\``).join(", ")}`,

@@ -1,0 +1,91 @@
+---
+title: "The Engine and the Spine"
+description: "Anthropic's Dynamic Workflows fan tens-to-hundreds of subagents across one giant task. H·AI·K·U governs the whole feature lifecycle, over and over. Different layers — and they nest."
+date: "2026-05-28T16:00:00Z"
+author: Jason Waldrip
+category: Architecture
+tags:
+  - dynamic-workflows
+  - claude-code
+  - subagents
+  - workflow-engine
+  - orchestration
+---
+
+Jarred Sumner pointed Claude Code at the Bun runtime and asked it to port the thing from Zig to Rust. Eleven days from first commit to merge, [~750,000 lines of Rust, 99.8% of the test suite passing](https://claude.com/blog/introducing-dynamic-workflows-in-claude-code). Parallel agents ported file by file, each file got its own reviewer, automated fix loops cleaned up the rest. That's the headline example for Anthropic's new Dynamic Workflows in Claude Code, and it earns the headline.
+
+Read the announcement and the first reaction is recognition, not surprise. Fan a task out across parallel subagents. Have other agents try to refute what the first ones found. Loop until the answers converge. We do exactly that inside H·AI·K·U — the engine even exposes the same primitive as a tool. So the interesting question isn't whether it's good. It's where it sits relative to what we built, and the answer turns out to be a clean one.
+
+## Where we make the same bet
+
+Start with the convergence, because it's real and it's the honest place to start. The H·AI·K·U engine ships a `Workflow` primitive that is, functionally, the same thing Dynamic Workflows just made a first-class feature: fan out subagents, run stages in parallel or in a pipeline, have adversarial agents attack the output, loop until it stops finding problems. We didn't borrow it from the announcement and they didn't borrow it from us — it's the shape the problem forces. When you have a task too big for one context window and you don't trust a single agent to grade its own homework, you parallelize and you make the verifier a different agent than the author.
+
+<Compare verdict="match" title="Parallel fan-out as the unit of scale">
+  <Side label="Dynamic Workflows">
+    Claude plans the decomposition from your prompt and distributes subtasks across tens-to-hundreds of subagents in one session. The Bun port ran file-by-file ports in parallel with a dedicated reviewer per file.
+  </Side>
+  <Side label="H·AI·K·U">
+    A stage's execute phase fans one subagent out per ready unit, each in its own isolated copy of the repo. The same `Workflow` fan-out-and-converge primitive is exposed as an engine tool.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="Adversarial verification over self-assessment">
+  <Side label="Dynamic Workflows">
+    "Agents address the problem from independent angles, other agents try to refute what they found, and the run keeps iterating until the answers converge."
+  </Side>
+  <Side label="H·AI·K·U">
+    Review agents audit the spec before code lands and the work after; the fix loop is the rebuttal. A finding reopens the work, a fixer lands the change, the same check re-runs until it stops complaining.
+  </Side>
+</Compare>
+
+Two teams, same two answers. If the convergence ended there, this would be a short post about a feature we're glad shipped. But the convergence is on the mechanism, not on the job.
+
+## Where we diverge
+
+Here's the thing the Bun port does and doesn't tell you. It's one task. An enormous, gnarly, bounded task — but one. There's a clear input (Zig source), a clear output (Rust source), and a clear oracle (does the test suite pass). That's the shape Dynamic Workflows is built for, and it's the shape it nails. The shape H·AI·K·U is built for is the one that comes *after* the merge: now ship the next feature, and the one after that, with continuity, gates, and a delivery you can trust — over and over, for months.
+
+That difference shows up first in who's holding the wheel.
+
+<Compare verdict="diverge" title="Who plans the shape of the run">
+  <Side label="Dynamic Workflows">
+    The model. Claude reads your prompt, decides the decomposition dynamically, and orchestrates the fan-out at runtime. The intelligence planning the work is the same intelligence doing it.
+  </Side>
+  <Side label="H·AI·K·U">
+    The engine. A cursor reads on-disk state every tick and hands the agent exactly one action; the agent follows the breadcrumb and asks again. We have a project rule that forbids the prompts from even teaching the agent how the orchestration works.
+  </Side>
+</Compare>
+
+That rule is the load-bearing difference, so let me name it. Call it **the orchestrator seat** — the role that decides what happens next and in what order. Dynamic Workflows puts the model in that seat and trusts it to plan a good shape on the fly. We deliberately took the seat away from the model and welded it into durable engine code, because we watched the model's in-context plan drift the moment reality diverged from it. The agent reconstructs the world from its prompt and its last few tool returns every single turn. Anything you teach it about pool slots, batch boundaries, or "what comes next" becomes a stale mental model the instant the run goes sideways. So we don't teach it. The engine knows; the agent gets told one thing at a time. ([The long version.](/blog/one-instruction-at-a-time))
+
+Sit in the seat for a second yourself. You're an agent forty subtasks into a run. Your context is full of completions, half-merged branches, and three reviewers' findings. Now decide: which subtask fires next, is the pool full, did that chain finish or is it mid-relay? Dynamic Workflows answers this with a strong model and in-run checkpoints that let an interrupted job resume instead of restarting. We answer it by never asking the agent the question — the cursor answers it from disk, the same way every tick.
+
+Which leads straight to the next divergence: how long the state lives.
+
+<Compare verdict="diverge" title="Lifespan of the run">
+  <Side label="Dynamic Workflows">
+    One session. Progress is checkpointed so an interrupted run resumes where it stopped — durable within the run, scoped to the run.
+  </Side>
+  <Side label="H·AI·K·U">
+    Permanent. The plan, the units, the feedback, the delivery state all live as git-backed files. Pick an intent back up a week later and the engine knows exactly where it stalled, what's sealed, what's still waiting to merge.
+  </Side>
+</Compare>
+
+A Dynamic Workflow checkpoint is a save file for one playthrough. A H·AI·K·U intent is a record that outlives the session that started it, the agent that ran it, and the human who kicked it off. A researcher can start an intent, a designer can pick up the design stage in a fresh session next week, and the engine reads state and hands each one the right next action. That property only exists because the state lives outside the conversation.
+
+## Where they nest
+
+Now the verification gap, which is also where the two stop being alternatives and start being layers.
+
+Dynamic Workflows iterates until its agents stop refuting each other — convergence on the model's own judgment. That's a strong signal, but it's still the model agreeing with the model. A hard gate doesn't care whether the agents agree. In H·AI·K·U, tests pass or they don't, types check or they don't, and the engine refuses to advance past a failing exit code regardless of what any agent claims. ([Why we don't let agents grade compilation.](/blog/dont-review-broken-code)) An intent doesn't even seal until a delivery check confirms the PR's CI is green *and* meaningful — not a no-op suite that exits zero — *and* the PR is actually mergeable. ([The check that watches the delivery.](/blog/the-loop-that-watches-the-loop))
+
+<Callout tone="info" title="The layer distinction">
+Dynamic Workflows is an engine for one massive task: plan it, fan it out, converge. H·AI·K·U is a spine for the repeated lifecycle: govern the whole feature, gate by gate, with state that survives the session. One scales a single job. The other carries a process.
+</Callout>
+
+The two human stories differ to match. Dynamic Workflows asks for confirmation once, then runs — the right call for a bounded job you've decided to commit to. H·AI·K·U puts a configurable gate on every stage: auto-advance where you trust it, ask-the-human where you don't, wait-for-external-review where the work demands sign-off. Same knob the dark-factory bet always needed — supervision dialed in per phase, not per session.
+
+And because both fan out in parallel, both have to keep parallel writers from clobbering each other. Dynamic Workflows handles it with in-session subagents. H·AI·K·U gives each unit and each fix-chain its own git worktree on an ephemeral branch, merged back under a stage lock only at the terminal — so forty agents writing at once never trample one shared tree.
+
+So which do you reach for? If your problem is one enormous bounded thing — a migration, a repo-wide bug hunt, a Zig-to-Rust port — Dynamic Workflows is the muscle, and the Bun result is the proof. If your problem is the steady cadence of shipping features that need continuity across stages, gates a stakeholder signs, and a delivery you can audit, that's the lifecycle H·AI·K·U was built to carry.
+
+The honest punchline is that these aren't rivals. A Dynamic Workflow would make a great engine inside a single stage's execute phase — fan the units out, converge, hand the result back to the cursor. The engine drives the one big push; the spine decides when that push happens, what gate it has to clear, and what ships when it's done. We use the same fan-out primitive internally already. The question we're chewing on now isn't whether the two compete. It's whether the muscle Anthropic just shipped belongs *inside* the spine we built.

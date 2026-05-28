@@ -1,7 +1,6 @@
 "use client"
 
 import matter from "gray-matter"
-import Link from "next/link"
 import { useEffect, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -24,6 +23,7 @@ import { FilePreview, isTextFile } from "./FilePreview"
 import { RESOLUTION_BADGES } from "./feedback-badges"
 import { FixHistory, HatHistory } from "./IterationHistory"
 import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
+import { loadReviewAgentDef } from "./studio-defs"
 
 function titleCase(s: string): string {
 	return s
@@ -1005,19 +1005,11 @@ const ENGINE_OR_GATE_ROLES = new Set([
 	"user",
 ])
 
-/** Deep-link a studio review/approval agent role to its definition on the
- *  stage page (`#agent-<role>` for the review walk, `#approve-agent-<role>`
- *  for the approval walk — both render the same def). Returns null for engine
- *  roles / gates, which have no def page. */
-function roleDefHref(
-	role: string,
-	studio: string,
-	stageName: string,
-	walk: "review" | "approve",
-): string | null {
-	if (!studio || ENGINE_OR_GATE_ROLES.has(role)) return null
-	const anchor = walk === "approve" ? `approve-agent-${role}` : `agent-${role}`
-	return `/studios/${studio}/stages/${stageName}/#${anchor}`
+/** A role is linkable to a studio definition when it's a studio review agent
+ *  (not an engine role and not the user/quality-gate slot). Those agents ship
+ *  a `review-agents/<role>.md` mandate we can open in a modal. */
+function roleIsLinkable(role: string, studio: string): boolean {
+	return Boolean(studio) && !ENGINE_OR_GATE_ROLES.has(role)
 }
 
 /**
@@ -1074,7 +1066,6 @@ function SignOffsSection({
 						entries={reviews}
 						studio={studio}
 						stageName={stageName}
-						walk="review"
 					/>
 				)}
 				{approvals.length > 0 && (
@@ -1083,7 +1074,6 @@ function SignOffsSection({
 						entries={approvals}
 						studio={studio}
 						stageName={stageName}
-						walk="approve"
 					/>
 				)}
 			</div>
@@ -1096,14 +1086,23 @@ function SignOffGroup({
 	entries,
 	studio,
 	stageName,
-	walk,
 }: {
 	title: string
 	entries: Array<{ role: string; signed: boolean; signedAt: string | null }>
 	studio: string
 	stageName: string
-	walk: "review" | "approve"
 }) {
+	// Open the agent's mandate in a modal (instead of navigating to the studio
+	// stage page). Loaded lazily from the bundled studio defs on click.
+	const [def, setDef] = useState<{
+		role: string
+		body: string
+		path: string | null
+	} | null>(null)
+	const openDef = async (role: string) => {
+		const loaded = await loadReviewAgentDef(studio, stageName, role)
+		if (loaded) setDef({ role, body: loaded.body, path: loaded.path })
+	}
 	return (
 		<div className="rounded-xl border border-stone-200 dark:border-stone-700">
 			<div className="border-b border-stone-100 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-stone-400 dark:border-stone-800">
@@ -1146,21 +1145,19 @@ function SignOffGroup({
 									/>
 								)}
 							</span>
-							{(() => {
-								const href = roleDefHref(role, studio, stageName, walk)
-								return href ? (
-									<Link
-										href={href}
-										className="truncate text-sm text-teal-700 hover:underline dark:text-teal-400"
-									>
-										{roleLabel(role)}
-									</Link>
-								) : (
-									<span className="truncate text-sm text-stone-700 dark:text-stone-300">
-										{roleLabel(role)}
-									</span>
-								)
-							})()}
+							{roleIsLinkable(role, studio) ? (
+								<button
+									type="button"
+									onClick={() => openDef(role)}
+									className="truncate text-left text-sm text-teal-700 hover:underline dark:text-teal-400"
+								>
+									{roleLabel(role)}
+								</button>
+							) : (
+								<span className="truncate text-sm text-stone-700 dark:text-stone-300">
+									{roleLabel(role)}
+								</span>
+							)}
 						</div>
 						<span className="flex-shrink-0 text-xs text-stone-400">
 							{signedAt ? formatDate(signedAt) : signed ? "signed" : "pending"}
@@ -1168,6 +1165,15 @@ function SignOffGroup({
 					</li>
 				))}
 			</ul>
+			{def && (
+				<DocModal
+					fileName={roleLabel(def.role)}
+					filePath={def.path ?? def.role}
+					content={def.body}
+					isMarkdown
+					onClose={() => setDef(null)}
+				/>
+			)}
 		</div>
 	)
 }

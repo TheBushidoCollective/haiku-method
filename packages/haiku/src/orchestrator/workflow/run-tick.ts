@@ -53,6 +53,7 @@ import {
 } from "./deadlock-detector.js"
 import { completePendingFixChainMerges } from "./fix-chain-merge-gate.js"
 import { reconcileOrphanedHatSequences } from "./hat-sequence-migration.js"
+import { healDuplicateFeedbackIds } from "./heal-duplicate-feedback-ids.js"
 import { purgeDeadSidecars } from "./purge-dead-sidecars.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
 import {
@@ -483,6 +484,33 @@ export function runWorkflowTick(
 		}
 	} catch (err) {
 		emitTelemetry("haiku.hat_sequence.reconcile_failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Pre-tick FB-id heal: renumber feedback files that collide on their
+	// numeric prefix so every FB has a UNIQUE id. Parallel reviewers can
+	// both allocate the same number (local-max+1) when intent-main is
+	// behind origin; the non-fast-forward rebase recovery then keeps BOTH
+	// files, and `findFeedbackFile` would resolve only one — silently
+	// shadowing the other finding (a delivery-branch net-delete BLOCKER was
+	// nearly lost this way, worker-new-badge 2026-05-28). Runs before the
+	// cursor collects feedback so dispatch sees distinct ids. Idempotent;
+	// best-effort — never blocks the tick.
+	try {
+		const healed = healDuplicateFeedbackIds(
+			slug,
+			resolveIntentStages(intentFm, studio),
+		)
+		if (healed.renamed.length > 0) {
+			emitTelemetry("haiku.feedback.id_heal", {
+				intent: slug,
+				renamed: String(healed.renamed.length),
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.feedback.id_heal.failed", {
 			intent: slug,
 			error: String((err as Error)?.message ?? err),
 		})

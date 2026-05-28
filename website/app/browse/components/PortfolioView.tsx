@@ -25,6 +25,7 @@ import type {
 import { formatDate, formatDuration } from "@/lib/browse/types"
 import type { BrowseLocation } from "@/lib/browse/url"
 import { buildBrowseUrl } from "@/lib/browse/url"
+import { BrowseSkeleton } from "./BrowseSkeletons"
 import { IntentDetailView } from "./IntentDetailView"
 import { PortfolioKanban } from "./KanbanView"
 import type { SearchSelection } from "./SearchBar"
@@ -81,7 +82,7 @@ export function PortfolioView({
 		useState<HaikuIntentDetail | null>(null)
 	const [loading, setLoading] = useState(true)
 	const [loadingMore, setLoadingMore] = useState(false)
-	const [_loadingDetail, setLoadingDetail] = useState(false)
+	const [loadingDetail, setLoadingDetail] = useState(false)
 	const [viewMode, setViewMode] = useState<"list" | "board">(
 		location?.view === "board" ? "board" : "list",
 	)
@@ -642,6 +643,12 @@ export function PortfolioView({
 				onBack={handleBackFromIntent}
 			/>
 		)
+	}
+
+	// Deep link still resolving its intent detail — show the skeleton that
+	// matches the target (intent / stage / unit), not the portfolio list.
+	if (location?.intent && loadingDetail) {
+		return <BrowseSkeleton location={location} />
 	}
 
 	return (

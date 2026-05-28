@@ -16,6 +16,7 @@ import { addRecent } from "@/lib/browse/recents"
 import type { BrowseProvider } from "@/lib/browse/types"
 import type { BrowseLocation } from "@/lib/browse/url"
 import { parseBrowsePath } from "@/lib/browse/url"
+import { BrowseSkeleton } from "./BrowseSkeletons"
 import { PortfolioView } from "./PortfolioView"
 
 function titleCase(s: string): string {
@@ -131,30 +132,9 @@ export function RemoteBrowseView({ pathSegments, branch: branchParam }: Props) {
 	}
 
 	if (loading) {
-		return (
-			<div className="mx-auto max-w-5xl px-4 py-8 lg:py-12">
-				<div className="mb-8">
-					<div className="mb-2 h-4 w-16 animate-pulse rounded bg-stone-200 dark:bg-stone-700" />
-					<div className="h-8 w-48 animate-pulse rounded bg-stone-200 dark:bg-stone-700" />
-					<div className="mt-2 h-4 w-64 animate-pulse rounded bg-stone-100 dark:bg-stone-800" />
-				</div>
-				<div className="space-y-3">
-					{[1, 2, 3].map((i) => (
-						<div
-							key={i}
-							className="animate-pulse rounded-xl border border-stone-200 px-6 py-4 dark:border-stone-700"
-						>
-							<div className="h-5 w-48 rounded bg-stone-200 dark:bg-stone-700" />
-							<div className="mt-2 flex gap-4">
-								<div className="h-3 w-20 rounded bg-stone-100 dark:bg-stone-800" />
-								<div className="h-3 w-16 rounded bg-stone-100 dark:bg-stone-800" />
-							</div>
-							<div className="mt-3 h-1.5 w-full rounded-full bg-stone-100 dark:bg-stone-800" />
-						</div>
-					))}
-				</div>
-			</div>
-		)
+		// Match the skeleton to the page being loaded (a deep link to a unit
+		// flashes a unit-shaped skeleton, not the portfolio list).
+		return <BrowseSkeleton location={location} />
 	}
 
 	if (error) {

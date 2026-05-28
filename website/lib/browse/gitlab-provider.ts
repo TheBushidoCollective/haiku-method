@@ -429,42 +429,40 @@ export class GitLabProvider implements BrowseProvider {
 		// Scan mode: discover intents across all haiku/* branches + default branch
 		const intentsBySlug = new Map<string, HaikuIntent>()
 
-		// Step 1: List haiku/* branches via GraphQL
-		const branchesCacheKey = `gl:${this.host}:${this.projectPath}:listHaikuBranches`
-		const branchesData =
-			await this.cachedQuery<operationsListBranchNamesQuery$data>(
+		// Step 1: List the intent branches via GraphQL — PAGINATED. `branchNames`
+		// caps at `limit` per call (100), and a busy monorepo has far more than
+		// 100 `haiku/*` branches (every unit branch counts), so a single page
+		// silently dropped intents whose `*/main` branch sorted past the cutoff
+		// (worker-new-badge, 2026-05-28). The lean list only needs the `*/main`
+		// branches, so narrow the glob to `haiku/*/main` (far fewer results) AND
+		// page through until a short page signals the end.
+		const PAGE = 100
+		const mainBranches: string[] = []
+		for (let offset = 0; ; offset += PAGE) {
+			const page = await this.cachedQuery<operationsListBranchNamesQuery$data>(
 				ListBranchNamesQuery,
 				{
 					fullPath: this.projectPath,
-					searchPattern: "haiku/*",
-					offset: 0,
-					limit: 100,
+					searchPattern: "haiku/*/main",
+					offset,
+					limit: PAGE,
 				},
-				branchesCacheKey,
+				`gl:${this.host}:${this.projectPath}:listMainBranches:${offset}`,
 			)
-
-		const branchNames = branchesData?.project?.repository?.branchNames ?? []
-		if (branchNames.length > 0) {
-			console.log(
-				`[haiku-browse] Found ${branchNames.length} haiku branches:`,
-				branchNames,
-			)
-		} else {
-			console.log(
-				`[haiku-browse] No haiku branches found via branchNames query`,
-			)
+			const names = page?.project?.repository?.branchNames ?? []
+			for (const name of names) {
+				const parts = name.split("/")
+				if (parts.length >= 2 && parts[parts.length - 1] === "main") {
+					mainBranches.push(name)
+				}
+			}
+			if (names.length < PAGE) break
 		}
 
 		// LEAN list-view load: NO per-stage-branch MR fan-out and NO per-stage
 		// unit probes — those were the O(N) slowness. MR/PR status + per-stage
 		// detail load lazily in the detail view. The list needs only:
 		// title/studio/mode/status + branch + stage-dir-count over total stages.
-
-		// haiku/<slug>/main branches → the "current" (in-flight) intents.
-		const mainBranches = branchNames.filter((name: string) => {
-			const parts = name.split("/")
-			return parts.length >= 2 && parts[parts.length - 1] === "main"
-		})
 
 		// Step 2: Load ALL intents from default branch — the canonical catalog
 		const defaultIntents = await this.listIntentsFromRef(null)

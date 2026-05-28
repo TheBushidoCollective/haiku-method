@@ -1,6 +1,7 @@
 ---
 name: transformation
 description: Transform and model data for the target schema
+optional: true
 hats: [transformer, data-modeler, verifier]
 fix_hats: [classifier, transformer, feedback-assessor]
 review: ask

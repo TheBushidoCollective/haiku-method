@@ -1,6 +1,7 @@
 ---
 name: monitor
 description: Track vendor performance and SLA compliance
+optional: true
 hats: [monitor, relationship-manager, verifier]
 fix_hats: [classifier, monitor, feedback-assessor]
 review: auto

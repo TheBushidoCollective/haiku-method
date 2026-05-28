@@ -1,7 +1,6 @@
 ---
 name: product
 description: Define behavioral specifications and acceptance criteria
-optional: true
 hats: [product, specification, validator]
 fix_hats: [classifier, product, specification, feedback-assessor]
 review: [external, ask]

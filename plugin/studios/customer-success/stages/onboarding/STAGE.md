@@ -1,6 +1,7 @@
 ---
 name: onboarding
 description: Guide new customers through setup, training, and initial value realization
+optional: true
 hats: [onboarding-lead, technical-enabler, verifier]
 fix_hats: [classifier, onboarding-lead, feedback-assessor]
 review: ask

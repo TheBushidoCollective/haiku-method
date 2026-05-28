@@ -1,6 +1,7 @@
 ---
 name: deliver
 description: Facilitate training delivery and coordinate logistics
+optional: true
 hats: [facilitator, coordinator, verifier]
 fix_hats: [classifier, facilitator, feedback-assessor]
 review: auto

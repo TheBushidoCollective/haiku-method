@@ -1,6 +1,7 @@
 ---
 name: resolve
 description: Implement permanent fix with proper testing and review
+optional: true
 hats: [engineer, reviewer, verifier]
 fix_hats: [classifier, engineer, feedback-assessor]
 review: ask

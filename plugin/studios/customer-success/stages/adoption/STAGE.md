@@ -1,6 +1,7 @@
 ---
 name: adoption
 description: Drive product adoption, usage patterns, and feature discovery
+optional: true
 hats: [adoption-coach, usage-analyst, verifier]
 fix_hats: [classifier, adoption-coach, feedback-assessor]
 review: auto

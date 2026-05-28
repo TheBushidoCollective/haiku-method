@@ -1,6 +1,7 @@
 ---
 name: budget
 description: Allocate resources and set financial targets
+optional: true
 hats: [budget-owner, allocator, verifier]
 fix_hats: [classifier, budget-owner, feedback-assessor]
 review: external

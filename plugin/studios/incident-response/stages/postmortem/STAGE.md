@@ -1,6 +1,7 @@
 ---
 name: postmortem
 description: Document timeline, root cause, action items, and prevention measures
+optional: true
 hats: [postmortem-author, action-item-tracker, verifier]
 fix_hats: [classifier, postmortem-author, feedback-assessor]
 review: external

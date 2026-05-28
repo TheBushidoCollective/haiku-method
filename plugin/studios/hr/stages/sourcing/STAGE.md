@@ -1,6 +1,7 @@
 ---
 name: sourcing
 description: Identify candidate pools and conduct outreach
+optional: true
 hats: [sourcer, recruiter, verifier]
 fix_hats: [classifier, sourcer, feedback-assessor]
 review: auto

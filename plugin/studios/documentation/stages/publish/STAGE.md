@@ -1,6 +1,7 @@
 ---
 name: publish
 description: Format, validate links, and publish the documentation
+optional: true
 hats: [format-planner, publisher, verifier]
 fix_hats: [classifier, publisher, feedback-assessor]
 review: auto

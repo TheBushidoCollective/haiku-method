@@ -2113,15 +2113,26 @@ export function derivePosition(args: {
 			? (intentResult.data.mode as string)
 			: "continuous"
 
-	// Sealed intent short-circuit: once intent.sealed_at is set, the
-	// intent is write-locked — no further cursor work. Architectural
-	// invariant: sealed = terminal forever, no walk.
+	// Sealed intent short-circuit: a sealed stamp is terminal — BUT only
+	// once the work has actually landed on the default branch. A sealed
+	// stamp on an intent whose `haiku/<slug>/main` is still ahead of the
+	// default branch (a premature seal, or a legacy seal from before the
+	// merge gate) is NOT done: fall through to the full walk so a pickup
+	// re-audit runs (the delivery-verifier re-checks the PR) and the
+	// terminal re-emits `pending_seal` until the merge lands. Authoritative
+	// (squash-merge-aware) read — this decides whether the lock holds.
+	// Inapplicable in filesystem mode / no default branch → merged === true
+	// → the short-circuit fires exactly as before.
 	if (
 		intentResult &&
 		typeof intentResult.data.sealed_at === "string" &&
 		(intentResult.data.sealed_at as string).length > 0
 	) {
-		return { track: "sealed", action: { kind: "sealed" } }
+		const sealedDelivery = intentDeliveryState(slug)
+		if (!sealedDelivery.applicable || sealedDelivery.merged) {
+			return { track: "sealed", action: { kind: "sealed" } }
+		}
+		// else: sealed but not delivered — fall through to the walk.
 	}
 
 	// Pre-intent verifier (2026-05-08). The conversation that produced
@@ -2373,35 +2384,40 @@ export function derivePosition(args: {
 		// file's existence on disk is the seen-this-cycle signal, so
 		// a re-tick after the agent wrote it falls through to
 		// seal_intent.
-		if (intentResult.data.sealed_at == null) {
-			if (isReflectionEnabled(intentDir)) {
-				const reflectionPath = join(intentDir, "reflection.md")
-				if (!existsSync(reflectionPath)) {
-					return {
-						track: "intent",
-						action: { kind: "record_reflection" },
-					}
-				}
-			}
-			// Merge gate (2026-05-28). The intent is fully built, signed,
-			// and reflected — but it is not SEALED until its work has landed
-			// on the repo's default branch. While the hub branch is still
-			// ahead of (not merged into) the default branch, hold in
-			// `pending_seal` instead of stamping `sealed_at`. Authoritative
-			// (squash-merge-aware) read — this is the signal that actually
-			// writes the terminal lock. Inapplicable in filesystem mode / when
-			// no default branch resolves → `merged` is true and the seal
-			// proceeds exactly as before.
-			const delivery = intentDeliveryState(slug)
-			if (delivery.applicable && !delivery.merged) {
+		// Reflection runs once, for a not-yet-sealed intent, before the
+		// merge gate (a sealed-but-unmerged intent that fell through the
+		// short-circuit already reflected — reflection.md exists / sealed_at
+		// is set).
+		if (intentResult.data.sealed_at == null && isReflectionEnabled(intentDir)) {
+			const reflectionPath = join(intentDir, "reflection.md")
+			if (!existsSync(reflectionPath)) {
 				return {
 					track: "intent",
-					action: {
-						kind: "pending_seal",
-						default_branch: delivery.defaultBranch,
-					},
+					action: { kind: "record_reflection" },
 				}
 			}
+		}
+		// Merge gate (2026-05-28). The intent is fully built, signed, and
+		// reflected — but it is not SEALED until its work has landed on the
+		// repo's default branch. While the hub branch is still ahead of (not
+		// merged into) the default branch, hold in `pending_seal`. This fires
+		// whether or not `sealed_at` is already stamped: a premature/legacy
+		// seal falls through the short-circuit above and is held here too, so
+		// a pickup re-audits the PR until the merge lands. Authoritative
+		// (squash-merge-aware) read. Inapplicable in filesystem mode / when no
+		// default branch resolves → `merged` is true and the seal proceeds as
+		// before.
+		const delivery = intentDeliveryState(slug)
+		if (delivery.applicable && !delivery.merged) {
+			return {
+				track: "intent",
+				action: {
+					kind: "pending_seal",
+					default_branch: delivery.defaultBranch,
+				},
+			}
+		}
+		if (intentResult.data.sealed_at == null) {
 			return {
 				track: "intent",
 				action: { kind: "seal_intent" },

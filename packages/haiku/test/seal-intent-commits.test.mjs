@@ -163,6 +163,33 @@ test("seal_intent COMMITS the sealed_at stamp (so the auto-push can fire)", asyn
 			"sealed_at must NOT be stamped while the hub branch is unmerged",
 		)
 
+		// LEGACY guard: an intent that ALREADY carries a sealed_at stamp
+		// (sealed before the merge gate, or a premature seal) must STILL hold
+		// at pending_seal while unmerged — the cursor's sealed short-circuit
+		// must NOT fire until the work lands. This is what lets a pickup
+		// re-audit the PR instead of treating the intent as done.
+		{
+			const p = matter(readFileSync(intentMd, "utf8"))
+			writeFileSync(
+				intentMd,
+				matter.stringify(p.content, {
+					...p.data,
+					sealed_at: "2026-05-24T00:00:00Z",
+				}),
+			)
+			const legacyHeld = (await tick()).action
+			assert.equal(
+				legacyHeld,
+				"pending_seal",
+				`a sealed-but-unmerged intent must stay held (not short-circuit to sealed), got: ${legacyHeld}`,
+			)
+			// Clear it so the seal-commit flow below exercises the real
+			// seal_intent stamp + commit path.
+			const p2 = matter(readFileSync(intentMd, "utf8"))
+			const { sealed_at: _drop, ...rest } = p2.data
+			writeFileSync(intentMd, matter.stringify(p2.content, rest))
+		}
+
 		// Simulate the human/host merging the delivery into the default
 		// branch — the engine never does this itself.
 		deliverIntent({ repoRoot, slug })

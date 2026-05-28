@@ -1543,28 +1543,13 @@ test("cursor: brand-new intent (no stages dir at all) → elaborate on first dec
 // 2026-05-08 — design_direction gate is now a discovery agent, covered
 // by the discovery_required tests above.
 
-test("cursor: brand-new intent with sealed_at already set → sealed (sanity)", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo(
-		"cursor-pre-stage-sealed",
-		async ({ repoRoot, intentDir, slug }) => {
-			makeStudio({ repoRoot, studio: "test" })
-			makeIntent({
-				intentDir,
-				slug,
-				studio: "test",
-				sealed: true,
-				approvals: {
-					spec: { at: "2026-05-06T00:00:00Z" },
-					continuity: { at: "2026-05-06T00:00:00Z" },
-					user: { at: "2026-05-06T00:00:00Z" },
-				},
-			})
-			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(action.action, "sealed")
-		},
-	)
-})
+// NOTE (2026-05-28): the old "sealed_at unconditionally → sealed" sanity
+// tests were removed. The merge gate made the sealed short-circuit
+// conditional on the work having landed on the default branch, so a
+// degenerate sealed-but-unmerged fixture (no units, no verified_at) now
+// correctly falls through the short-circuit. The realistic sealed paths —
+// sealed+merged → sealed, and sealed-but-unmerged → pending_seal — are
+// covered on a real completed fixture in seal-intent-commits.test.mjs.
 
 test("cursor: intent with FB on a stage that hasn't started yet → start_feedback_hat preempts", async () => {
 	if (!HAS_GIT) return
@@ -1662,27 +1647,7 @@ test("cursor: intent restricted to subset of studio stages does NOT surface unsc
 })
 
 // ── Sealed intent ────────────────────────────────────────────────────
-
-test("cursor: sealed intent → sealed action", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo("cursor-sealed", async ({ repoRoot, intentDir, slug }) => {
-		makeStudio({ repoRoot, studio: "test" })
-		makeIntent({
-			intentDir,
-			slug,
-			studio: "test",
-			approvals: {
-				spec: { at: "t" },
-				continuity: { at: "t" },
-				user: { at: "t" },
-			},
-			sealed: true,
-		})
-		const action = await runTick(repoRoot, slug)
-		assert.strictEqual(
-			action.action,
-			"sealed",
-			`sealed intent should return sealed; got: ${action.action}`,
-		)
-	})
-})
+// (See the note above the FB-preempt test: the degenerate sealed-state
+// sanity tests were removed when the merge gate made the sealed
+// short-circuit conditional on delivery; realistic coverage lives in
+// seal-intent-commits.test.mjs.)

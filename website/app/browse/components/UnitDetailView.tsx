@@ -23,7 +23,8 @@ import { FilePreview, isTextFile } from "./FilePreview"
 import { RESOLUTION_BADGES } from "./feedback-badges"
 import { FixHistory, HatHistory } from "./IterationHistory"
 import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
-import { loadReviewAgentDef } from "./studio-defs"
+import { SignOffGroup } from "./SignOffGroup"
+import type { QualityGate } from "./studio-defs"
 
 function titleCase(s: string): string {
 	return s
@@ -982,34 +983,19 @@ function readSignOffs(
 	return expectedRoles.map((role) => slotSignOff(role, record[role]))
 }
 
-/** Human label for a review/approval role. Raw role names read fine; we just
- *  tidy the multi-word engine roles and the special gates. */
-function roleLabel(role: string): string {
-	if (role === "user") return "User"
-	if (role === "quality_gates") return "Quality Gates"
-	if (role === "cross-stage-consistency") return "Cross-stage Consistency"
-	return role
-		.split(/[-_]/)
-		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-		.join(" ")
-}
-
-/** Engine-owned roles + the human/gate slots have no studio definition page —
- *  they're built into the workflow, not authored as `review-agents/*.md`.
- *  Everything else stamped is a studio review agent with a def we can link. */
-const ENGINE_OR_GATE_ROLES = new Set([
-	"spec",
-	"continuity",
-	"cross-stage-consistency",
-	"quality_gates",
-	"user",
-])
-
-/** A role is linkable to a studio definition when it's a studio review agent
- *  (not an engine role and not the user/quality-gate slot). Those agents ship
- *  a `review-agents/<role>.md` mandate we can open in a modal. */
-function roleIsLinkable(role: string, studio: string): boolean {
-	return Boolean(studio) && !ENGINE_OR_GATE_ROLES.has(role)
+/** Collect a unit's executable quality gates from frontmatter — the
+ *  `{name, command, dir?}` objects (prose strings are skipped). Surfaced in the
+ *  sign-off modal for the `quality_gates` role. */
+function unitQualityGates(raw: Record<string, unknown>): QualityGate[] {
+	const gates = raw.quality_gates
+	if (!Array.isArray(gates)) return []
+	return gates.flatMap((g) =>
+		g &&
+		typeof g === "object" &&
+		typeof (g as { command?: unknown }).command === "string"
+			? [g as QualityGate]
+			: [],
+	)
 }
 
 /**
@@ -1054,6 +1040,7 @@ function SignOffsSection({
 	const reviews = readSignOffs(reviewsRaw, reviewRoles)
 	const approvals = readSignOffs(approvalsRaw, approvalRoles)
 	if (reviews.length === 0 && approvals.length === 0) return null
+	const qualityGates = unitQualityGates(unit.raw)
 	return (
 		<section className="mb-8">
 			<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
@@ -1066,6 +1053,8 @@ function SignOffsSection({
 						entries={reviews}
 						studio={studio}
 						stageName={stageName}
+						scope="review"
+						qualityGates={qualityGates}
 					/>
 				)}
 				{approvals.length > 0 && (
@@ -1074,107 +1063,12 @@ function SignOffsSection({
 						entries={approvals}
 						studio={studio}
 						stageName={stageName}
+						scope="approve"
+						qualityGates={qualityGates}
 					/>
 				)}
 			</div>
 		</section>
-	)
-}
-
-function SignOffGroup({
-	title,
-	entries,
-	studio,
-	stageName,
-}: {
-	title: string
-	entries: Array<{ role: string; signed: boolean; signedAt: string | null }>
-	studio: string
-	stageName: string
-}) {
-	// Open the agent's mandate in a modal (instead of navigating to the studio
-	// stage page). Loaded lazily from the bundled studio defs on click.
-	const [def, setDef] = useState<{
-		role: string
-		body: string
-		path: string | null
-	} | null>(null)
-	const openDef = async (role: string) => {
-		const loaded = await loadReviewAgentDef(studio, stageName, role)
-		if (loaded) setDef({ role, body: loaded.body, path: loaded.path })
-	}
-	return (
-		<div className="rounded-xl border border-stone-200 dark:border-stone-700">
-			<div className="border-b border-stone-100 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-stone-400 dark:border-stone-800">
-				{title}
-			</div>
-			<ul className="divide-y divide-stone-100 dark:divide-stone-800">
-				{entries.map(({ role, signed, signedAt }) => (
-					<li
-						key={role}
-						className="flex items-center justify-between gap-3 px-4 py-2.5"
-					>
-						<div className="flex items-center gap-2 min-w-0">
-							<span
-								className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
-									signed
-										? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
-										: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
-								}`}
-							>
-								{signed ? (
-									<svg
-										className="h-3 w-3"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke="currentColor"
-										aria-hidden="true"
-									>
-										<title>signed</title>
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={3}
-											d="M5 13l4 4L19 7"
-										/>
-									</svg>
-								) : (
-									<span
-										className="h-1.5 w-1.5 rounded-full bg-current"
-										aria-hidden="true"
-									/>
-								)}
-							</span>
-							{roleIsLinkable(role, studio) ? (
-								<button
-									type="button"
-									onClick={() => openDef(role)}
-									className="truncate text-left text-sm text-teal-700 hover:underline dark:text-teal-400"
-								>
-									{roleLabel(role)}
-								</button>
-							) : (
-								<span className="truncate text-sm text-stone-700 dark:text-stone-300">
-									{roleLabel(role)}
-								</span>
-							)}
-						</div>
-						<span className="flex-shrink-0 text-xs text-stone-400">
-							{signedAt ? formatDate(signedAt) : signed ? "signed" : "pending"}
-						</span>
-					</li>
-				))}
-			</ul>
-			{def && (
-				<DocModal
-					fileName={roleLabel(def.role)}
-					filePath={def.path ?? def.role}
-					content={def.body}
-					isMarkdown
-					onClose={() => setDef(null)}
-				/>
-			)}
-		</div>
 	)
 }
 

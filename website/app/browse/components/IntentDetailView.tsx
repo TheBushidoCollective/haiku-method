@@ -27,6 +27,8 @@ import { RESOLUTION_BADGES, SEVERITY_BADGES } from "./feedback-badges"
 import { FixHistory } from "./IterationHistory"
 import { IntentKanban } from "./KanbanView"
 import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
+import { SignOffGroup } from "./SignOffGroup"
+import type { QualityGate } from "./studio-defs"
 import { UnitDetailView } from "./UnitDetailView"
 
 function titleCase(s: string): string {
@@ -572,7 +574,11 @@ export function IntentDetailView({
 							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
 								Intent Approvals
 							</h2>
-							<IntentApprovalsCard approvals={intent.intentApprovals} />
+							<IntentApprovalsCard
+								approvals={intent.intentApprovals}
+								studio={intent.studio}
+								qualityGates={collectIntentQualityGates(intent)}
+							/>
 						</section>
 					)}
 
@@ -1562,89 +1568,57 @@ function OutputFileModal({
 	)
 }
 
-/** Surfaces the engine's intent-completion approval roles. Each entry
- *  is a `{ role, signed, at }` triple read off `intent.md.approvals.*`.
- *  We label `intent_quality_gates` as derived (it's the union of every
- *  unit's `quality_gates:` declarations, never declared on intent.md).
- *  Studio-specific roles render with their raw key; viewers can hover
- *  for a tooltip explaining the role exists in the studio's
- *  `review-agents/` directory. */
+/** Union of every unit's executable quality gates across the intent — the set
+ *  the engine runs once at intent scope for the `intent_quality_gates` role.
+ *  Deduped by command so the same gate declared on many units shows once. */
+function collectIntentQualityGates(intent: HaikuIntentDetail): QualityGate[] {
+	const byCommand = new Map<string, QualityGate>()
+	for (const stage of intent.stages) {
+		for (const unit of stage.units) {
+			const gates = unit.raw.quality_gates
+			if (!Array.isArray(gates)) continue
+			for (const g of gates) {
+				if (
+					g &&
+					typeof g === "object" &&
+					typeof (g as { command?: unknown }).command === "string"
+				) {
+					const gate = g as QualityGate
+					if (!byCommand.has(gate.command)) byCommand.set(gate.command, gate)
+				}
+			}
+		}
+	}
+	return [...byCommand.values()]
+}
+
+/** Surfaces the engine's intent-completion approval roles via the shared
+ *  sign-off list, so each role opens the same modal as the unit view: engine
+ *  roles show their intent-completion prompt, `user` the gate description,
+ *  `intent_quality_gates` the command union, studio intent-review agents their
+ *  mandate. The engine writes these to `intent.md.approvals` as each gate fires. */
 function IntentApprovalsCard({
 	approvals,
+	studio,
+	qualityGates,
 }: {
 	approvals: ReadonlyArray<{ role: string; signed: boolean; at: string | null }>
+	studio: string
+	qualityGates: QualityGate[]
 }) {
-	const ENGINE_ROLES: Record<string, { label: string; tooltip: string }> = {
-		spec: {
-			label: "Spec",
-			tooltip:
-				"Intent-completion spec review — engine-built, mirrors the per-stage spec gate.",
-		},
-		continuity: {
-			label: "Continuity",
-			tooltip:
-				"Cross-stage continuity check — verifies that promises declared in earlier stages were honored.",
-		},
-		user: {
-			label: "User",
-			tooltip: "User approval — the human signs off on the intent as a whole.",
-		},
-		intent_quality_gates: {
-			label: "Intent quality gates",
-			tooltip:
-				"Derived role — the engine runs the union of every unit's `quality_gates:` declarations once at intent scope. Not declared on intent.md.",
-		},
-	}
 	return (
-		<div className="rounded-lg border border-stone-200 dark:border-stone-700 px-4 py-3 space-y-2">
-			{approvals.map((a) => {
-				const meta = ENGINE_ROLES[a.role]
-				const isDerived = a.role === "intent_quality_gates"
-				return (
-					<div key={a.role} className="flex items-center justify-between gap-3">
-						<div className="flex items-center gap-2">
-							<span
-								className={`rounded-full w-2 h-2 ${
-									a.signed
-										? "bg-green-500 dark:bg-green-400"
-										: "bg-stone-300 dark:bg-stone-600"
-								}`}
-								aria-hidden="true"
-							/>
-							<span
-								className="text-sm font-medium text-stone-800 dark:text-stone-200"
-								title={meta?.tooltip ?? `Studio-defined role: ${a.role}`}
-							>
-								{meta?.label ?? a.role}
-							</span>
-							{isDerived && (
-								<span className="rounded bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider text-stone-500 dark:text-stone-400">
-									derived
-								</span>
-							)}
-						</div>
-						<div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
-							{a.signed ? (
-								<>
-									<span className="rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 text-[10px] font-medium">
-										signed
-									</span>
-									{a.at && (
-										<time dateTime={a.at} className="font-mono">
-											{a.at.slice(0, 10)}
-										</time>
-									)}
-								</>
-							) : (
-								<span className="rounded bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 px-1.5 py-0.5 text-[10px] font-medium">
-									pending
-								</span>
-							)}
-						</div>
-					</div>
-				)
-			})}
-		</div>
+		<SignOffGroup
+			title="Approvals"
+			entries={approvals.map((a) => ({
+				role: a.role,
+				signed: a.signed,
+				signedAt: a.at,
+			}))}
+			studio={studio}
+			stageName=""
+			scope="intent"
+			qualityGates={qualityGates}
+		/>
 	)
 }
 

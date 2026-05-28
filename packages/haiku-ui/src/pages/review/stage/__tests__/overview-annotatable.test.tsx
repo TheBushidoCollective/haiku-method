@@ -245,3 +245,96 @@ describe("StageReview — per-directory tabs", () => {
 		expect(getByText("proofs/run-1.md")).toBeTruthy()
 	})
 })
+
+describe("StageReview Outputs detail — code renders + empty never blanks", () => {
+	const JSX_SRC = 'export const X = () => <div className="a">{v}</div>'
+	function sessionWithOutputs() {
+		return {
+			output_artifacts: [
+				{
+					stage: STAGE,
+					name: "WorkerDates.tsx",
+					type: "code",
+					language: "tsx",
+					content: JSX_SRC,
+				},
+				{
+					stage: STAGE,
+					name: "missing.tsx",
+					type: "file",
+					// no content — the "declared output not on disk" case
+					relativePath: "/stage-artifacts/x/missing.tsx",
+				},
+			],
+		} as unknown as ReviewPageSessionData
+	}
+
+	it("renders a code output syntax-highlighted (escaped JSX), not an empty box", () => {
+		const { container } = render(
+			<StageReview
+				session={sessionWithOutputs()}
+				sessionId="s-code"
+				intentSlug={INTENT}
+				stageName={STAGE}
+				feedback={[]}
+				tab="outputs"
+				detail={{ kind: "outputs", name: "WorkerDates.tsx" }}
+				onInlineCommentsChange={() => {}}
+			/>,
+		)
+		// highlight.js token spans present → the code rendered (not blank).
+		expect(container.querySelector('[class*="hljs"]')).not.toBeNull()
+		// JSX survives as escaped text, not a live (invisible) <div>.
+		expect(container.innerHTML).toContain("&lt;div")
+		expect(container.querySelector("div.a")).toBeNull()
+	})
+
+	it("shows a 'not on disk' note for an empty/file output, never a blank box", () => {
+		const { getByText } = render(
+			<StageReview
+				session={sessionWithOutputs()}
+				sessionId="s-missing"
+				intentSlug={INTENT}
+				stageName={STAGE}
+				feedback={[]}
+				tab="outputs"
+				detail={{ kind: "outputs", name: "missing.tsx" }}
+				onInlineCommentsChange={() => {}}
+			/>,
+		)
+		expect(getByText(/isn't on disk at the expected path/i)).toBeTruthy()
+	})
+})
+
+describe("StageReview — dir-tab detail renders (no Not Found)", () => {
+	it("opening an item in a per-directory tab renders its content, not a route 404", () => {
+		const session = {
+			other_files: [
+				{
+					stage: STAGE,
+					name: "proofs/run-1.md",
+					type: "markdown",
+					content: "# proof one body",
+					directory: "proofs",
+				},
+			],
+		} as unknown as ReviewPageSessionData
+		// detail.kind = the dir name ("proofs"); the route widening (isKind
+		// accepts dir slugs) gets us here, and StageReview matches
+		// detail.tab === <dir> to render the dir-tab detail view.
+		const { getAllByText } = render(
+			<StageReview
+				session={session}
+				sessionId="s-dir-detail"
+				intentSlug={INTENT}
+				stageName={STAGE}
+				feedback={[]}
+				tab="proofs"
+				detail={{ kind: "proofs" as never, name: "proofs/run-1.md" }}
+				onInlineCommentsChange={() => {}}
+			/>,
+		)
+		// Renders (in the detail view + summary), proving no route 404.
+		expect(getAllByText(/proof one body/i).length).toBeGreaterThan(0)
+	})
+})

@@ -2507,7 +2507,34 @@ function ArtifactBody({
 			/>
 		)
 	}
-	// Unknown / plain text — escaped <pre> ASCII floor (never an empty box).
+	// Empty content (no inlined body) — DON'T render a blank <pre> (the
+	// "renders as nothing" bug, reported 2026-05-27 on a unit-declared `.tsx`
+	// output whose file resolved outside the intent dir, so `buildArtifactEntry`
+	// couldn't read it → type "file", empty body). Show a clear note + an open
+	// link instead of an empty box.
+	if (!artifact.body || !artifact.body.trim()) {
+		const src = artifact.assetUrl ? authedAssetUrl(artifact.assetUrl) : null
+		return (
+			<div className="rounded-md border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 p-3">
+				<p className="text-xs italic text-stone-500 dark:text-stone-400">
+					No inline preview for{" "}
+					<code className="font-mono">{artifact.name}</code> — the declared
+					output isn't on disk at the expected path (or couldn't be read).
+				</p>
+				{src && (
+					<a
+						href={src}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="mt-1 inline-block text-xs text-teal-600 dark:text-teal-400 hover:underline"
+					>
+						Open file &#8599;
+					</a>
+				)}
+			</div>
+		)
+	}
+	// Unknown / plain text with content — escaped <pre> ASCII floor.
 	return (
 		<pre className="text-xs font-mono text-stone-700 dark:text-stone-300 whitespace-pre-wrap bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-md p-3 max-h-[60vh] overflow-auto">
 			{artifact.body}

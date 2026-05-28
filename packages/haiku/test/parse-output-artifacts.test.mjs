@@ -705,6 +705,61 @@ await test("parseIntentRootFiles: surfaces intent-root strays, HIDES system jour
 	assert.strictEqual(diagram.type, "code", ".py → code")
 })
 
+await test("parseStageFiles: a REPO-ROOT-relative software output resolves + inlines content (not 'not on disk')", async () => {
+	// A software unit's output is the actual codebase file it edited —
+	// declared repo-root-relative (e.g. web/apps/admin/.../WorkerDates.tsx),
+	// living at the repo root, NOT under .haiku/intents/<slug>/. The intent
+	// dir must sit under a `.haiku/` so the repo-root detection fires.
+	const repoRoot = mkdtempSync(join(tmp, "repo-"))
+	const intentDir = join(repoRoot, ".haiku", "intents", "add-badge")
+	const units = join(intentDir, "stages", "development", "units")
+	mkdirSync(units, { recursive: true })
+	const codeDir = join(repoRoot, "web", "apps", "admin", "src")
+	mkdirSync(codeDir, { recursive: true })
+	writeFileSync(
+		join(codeDir, "WorkerDates.tsx"),
+		'export const Badge = () => <div className="new">New</div>\n',
+	)
+	writeFileSync(
+		join(units, "unit-01-badge.md"),
+		"---\ntitle: Badge\noutputs:\n  - web/apps/admin/src/WorkerDates.tsx\n---\n# unit",
+	)
+
+	const { outputs } = await parseStageFiles(intentDir)
+	const wd = outputs.find(
+		(a) => a.name === "web/apps/admin/src/WorkerDates.tsx",
+	)
+	assert.ok(
+		wd,
+		`repo-root output should resolve; got ${JSON.stringify(outputs.map((a) => a.name))}`,
+	)
+	assert.strictEqual(wd.type, "code", "code type so the SPA highlights it")
+	assert.strictEqual(wd.language, "tsx", ".tsx → tsx grammar")
+	assert.ok(
+		wd.content?.includes("New"),
+		"content inlined from the repo-root file (NOT empty 'not on disk')",
+	)
+	// No tunnel relativePath — the file is outside the intent dir; content is
+	// inlined, so the renderer doesn't need a (un-servable) URL.
+	assert.strictEqual(wd.relativePath, undefined)
+})
+
+await test("parseStageFiles: a declared output that exists NOWHERE still surfaces (renders as 'not on disk')", async () => {
+	const repoRoot = mkdtempSync(join(tmp, "repo-missing-"))
+	const intentDir = join(repoRoot, ".haiku", "intents", "x")
+	const units = join(intentDir, "stages", "development", "units")
+	mkdirSync(units, { recursive: true })
+	writeFileSync(
+		join(units, "unit-01-gone.md"),
+		"---\ntitle: U\noutputs:\n  - web/apps/admin/src/Gone.tsx\n---\n# unit",
+	)
+	const { outputs } = await parseStageFiles(intentDir)
+	const gone = outputs.find((a) => a.name === "web/apps/admin/src/Gone.tsx")
+	assert.ok(gone, "a missing declared output still surfaces (as a stub)")
+	// type "file", no content → the SPA shows the "not on disk" note.
+	assert.ok(!gone.content, "no content for a genuinely-missing output")
+})
+
 console.log(`\n${passed} passed, ${failed} failed`)
 rmSync(tmp, { recursive: true, force: true })
 process.exit(failed > 0 ? 1 : 0)

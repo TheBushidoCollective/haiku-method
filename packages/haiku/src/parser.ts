@@ -1,4 +1,4 @@
-import type { Dirent } from "node:fs"
+import { type Dirent, existsSync } from "node:fs"
 import { readdir, readFile } from "node:fs/promises"
 import { basename, join, relative, resolve } from "node:path"
 import {
@@ -786,6 +786,17 @@ async function parseUnitOutputs(
 	const out: Array<{ absPath: string; artifact: OutputArtifact }> = []
 	const intentDirAbs = resolve(intentDir)
 	const intentDirAbsSlash = `${intentDirAbs}/`
+	// The repo root is the dir that CONTAINS `.haiku/` — software outputs are
+	// the actual codebase files the unit edited (declared repo-root-relative,
+	// e.g. `web/apps/admin/.../WorkerDates.tsx`), living there, NOT under the
+	// intent dir. Derived from the intent path's `/.haiku/` segment, with a
+	// 3-levels-up fallback (`.haiku/intents/<slug>`).
+	const haikuSeg = intentDirAbs.indexOf("/.haiku/")
+	const repoRootAbs =
+		haikuSeg >= 0
+			? intentDirAbs.slice(0, haikuSeg)
+			: resolve(intentDirAbs, "..", "..", "..")
+	const repoRootAbsSlash = `${repoRootAbs}/`
 	let stageEntries: Dirent<string>[]
 	try {
 		stageEntries = await readdir(join(intentDir, "stages"), {
@@ -825,30 +836,58 @@ async function parseUnitOutputs(
 			}
 			for (const declared of outputs) {
 				const intentRel = intentRelativeOutputPath(declared, intentDir)
-				const absPath = resolve(intentDirAbs, intentRel)
-				// Path-containment check: silently skip anything that
-				// resolves outside the intent dir (`../../.env`,
-				// `/etc/passwd`, symlink-targeted paths, etc.). Equality
-				// check rejects `absPath === intentDirAbs` (declaring the
-				// intent dir itself as an output is meaningless).
-				if (
-					absPath !== intentDirAbs &&
-					!absPath.startsWith(intentDirAbsSlash)
-				) {
-					continue
+				const intentAbs = resolve(intentDirAbs, intentRel)
+				const withinIntent =
+					intentAbs !== intentDirAbs && intentAbs.startsWith(intentDirAbsSlash)
+
+				// Resolve the file to read. Intent-scoped outputs (product/*.md,
+				// features/*.feature, knowledge/*) live under the intent dir.
+				// SOFTWARE outputs are the codebase files the unit edited —
+				// declared repo-root-relative and living at the repo root, NOT
+				// under `.haiku/intents/<slug>/`. Try the intent path first; if
+				// nothing's there, fall back to the repo root so a software
+				// output's content is FOUND + inlined (and syntax-highlighted)
+				// instead of rendering as "not on disk" (reported 2026-05-27).
+				let absPath = intentAbs
+				// Full filename incl. extension — ext-less names collide
+				// same-stem files + break the ext-carrying FM links (2026-05-26).
+				let displayName = relative(intentDirAbs, intentAbs)
+				// Intent-dir-relative path the `/stage-artifacts/:sessionId/*`
+				// tunnel serves. A repo-root file is outside the intent dir and
+				// can't be tunnel-served, so it carries no relativePath — code/
+				// text content is inlined by buildArtifactEntry regardless.
+				let serveRel: string | undefined = displayName
+				if (!(withinIntent && existsSync(intentAbs))) {
+					const repoAbs = resolve(repoRootAbs, declared)
+					const withinRepo =
+						repoAbs !== repoRootAbs && repoAbs.startsWith(repoRootAbsSlash)
+					if (withinRepo) {
+						// Software output: resolve against the repo root. If it
+						// exists, buildArtifactEntry inlines its content (code →
+						// highlighted); if it's missing, it surfaces as a "file"
+						// stub the SPA shows as "not on disk" — either way the
+						// declared output stays visible to the reviewer.
+						absPath = repoAbs
+						displayName = declared
+						serveRel = undefined
+					} else if (!withinIntent) {
+						// Resolves OUTSIDE both the intent dir AND the repo root →
+						// skip (`../../.env`, symlink targets, etc.).
+						continue
+					}
 				}
-				const safeRel = relative(intentDirAbs, absPath)
-				// Keep the full filename (extension included) — same reason as
-				// the artifacts walk: ext-less names collide same-stem files and
-				// break the ext-carrying unit-frontmatter links (2026-05-26).
-				const nameWithDir = safeRel
 				const entry = await buildArtifactEntry(
 					absPath,
 					stageName,
-					nameWithDir,
-					safeRel,
+					displayName,
+					serveRel ?? displayName,
 				)
-				if (entry) out.push({ absPath, artifact: entry })
+				if (entry) {
+					// Repo-root output: drop the (un-servable) tunnel relativePath;
+					// the inlined content is what the reviewer reads.
+					if (serveRel === undefined) entry.relativePath = undefined
+					out.push({ absPath, artifact: entry })
+				}
 			}
 		}
 	}

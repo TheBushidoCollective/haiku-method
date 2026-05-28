@@ -178,39 +178,48 @@ export function UnitDetailView({
 				</p>
 			</header>
 
-			{/* Quick Stats */}
+			{/* Quick Stats — only tiles that carry real signal for this unit.
+			    Criteria shows only when the unit declared checkbox criteria;
+			    Iterations (hat dispatches) only when the unit has run; Hat (the
+			    current hat) only while in-flight — a completed unit's hats live
+			    in the Hat history stepper below. */}
 			<div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-						Criteria
-					</div>
-					<div className="mt-1 text-2xl font-bold">
-						{checkedCount}
-						<span className="text-stone-400">/{totalCriteria}</span>
-					</div>
-					{totalCriteria > 0 && (
+				{totalCriteria > 0 && (
+					<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
+						<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
+							Criteria
+						</div>
+						<div className="mt-1 text-2xl font-bold">
+							{checkedCount}
+							<span className="text-stone-400">/{totalCriteria}</span>
+						</div>
 						<div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800">
 							<div
 								className={`h-full rounded-full transition-all ${progress === 100 ? "bg-green-500" : "bg-teal-500"}`}
 								style={{ width: `${progress}%` }}
 							/>
 						</div>
-					)}
-				</div>
-				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-						Bolt
 					</div>
-					<div className="mt-1 text-2xl font-bold">{unit.bolt || 0}</div>
-				</div>
-				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-						Hat
+				)}
+				{unit.bolt > 0 && (
+					<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
+						<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
+							Iterations
+						</div>
+						<div className="mt-1 text-2xl font-bold">{unit.bolt}</div>
+						<div className="mt-0.5 text-xs text-stone-400">hat dispatches</div>
 					</div>
-					<div className="mt-1 text-lg font-semibold">
-						{unit.hat ? titleCase(unit.hat) : "—"}
+				)}
+				{unit.status === "active" && unit.hat && (
+					<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
+						<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
+							Current Hat
+						</div>
+						<div className="mt-1 text-lg font-semibold">
+							{titleCase(unit.hat)}
+						</div>
 					</div>
-				</div>
+				)}
 				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
 					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
 						Status

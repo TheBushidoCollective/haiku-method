@@ -214,14 +214,27 @@ export function parseUnit(
 		refs: (data.refs as string[]) || [],
 		inputs: (data.inputs as string[]) || [],
 		outputs: (data.outputs as string[]) || [],
-		bolt: (data.bolt as number) || 0,
-		hat: (data.hat as string) || "",
+		// v4 dropped the top-level `bolt`/`hat` FM fields — both derive from the
+		// append-only iterations log now. `bolt` = number of hat dispatches;
+		// `hat` = the most recent (current for an in-flight unit, terminal for a
+		// completed one). Reading `data.bolt`/`data.hat` would always be 0/"".
+		bolt: Array.isArray(data.iterations) ? data.iterations.length : 0,
+		hat: lastIterationHat(data.iterations),
 		startedAt: (data.started_at as string) || null,
 		completedAt: (data.completed_at as string) || null,
 		criteria: parseCriteria(content),
 		content,
 		raw: data,
 	}
+}
+
+/** The most recent iteration's hat — the current hat for an in-flight unit, the
+ *  terminal hat for a completed one. "" when there are no iterations. */
+function lastIterationHat(iterations: unknown): string {
+	if (!Array.isArray(iterations) || iterations.length === 0) return ""
+	const last = iterations[iterations.length - 1]
+	const hat = (last as { hat?: unknown })?.hat
+	return typeof hat === "string" ? hat : ""
 }
 
 export function parseCriteria(

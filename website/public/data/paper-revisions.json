@@ -305,12 +305,12 @@
     "revisions": [
       {
         "version": "2",
-        "date": "2026-05-21",
-        "commitHash": "eeb55aa",
-        "fullCommitHash": "eeb55aa4b3b3926802e109a70796af6ab019c525",
-        "commitMessage": "chore: checkpoint in-flight skill/phase consolidation refactor",
+        "date": "2026-05-26",
+        "commitHash": "738de27",
+        "fullCommitHash": "738de27fe5baca77501f93a40963f153279a34c7",
+        "commitMessage": "feat: integrate in-flight working-tree work — gate environment, studio-picker shortlist, haiku-start",
         "stats": {
-          "linesAdded": 354,
+          "linesAdded": 356,
           "linesRemoved": 1000
         },
         "sectionChanges": [
@@ -374,7 +374,7 @@
             "section": "Execution",
             "originalSection": "Execution",
             "isNew": true,
-            "linesAdded": 7,
+            "linesAdded": 9,
             "linesRemoved": 0
           },
           {
@@ -473,7 +473,7 @@
             "section": "Completion Criteria",
             "originalSection": "Completion Criteria",
             "isNew": true,
-            "linesAdded": 19,
+            "linesAdded": 21,
             "linesRemoved": 0
           },
           {

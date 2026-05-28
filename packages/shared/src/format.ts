@@ -23,6 +23,21 @@ export function formatDuration(
 	return `${mins}m`
 }
 
+/** Format a duration given directly in milliseconds (e.g. summed active time
+ *  across iterations). Unlike formatDuration this takes a number, not a span,
+ *  and shows minutes alongside hours / seconds for sub-minute totals so a short
+ *  active time doesn't collapse to "0m". */
+export function formatDurationMs(ms: number): string {
+	if (!Number.isFinite(ms) || ms <= 0) return "0s"
+	const days = Math.floor(ms / 86400000)
+	const hours = Math.floor((ms % 86400000) / 3600000)
+	const mins = Math.floor((ms % 3600000) / 60000)
+	if (days > 0) return hours > 0 ? `${days}d ${hours}h` : `${days}d`
+	if (hours > 0) return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+	if (mins > 0) return `${mins}m`
+	return `${Math.floor(ms / 1000)}s`
+}
+
 export function formatDate(iso: string | null): string {
 	if (!iso) return ""
 	const d = new Date(iso)

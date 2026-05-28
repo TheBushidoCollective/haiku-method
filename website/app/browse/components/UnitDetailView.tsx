@@ -16,7 +16,11 @@ import type {
 	HaikuFeedback,
 	HaikuUnit,
 } from "@/lib/browse/types"
-import { formatDate, formatDuration } from "@/lib/browse/types"
+import {
+	formatDate,
+	formatDuration,
+	formatDurationMs,
+} from "@/lib/browse/types"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
 import { FilePreview, isTextFile } from "./FilePreview"
@@ -215,20 +219,37 @@ export function UnitDetailView({
 						{titleCase(unit.status)}
 					</div>
 				</div>
-				{unit.startedAt && (
-					<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-						<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-							{unit.completedAt ? "Duration" : "Elapsed"}
-						</div>
-						<div className="mt-1 text-lg font-semibold">
-							{formatDuration(unit.startedAt, unit.completedAt)}
-						</div>
-						<div className="mt-0.5 text-xs text-stone-400">
-							{formatDate(unit.startedAt)}
-							{unit.completedAt ? ` — ${formatDate(unit.completedAt)}` : ""}
-						</div>
-					</div>
-				)}
+				{unit.startedAt &&
+					(() => {
+						const active = unitActiveMs(unit.raw)
+						const wall = formatDuration(unit.startedAt, unit.completedAt)
+						return (
+							<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
+								<div
+									className="text-xs font-medium uppercase tracking-wider text-stone-400"
+									title={
+										active != null
+											? "Sum of each hat-dispatch's duration — excludes idle gaps between dispatches."
+											: undefined
+									}
+								>
+									{active != null
+										? "Active"
+										: unit.completedAt
+											? "Duration"
+											: "Elapsed"}
+								</div>
+								<div className="mt-1 text-lg font-semibold">
+									{active != null ? formatDurationMs(active) : wall}
+								</div>
+								<div className="mt-0.5 text-xs text-stone-400">
+									{active != null && wall ? `${wall} elapsed · ` : ""}
+									{formatDate(unit.startedAt)}
+									{unit.completedAt ? ` — ${formatDate(unit.completedAt)}` : ""}
+								</div>
+							</div>
+						)
+					})()}
 			</div>
 
 			{/* Completion Criteria */}
@@ -996,6 +1017,30 @@ function unitQualityGates(raw: Record<string, unknown>): QualityGate[] {
 			? [g as QualityGate]
 			: [],
 	)
+}
+
+/** Active working time on a unit: the sum of each hat-dispatch's own duration
+ *  (iteration `completed_at − started_at`). Excludes the idle gaps between
+ *  dispatches — waiting on the user, queueing, time between bolts — that inflate
+ *  a naive start→end wall clock. Null when no iteration carries both stamps. */
+function unitActiveMs(raw: Record<string, unknown>): number | null {
+	const its = raw.iterations
+	if (!Array.isArray(its)) return null
+	let sum = 0
+	let counted = 0
+	for (const it of its) {
+		if (!it || typeof it !== "object") continue
+		const s = (it as { started_at?: unknown }).started_at
+		const e = (it as { completed_at?: unknown }).completed_at
+		if (typeof s === "string" && typeof e === "string") {
+			const d = new Date(e).getTime() - new Date(s).getTime()
+			if (Number.isFinite(d) && d >= 0) {
+				sum += d
+				counted++
+			}
+		}
+	}
+	return counted > 0 ? sum : null
 }
 
 /**

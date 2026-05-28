@@ -19,7 +19,12 @@ export type {
 } from "@haiku/shared"
 
 // Re-export shared utilities from @haiku/shared
-export { formatDate, formatDuration, titleCase } from "@haiku/shared"
+export {
+	formatDate,
+	formatDuration,
+	formatDurationMs,
+	titleCase,
+} from "@haiku/shared"
 
 // Website-specific types and utilities remain here
 

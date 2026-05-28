@@ -475,6 +475,21 @@ test("e2e: continuous mode drives intent to sealed (full role list, user gates f
 				seenActions.includes("user_gate"),
 				"continuous: expected at least one user_gate action",
 			)
+			// Bug 4 (worker-new-badge 2026-05-28): intent-scope quality gates
+			// must run BEFORE the terminal user gate — "the user is the final
+			// check before reflection," not a signature solicited ahead of the
+			// automated bar. The intent-completion suffix is the LAST
+			// `dispatch_quality_gates` (intent-scope; stage QGs fire earlier)
+			// followed by the LAST `intent_review` (the role:"user" gate — the
+			// per-STAGE gate is `user_gate`, which fires early, NOT this one).
+			// Pre-fix the intent QG fired AFTER the user gate, so this
+			// lastIndexOf(QG) < lastIndexOf(intent_review) assertion was false.
+			const lastQg = seenActions.lastIndexOf("dispatch_quality_gates")
+			const lastIntentReview = seenActions.lastIndexOf("intent_review")
+			assert.ok(
+				lastQg !== -1 && lastIntentReview !== -1 && lastQg < lastIntentReview,
+				`intent quality gates must fire before the terminal user gate. order: ${seenActions.join(" → ")}`,
+			)
 			// Note: `complete_stage` is auto-executed inline by
 			// haiku_run_next's complete_stage loop and re-ticks before
 			// returning, so it never surfaces in seenActions. The `sealed`

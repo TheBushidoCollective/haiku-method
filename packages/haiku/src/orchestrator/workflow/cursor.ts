@@ -2321,22 +2321,15 @@ export function derivePosition(args: {
 				},
 			}
 		}
-		if (userMissing) {
-			return {
-				track: "intent",
-				action: {
-					kind: "intent_review",
-					role: "user",
-					dispatches: [{ role: "user" }],
-				},
-			}
-		}
 		// Intent-scope quality_gates re-run. Per GOALS § "Quality gates
 		// are one handler at three scopes," the intent-scope set is
 		// **derived** from the union of every unit's quality_gates[]
-		// across every stage, deduped by command. Fires after every
-		// agent + user review approval is signed and before the seal.
-		// Stamp lives at intent FM under `approvals.intent_quality_gates`.
+		// across every stage, deduped by command. Fires after the
+		// adversarial reviewers sign and BEFORE the terminal user gate —
+		// the human is "the final check before reflection," so they must
+		// approve over a green automated bar, never ahead of it (Bug 4,
+		// worker-new-badge 2026-05-28). Stamp lives at intent FM under
+		// `approvals.intent_quality_gates`.
 		if (!intentApprovals.intent_quality_gates) {
 			return {
 				track: "intent",
@@ -2345,6 +2338,18 @@ export function derivePosition(args: {
 					stage: "",
 					units: [],
 					scope: "intent",
+				},
+			}
+		}
+		// Terminal human gate — the LAST signature before reflection +
+		// seal, now reached only after the intent quality gates are green.
+		if (userMissing) {
+			return {
+				track: "intent",
+				action: {
+					kind: "intent_review",
+					role: "user",
+					dispatches: [{ role: "user" }],
 				},
 			}
 		}

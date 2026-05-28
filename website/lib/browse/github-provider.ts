@@ -329,16 +329,61 @@ export class GitHubProvider implements BrowseProvider {
 		// merge it over the HEAD baseline.
 		const intentsBySlug = new Map<string, HaikuIntent>()
 
-		// Step 1: List haiku/* branches with PR data
-		const branchesCacheKey = `gh:${this.owner}/${this.repo}:listHaikuBranches`
-		const branchesData =
-			await this.cachedQuery<operationsListHaikuBranchesQuery$data>(
-				ListHaikuBranchesQuery,
-				{ owner: this.owner, name: this.repo, refPrefix: "refs/heads/haiku/" },
-				branchesCacheKey,
+		// Step 1: List ALL haiku/* branches with PR data, PAGINATED.
+		// GitHub's `refs(first: 100)` caps at one page; a busy repo has far more
+		// than 100 `haiku/*` branches (every unit/stage branch counts), so any
+		// intent whose `*/main` ref sorted past #100 silently vanished from the
+		// list. Cursor-paginate until `hasNextPage` is false so it scales past
+		// the single-page cap. Raw GraphQL (not the static Relay artifact) so we
+		// can thread `after:` without regenerating compiled queries.
+		type BranchNode = {
+			name: string
+			associatedPullRequests: {
+				nodes: Array<{
+					number: number
+					url: string
+					state: string
+				} | null> | null
+			}
+		}
+		type RefsConn = {
+			nodes?: Array<BranchNode | null> | null
+			pageInfo?: { hasNextPage: boolean; endCursor: string | null }
+		}
+		type RefsPage = {
+			repository?: { refs?: RefsConn | null }
+		}
+		const branchNodes: BranchNode[] = []
+		let refsCursor: string | null = null
+		for (;;) {
+			const page: RefsPage | undefined = await this.rawGraphql<RefsPage>(
+				`query($owner: String!, $name: String!, $refPrefix: String!, $after: String) {
+					repository(owner: $owner, name: $name) {
+						refs(refPrefix: $refPrefix, first: 100, after: $after) {
+							nodes {
+								name
+								associatedPullRequests(first: 1, states: [OPEN, CLOSED, MERGED], orderBy: { field: UPDATED_AT, direction: DESC }) {
+									nodes { number url state }
+								}
+							}
+							pageInfo { hasNextPage endCursor }
+						}
+					}
+				}`,
+				{
+					owner: this.owner,
+					name: this.repo,
+					refPrefix: "refs/heads/haiku/",
+					after: refsCursor,
+				},
 			)
-
-		const branchNodes = branchesData?.repository?.refs?.nodes ?? []
+			const refs: RefsConn | null | undefined = page?.repository?.refs
+			for (const node of refs?.nodes ?? []) {
+				if (node) branchNodes.push(node)
+			}
+			if (!refs?.pageInfo?.hasNextPage || !refs.pageInfo.endCursor) break
+			refsCursor = refs.pageInfo.endCursor
+		}
 
 		// Capture stage-level branches (haiku/{slug}/{stageName}, where stageName != "main")
 		for (const node of branchNodes) {

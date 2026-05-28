@@ -139,7 +139,7 @@ const REGISTRY: Record<SharedBlockId, SharedBlockEntry> = {
 		content: () => runtimeVerificationBlock(),
 		title: "Runtime-verification doctrine",
 		summary:
-			"that verification is runtime observation (NOT running tests/typecheck); how to find the change's surface and route to a handle (web/GUI → `haiku_view` boot + `haiku-playwright`; CLI → run the command; server → the socket; library → the public export); the `.haiku/boot.md` project boot recipe; how to drive the smallest path, probe around the change, capture evidence under `proof/`; and the PASS/FAIL/BLOCKED/SKIP verdict that drives sign-off vs. feedback.",
+			"that verification is runtime observation (NOT running tests/typecheck); how to find the change's surface and route to a handle (web/GUI → `haiku_view` boot + a self-installed Playwright script that records video, with the `haiku-playwright` MCP as fallback; CLI → run the command; server → the socket; library → the public export); the `.haiku/boot.md` project boot recipe; how to drive the smallest path, probe around the change, capture video+screenshot evidence under the gitignored `proof/` and upload it to the change request (GitLab uploads API / GitHub release-asset); and the PASS/FAIL/BLOCKED/SKIP verdict that drives sign-off vs. feedback.",
 	},
 	"service-dependencies": {
 		content: () => serviceDependenciesBlock(),

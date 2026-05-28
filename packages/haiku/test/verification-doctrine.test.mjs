@@ -39,12 +39,49 @@ test("runtime-verification shared block is registered and carries the doctrine",
 		"bans tests-as-verification",
 	)
 	// Routes through OUR machinery, and explicitly steers AWAY from CC's.
-	assert.match(body, /haiku_view/, "routes web/GUI through haiku_view")
-	assert.match(body, /haiku-playwright/, "names the bundled playwright MCP")
+	assert.match(body, /haiku_view/, "routes web/GUI through haiku_view boot")
 	assert.match(
 		body,
-		/never reach for[\s\S]*?(chromium|\.claude\/skills\/run-)/i,
-		"frames Claude-Code-only machinery (chromium-cli / .claude/skills/run-*) as something to AVOID, not use",
+		/haiku-playwright/,
+		"names the bundled playwright MCP (now the fallback driver)",
+	)
+	assert.match(
+		body,
+		/don't hunt for[\s\S]*?\.claude\/skills\/run-/i,
+		"frames Claude-Code-only machinery (.claude/skills/run-*) as something to AVOID, not use",
+	)
+	// The driver is a self-provisioned Playwright script that records video —
+	// NOT the project's own deps, and NOT the MCP as the primary driver.
+	assert.match(
+		body,
+		/Playwright script/i,
+		"the web/GUI driver is a written Playwright script",
+	)
+	assert.match(
+		body,
+		/record[\s\S]{0,40}video|video[\s\S]{0,40}(record|proof)/i,
+		"the script records video of the run",
+	)
+	assert.match(
+		body,
+		/never (touch|add)[\s\S]{0,80}(project'?s|package\.json|dependenc)/i,
+		"the driver is self-provisioned and never couples to the project's deps",
+	)
+	// Proof is gitignored binary churn → uploaded to the PR, not committed.
+	assert.match(
+		body,
+		/gitignored/i,
+		"proof is framed as gitignored (not committed)",
+	)
+	assert.match(
+		body,
+		/upload[\s\S]{0,120}(PR|MR|change request)/i,
+		"proof is uploaded to the change request",
+	)
+	assert.match(
+		body,
+		/release asset/i,
+		"names GitHub release-asset as the upload path (no inline-attachment API)",
 	)
 	// All surfaces
 	for (const surface of ["CLI", "Server", "Library"]) {
@@ -185,11 +222,24 @@ test("intent_review injects the doctrine for the runtime-verifier studio role", 
 		body.includes(DOCTRINE_TITLE),
 		"intent-completion runtime-verifier must reference the doctrine",
 	)
-	// Evidence-only write carve-out replaces the strict no-write scope.
+	// runtime-verifier is in BOTH role-classes (RUNTIME_OBSERVATION +
+	// PR_INTERACTION), so the scope carve-outs are ADDITIVE — it gets the
+	// proof-write block AND the PR-interaction (upload) block, not the old
+	// mutually-exclusive "evidence only" heading.
 	assert.match(
 		body,
-		/Write scope \(evidence only\)/,
-		"runtime-verifier gets the proof/ write carve-out",
+		/Write scope \(evidence \+ delivery/i,
+		"runtime-verifier gets the combined evidence+delivery write scope",
+	)
+	assert.match(body, /Proof capture/i, "keeps the proof/ write carve-out")
+	assert.match(
+		body,
+		/PR\/MR interaction/i,
+		"ALSO gets the PR-interaction carve-out (uploads proof to the PR)",
+	)
+	assert.ok(
+		!/Write scope \(STRICT\)/.test(body),
+		"the strict no-write block must NOT render for a both-sets role",
 	)
 })
 

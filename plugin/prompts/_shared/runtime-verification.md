@@ -16,14 +16,27 @@ The surface is where a user — human or programmatic — meets the change. That
 
 | Change reaches | Surface | Handle |
 |---|---|---|
-| **GUI / web app** | the rendered page | `haiku_view({ intent, mode: "boot" })` boots the app on an ephemeral port; drive it with the bundled **`haiku-playwright`** MCP (`browser_navigate`, `browser_click`, `browser_type`, `browser_snapshot`, `browser_evaluate`, `browser_take_screenshot`). For a static artifact (mockup, image, PDF), `haiku_view({ stage, artifact, mode: "viewer" })` renders it. |
+| **GUI / web app** | the rendered page | `haiku_view({ intent, mode: "boot" })` boots the app on an ephemeral port and returns the URL; then drive it with a **self-contained Playwright script you write** (see "Drive the web app with a Playwright script" below) — it records **video** of the run plus step screenshots. For a static artifact (mockup, image, PDF), `haiku_view({ stage, artifact, mode: "viewer" })` renders it. |
 | **CLI / TUI** | the terminal | run the command with representative args; capture the pane and exit code |
 | **Server / API** | the socket | send the request; capture the response body and status |
 | **Library / SDK** | the package boundary | exercise the **public export** (`import pkg`, not `import ./src/internal`) and capture what it returns |
 | **Agent / prompt config** | the agent | run the agent; capture its behavior |
 | **No runtime surface** | — | docs-only, type declarations with no emit, config with no behavioral diff → **SKIP**, one line why |
 
-**`haiku_view` is the web/GUI handle — never reach for a local `chromium`/`playwright-cli` install or hunt for `.claude/skills/run-*`.** Those are one harness's machinery; `haiku_view` + `haiku-playwright` is ours and it works on every harness. If `haiku_view` boot can't find a way to start the app, that's a project that needs a **boot recipe** (see below) — report it, don't paper over it by typing `npm start` yourself in a way no one can replay.
+**`haiku_view` boot is the web/GUI handle — don't hunt for `.claude/skills/run-*` or hand-type `npm start` in a way no one can replay.** `haiku_view` boot works on every harness; it reads the project's boot recipe and returns a live URL. If `haiku_view` boot can't find a way to start the app, that's a project that needs a **boot recipe** (see below) — report it. What drives the booted URL is a Playwright script *you* write and run (next section) — it gives you video and full programmatic control. That driver is **self-provisioned and isolated**: you install Playwright into a scratch dir and never touch the project's own dependencies, so it works whether or not the project already uses Playwright.
+
+## Drive the web app with a Playwright script
+
+Once `haiku_view` boot hands you the URL, don't poke the page by hand — write a small Playwright script and run it. It records a **video** of the whole run (the proof a screenshot can't be) plus screenshots at each step, and it's deterministic and re-runnable.
+
+Provision it WITHOUT coupling to the project:
+
+- Work in a scratch dir under the stage's proof folder, e.g. `.haiku/intents/<intent>/stages/<stage>/proof/.driver/` (it's gitignored along with the rest of `proof/`).
+- `npm init -y` there and `npm install @playwright/test` **in that dir only** — never add Playwright to the project's `package.json`/lockfile. Reuse the shared browser cache (`PLAYWRIGHT_BROWSERS_PATH`, default `~/.cache/ms-playwright`); run `npx playwright install chromium` once if the browser binary is missing.
+- Point the script at the booted URL (pass it via an env var), and enable video in the context: `use: { video: 'on', viewport: … }` (or `browser.newContext({ recordVideo: { dir: '<proof>' } })`). Save step screenshots into the same `proof/` dir; Playwright drops the `.webm` there when the context closes.
+- Drive the contract: the product-spec `.feature` scenarios this scope owns and the per-unit acceptance criteria — the same things your mandate names. Assert visible state, not DOM presence.
+
+If you genuinely can't install Playwright (locked-down network, no npm) and the bundled **`haiku-playwright`** MCP is available, fall back to it (`browser_navigate`, `browser_click`, `browser_type`, `browser_snapshot`, `browser_evaluate`, `browser_take_screenshot`) — you'll get screenshots but no video. Say in your finding that you fell back and why.
 
 **Your role mandate vs. this doctrine.** Your stage/role mandate may detail one surface in depth — usually the web/GUI path, because that's the common case. That detail is the *specialization*; this doctrine governs *which surface actually applies*. When they're the same (the change is a web app), they reinforce — follow the mandate's `haiku_view` steps. When the change's real surface is a CLI, a server endpoint, or a library export, the surface routing here wins: apply the mandate's *intent* (drive the real thing, capture proof, file findings on divergence) to that surface instead of forcing a browser that has nothing to render.
 
@@ -45,9 +58,17 @@ Drive the smallest path that makes the changed code execute (changed a flag? run
 
 ## Capture evidence
 
-Screenshots, response bodies, pane dumps, computed-style reads. Save them under `.haiku/intents/<intent>/stages/<stage>/proof/` with the `Write` tool so a human can audit the chain after the fact, and attach them to any feedback you file — the capture *is* the proof of what the user would have seen. Captured output is evidence; your memory isn't.
+Video of the run, step screenshots, response bodies, pane dumps, computed-style reads. They land under `.haiku/intents/<intent>/stages/<stage>/proof/` (the Playwright script writes the `.webm` + screenshots there; for non-web surfaces, `Write` your captures there). The capture *is* the proof of what the user would have seen — your memory isn't.
 
-**Release the browser when you're done.** Call `browser_close` (the `haiku-playwright` MCP) to shut the Chrome instance — leaving it open strands a headless Chrome process after the review ends. Then close any `haiku_view` session with `haiku_view_close` so the dev server + tunnel slot release. Two distinct closes: `browser_close` kills the browser, `haiku_view_close` kills the booted app — do both.
+**Proof is gitignored — upload it to the PR so it survives.** The `proof/` dir is gitignored on purpose: video and screenshots are regenerated every run, and committing that binary churn bloats history forever. So the captures do NOT travel when a branch merges. To make them durable and reviewable, **upload them to the change request** for this scope (your dispatch tells you the target PR/MR URL when you have one):
+
+- **GitLab** has a first-class upload: `glab` (or `POST /projects/:id/uploads`) returns a markdown snippet — embed it in the MR description/note under a "Proof" section.
+- **GitHub** has no inline-attachment API. Attach the video/screenshots as **release assets** (`gh release upload`, draft/tag release) or push them to an artifact bucket, then link them from the PR body's "Proof" section. (Inline image paste only works in the web UI, which you can't drive.)
+- Keep it **idempotent**: re-running replaces the PR's "Proof" section rather than stacking duplicates. If you have no PR URL (no provider CLI / not a git repo), skip the upload — the captures still sit on disk and the SPA serves them live over the tunnel.
+
+Attach the same captures (or their uploaded links) to any feedback you file.
+
+**Tear down when you're done.** Stop your Playwright script's browser/context (the script should close them so the `.webm` finalizes) — leaving a context open strands a headless Chrome and the video never flushes. If you fell back to the `haiku-playwright` MCP, call `browser_close` instead. Then close the `haiku_view` session with `haiku_view_close` so the dev server + tunnel slot release.
 
 ## The verdict
 

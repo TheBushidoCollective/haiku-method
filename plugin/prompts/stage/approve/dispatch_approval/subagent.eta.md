@@ -8,6 +8,16 @@
 <% if (doctrineRef) { %>
 <%~ doctrineRef %>
 <% } %>
+<% if (doctrineRef || (typeof prInteraction !== "undefined" && prInteraction)) { %>
+## Write scope (evidence + delivery, NOT source)
+<% if (doctrineRef) { %>
+- **Proof capture.** You MAY write evidence captures (screenshots, video, response/pane dumps) under `.haiku/intents/<%= slug %>/stages/<%= stage %>/proof/` — the doctrine says where. These are gitignored — they will NOT travel on a branch merge.
+<% } %>
+<% if (typeof prInteraction !== "undefined" && prInteraction) { %>
+- **PR/MR interaction.** You MAY interact with the change request on the remote via the VCS CLI (`gh` / `glab`).<% if (typeof proofTargetPrUrl !== "undefined" && proofTargetPrUrl) { %> Because your proof is gitignored, **upload your captures to the PR/MR so they're durable and reviewable** — the target for this stage is `<%= proofTargetPrUrl %>`. Re-uploading replaces the prior proof section (idempotent). Follow the upload doctrine in the runtime-verification block above.<% } %>
+<% } %>
+- You MUST NOT edit source, specs, or units — code changes flow through `haiku_feedback` and the fix-hat loop.
+<% } %>
 ## Units to approve
 
 Read each unit's spec live via `haiku_unit_read` (returns body + title, engine frontmatter stripped) to recall what it promised to produce:

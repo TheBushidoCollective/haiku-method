@@ -18,12 +18,19 @@
  *    `runtime-verification` doctrine for these roles and let them write
  *    `proof/` evidence captures (but never source).
  *
- *  - PR_INTERACTION_ROLES audit the delivery PR on the remote (CI status +
- *    review conversation) rather than local artifacts or the running app.
- *    They may interact with the PR via the VCS CLI (`gh`/`glab`) — read
- *    checks, read/post/resolve review threads — but still MUST NOT edit
+ *  - PR_INTERACTION_ROLES interact with the change request on the remote via
+ *    the VCS CLI (`gh`/`glab`) — read checks, read/post/resolve review
+ *    threads, and upload assets to the PR/MR body. They still MUST NOT edit
  *    source/specs/units; code fixes flow through `haiku_feedback` and the
  *    studio fix-hat loop.
+ *
+ * A role may be in BOTH sets — `runtime-verifier` is. It drives the live work
+ * AND captures proof (runtime-observation), and that proof is regenerated
+ * binary churn that doesn't belong in git, so it uploads the captures to the
+ * relevant PR/MR (PR-interaction). The dispatch builders + subagent templates
+ * treat the two scope grants as ADDITIVE — a both-sets role gets the
+ * proof-write carve-out AND the PR-interaction carve-out, not one or the
+ * other.
  *
  * To make a NEW agent post-execute-only (no pre-execute spec audit), add its
  * role name to `RUNTIME_OBSERVATION_ROLES` — that one edit drops it from the
@@ -35,4 +42,8 @@ export const RUNTIME_OBSERVATION_ROLES: ReadonlySet<string> = new Set([
 
 export const PR_INTERACTION_ROLES: ReadonlySet<string> = new Set([
 	"delivery-verifier",
+	// Uploads its runtime-verification proof (gitignored binary churn) to the
+	// stage/intent PR so it's durable + reviewable off-git. Also in
+	// RUNTIME_OBSERVATION_ROLES — the scopes are additive (see header).
+	"runtime-verifier",
 ])

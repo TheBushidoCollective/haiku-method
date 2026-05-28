@@ -39,6 +39,7 @@ import {
 	createIntentBranch,
 	createStageBranch,
 	deleteStageBranch,
+	detectPrTool,
 	ensureOnIntentMain,
 	ensureOnStageBranch,
 	finalizeIntentBranches,
@@ -49,6 +50,7 @@ import {
 	markPullRequestReady,
 	mergeStageBranchForward,
 	mergeStageBranchIntoMain,
+	openStageDraftPullRequest,
 	pushStageBranch,
 } from "../../git-worktree.js"
 import { withIntentMainLock } from "../../locks.js"
@@ -62,7 +64,9 @@ import {
 	intentDir,
 	isGitRepo,
 	parseFrontmatter,
+	readStagePr,
 	setFrontmatterField,
+	setStagePrField,
 	timestamp,
 } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
@@ -95,6 +99,44 @@ function readFrontmatter(filePath: string): Record<string, unknown> {
 	const raw = readFileSync(filePath, "utf8")
 	const { data } = parseFrontmatter(raw)
 	return data
+}
+
+/** Modes whose stages each get their own draft PR (base = intent main).
+ *  In discrete delivery the per-stage PR is where that stage's work — and
+ *  its runtime-verification proof — lands; merging it is the approval
+ *  signal. continuous / autopilot / quick keep everything on the single
+ *  intent-main draft PR opened at intent_create. */
+const PER_STAGE_PR_MODES = new Set(["discrete", "discrete-hybrid"])
+
+/** Best-effort: open a DRAFT PR for this stage at stage start, in the
+ *  modes that use per-stage delivery. Mirrors the intent-create draft-PR
+ *  contract — gated on a git repo with a provider CLI, never throws,
+ *  stamps the `stage_prs` map so the gate can flip it ready later and the
+ *  dispatch builder can hand the verifier the right upload target.
+ *  Idempotent: a revisit re-enters workflowStartStage, so skip when this
+ *  stage already has a recorded PR URL. */
+function openStageDraftPrIfDelivery(slug: string, stage: string): void {
+	const intentFile = join(intentDir(slug), "intent.md")
+	const mode = (readFrontmatter(intentFile).mode as string) || ""
+	if (!PER_STAGE_PR_MODES.has(mode)) return
+	if (!isGitRepo() || detectPrTool() === null) return
+	if (readStagePr(slug, stage)?.url) return
+	try {
+		const draft = openStageDraftPullRequest({ slug, stage })
+		if (draft.createdUrl) {
+			setStagePrField(slug, stage, "url", draft.createdUrl)
+			setStagePrField(slug, stage, "status", "draft")
+		} else {
+			setStagePrField(slug, stage, "status", "failed")
+			console.error(
+				`[haiku] stage draft PR for ${slug}/${stage} not opened: ${draft.message}`,
+			)
+		}
+	} catch (err) {
+		console.error(
+			`[haiku] stage draft PR for ${slug}/${stage} threw: ${err instanceof Error ? err.message : String(err)}`,
+		)
+	}
 }
 
 /** Find the previous completed stage for branch chaining. */
@@ -215,6 +257,11 @@ export function workflowStartStage(slug: string, stage: string): void {
 	// inline. No FM cache.
 
 	cleanupOrphanedStageBranches(slug)
+
+	// Per-stage delivery PR (discrete / discrete-hybrid): open a draft for
+	// this stage now that its branch exists, so proof + work land on it.
+	// Stamps the stage_prs map; the gitCommitState below commits the stamp.
+	openStageDraftPrIfDelivery(slug, stage)
 
 	emitTelemetry("haiku.stage.started", { intent: slug, stage })
 	gitCommitState(`haiku: start stage ${stage}`)

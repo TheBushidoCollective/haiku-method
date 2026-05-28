@@ -27,6 +27,7 @@ const {
 	branchAheadOfOrigin,
 	markPullRequestReady,
 	openIntentDraftPullRequest,
+	openStageDraftPullRequest,
 	pushStageBranch,
 } = await import("../src/git-worktree.ts")
 const { _resetIsGitRepoForTests } = await import("../src/state/shared.ts")
@@ -94,6 +95,21 @@ test("no-git-repo path returns benign message, no exception", () => {
 		assert.strictEqual(r.branch, "haiku/test-intent/main")
 		assert.match(r.message, /Not a git repo/i)
 		// No createdUrl, no compareUrl, no error explosion.
+		assert.strictEqual(r.createdUrl, undefined)
+	})
+	rmSync(dir, { recursive: true, force: true })
+})
+
+console.log("\n=== openStageDraftPullRequest ===")
+
+test("no-git-repo path returns benign message, correct stage→intent-main branch pair", () => {
+	const dir = makeNonRepo()
+	withCwd(dir, () => {
+		const r = openStageDraftPullRequest({ slug: "test-intent", stage: "design" })
+		// Stage branch → intent main (NOT repo default).
+		assert.strictEqual(r.branch, "haiku/test-intent/design")
+		assert.strictEqual(r.base, "haiku/test-intent/main")
+		assert.match(r.message, /Not a git repo/i)
 		assert.strictEqual(r.createdUrl, undefined)
 	})
 	rmSync(dir, { recursive: true, force: true })

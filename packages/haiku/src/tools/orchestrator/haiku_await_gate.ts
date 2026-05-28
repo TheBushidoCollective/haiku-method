@@ -76,8 +76,11 @@ import {
 	intentDir,
 	isGitRepo,
 	parseFrontmatter,
+	readStagePr,
 	setFrontmatterField,
+	setStagePrField,
 	syncSessionMetadata,
+	timestamp,
 } from "../../state-tools.js"
 import { defineTool } from "../define.js"
 import { withAnnouncement } from "./_announce.js"
@@ -576,7 +579,41 @@ export default defineTool({
 				// the provider-specific compare URL so the user can open
 				// the MR in one click.
 				let externalReviewMessage: string
-				if (isGitRepo()) {
+				const existingStagePr = readStagePr(slug, stage)
+				if (isGitRepo() && existingStagePr?.url) {
+					// Per-stage delivery (discrete / discrete-hybrid): a DRAFT
+					// stage PR was already opened at stage start. Flip it to
+					// ready instead of opening a SECOND, non-draft PR. The
+					// merge is still the approval signal (gate.ts reconciles
+					// on branch-merged-into-intent-main).
+					const stagePrUrl = existingStagePr.url
+					const { markPullRequestReady } = await import(
+						"../../git-worktree.js"
+					)
+					const ready = markPullRequestReady(stagePrUrl)
+					try {
+						const intentMd = join(intentDir(slug), "intent.md")
+						setFrontmatterField(intentMd, "external_review_url", stagePrUrl)
+					} catch {
+						/* non-fatal — agent can still pass via run_next */
+					}
+					if (ready.ok) {
+						setStagePrField(slug, stage, "status", "ready")
+						setStagePrField(slug, stage, "ready_at", timestamp())
+						externalReviewMessage = withAnnouncement(
+							`The user routed stage "${stage}" to external review. The engine flipped the stage's draft PR to ready: ${stagePrUrl}`,
+							`Tell the user: "The stage PR at ${stagePrUrl} is ready for review — merge it when you're satisfied. Run /haiku:haiku-pickup after the merge to continue." It targets \`haiku/${slug}/main\` so the engine detects the merge.`,
+						)
+					} else {
+						console.error(
+							`[haiku] flip-to-ready of stage PR ${stagePrUrl} failed: ${ready.error}`,
+						)
+						externalReviewMessage = withAnnouncement(
+							`The user routed stage "${stage}" to external review. The stage's draft PR is at ${stagePrUrl}.`,
+							`The engine couldn't flip the draft to ready (${ready.error ?? "unknown"}). Tell the user to mark ${stagePrUrl} ready and merge it — it targets \`haiku/${slug}/main\` so the merge signal lands correctly. Run /haiku:haiku-pickup after the merge.`,
+						)
+					}
+				} else if (isGitRepo()) {
 					const { openStagePullRequest } = await import("../../git-worktree.js")
 					const opened = openStagePullRequest({ slug, stage })
 					if (opened.createdUrl) {

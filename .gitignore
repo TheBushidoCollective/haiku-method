@@ -69,6 +69,10 @@ terraform.tfvars
 .haiku/**/write-audit.jsonl
 # Engine diagnostics (loop-guard log, etc — runtime-only)
 .haiku/diagnostics/
+# Runtime-verification proof (screenshots/video) + ephemeral Playwright
+# driver — regenerated every run, uploaded to the PR, never committed.
+.haiku/intents/*/stages/*/proof/
+.haiku/intents/*/proof/
 bun.lock
 plugin/bin/haiku.mjs.map
 .claude/scheduled_tasks.lock

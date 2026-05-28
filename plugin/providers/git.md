@@ -31,6 +31,17 @@ H·AI·K·U is always git-backed when a `.git/` directory is present. This contr
 
 When git creates a draft PR at intent-create time, the PR URL is stamped on `intent.md` frontmatter as `external_refs.git_pr` and `draft_pr_status`. The draft flips `ready` automatically at intent completion. You don't write these fields manually — the engine does — but you can read them to surface PR state to the user.
 
+In **discrete / discrete-hybrid** mode the engine also opens a per-stage draft PR at stage start (base = `haiku/<slug>/main`) and records it in the `stage_prs` map on `intent.md` FM; the stage gate flips that draft to ready (merging it is the approval). That stage PR is where the stage's runtime-verification proof gets uploaded. Continuous / autopilot / quick keep everything on the single intent-main draft PR.
+
+## Proof asset uploads (runtime-verification evidence)
+
+Runtime-verification proof (screenshots, video) is **gitignored** — it's regenerated every run and committing it bloats history. It does not travel on a branch merge, so a runtime-verifier uploads it to the relevant PR/MR to make it durable and reviewable. The two hosts differ:
+
+- **GitLab** — first-class: `glab` / `POST /projects/:id/uploads` returns a markdown snippet to embed in the MR description or a note. Access-controlled by project visibility.
+- **GitHub** — no inline-attachment API. Attach captures as **release assets** (`gh release upload`) or push to an artifact bucket, then link them from the PR body. (Inline image paste is web-UI-only; a bot can't drive it. Note: GitHub's `user-attachments` CDN URLs are anonymized — anyone with the link can view, even for a private repo.)
+
+Keep uploads idempotent — replace the PR's "Proof" section on re-run rather than stacking duplicates.
+
 ## Non-git environments
 
 When `.git/` is absent the framework falls back to filesystem persistence:

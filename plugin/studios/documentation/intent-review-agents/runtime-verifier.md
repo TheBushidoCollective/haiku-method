@@ -7,7 +7,7 @@ interpretation: lens
 
 ## Check
 
-Prefer `haiku_view({ intent: "<this-intent>", mode: "boot" })` to boot the docs site and drive the published surface. If no boot target detected, that's typically a finding for a documentation intent — the site should be runnable by close. Use the bundled `haiku-playwright` MCP. Call `browser_take_screenshot` at every meaningful step. **Save each screenshot** to disk under `.haiku/intents/<intent>/proof/<page-or-flow>-<step>.png` using the `Write` tool.
+Prefer `haiku_view({ intent: "<this-intent>", mode: "boot" })` to boot the docs site and drive the published surface. If no boot target detected, that's typically a finding for a documentation intent — the site should be runnable by close. Drive the published surface from your Playwright script (per the runtime-verification doctrine — records video + screenshots) and screenshot every meaningful step into `.haiku/intents/<intent>/proof/` (e.g. `<page-or-flow>-<step>.png`). That `proof/` dir is gitignored — upload the captures to the intent's delivery PR per the doctrine.
 
 The agent **MUST** verify each of the following:
 

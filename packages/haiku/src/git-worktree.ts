@@ -37,7 +37,7 @@ import { migrateIntent } from "./orchestrator/migrate-registry.js"
 // `migrateIntent("0", "4.0.0")` would throw "no migration path."
 import { hasV3CruftInIntent } from "./orchestrator/migrations/v0-to-v4.js"
 import {
-	ensureWorktreesGitignored,
+	ensureHaikuGitignored,
 	isGitRepo,
 	primaryRepoRoot,
 } from "./state-tools.js"
@@ -1331,6 +1331,74 @@ export function openIntentDraftPullRequest(opts: {
 
 	result.message = push.ok
 		? `Pushed \`${branch}\` but no compare URL could be built (origin host not recognised). Open the draft PR manually from \`${branch}\` into \`${base}\`.`
+		: `Failed to push \`${branch}\` (${push.error}) and no compare URL could be built.`
+	return result
+}
+
+/** Open a DRAFT PR/MR from `haiku/<slug>/<stage>` into the intent's main
+ *  branch (`haiku/<slug>/main`, NOT the repo mainline). Called once at
+ *  stage start in discrete / discrete-hybrid mode so each stage has a
+ *  place where its proof artifacts land while the work happens. The
+ *  engine flips the draft to ready at the stage gate via
+ *  markPullRequestReady().
+ *
+ *  Best-effort: any failure (no git repo, no provider CLI, push or PR
+ *  create error) returns a populated message and lets the caller surface
+ *  it. Stage start never blocks on this. Shape mirrors
+ *  openIntentDraftPullRequest — the only differences are the branch/base
+ *  pair (stage → intent-main) and the default copy. */
+export function openStageDraftPullRequest(opts: {
+	slug: string
+	stage: string
+	title?: string
+	body?: string
+}): OpenIntentMrResult {
+	const branch = `haiku/${opts.slug}/${opts.stage}`
+	const base = `haiku/${opts.slug}/main`
+	const title =
+		opts.title ?? `H·AI·K·U: ${opts.slug} — stage ${opts.stage}`
+	const body =
+		opts.body ??
+		`Stage \`${opts.stage}\` of intent \`${opts.slug}\` is in flight. The H·AI·K·U engine opened this PR as a draft so the stage's work — and its runtime-verification proof — can be watched as units land. The engine marks it ready at the stage gate; merging it signals approval.`
+
+	if (!isGitRepo()) {
+		return {
+			branch,
+			base,
+			message: "Not a git repo — no draft stage PR opened.",
+		}
+	}
+
+	const push = pushBranchToOrigin(branch)
+	const result: OpenIntentMrResult = {
+		branch,
+		base,
+		pushed: push.ok,
+		pushError: push.ok ? undefined : push.error,
+		message: "",
+	}
+
+	if (push.ok) {
+		const pr = openPullRequest(branch, base, title, body, { draft: true })
+		if (pr.ok && pr.url) {
+			result.createdUrl = pr.url
+			result.message = `Draft stage PR opened: ${pr.url}`
+			return result
+		}
+		result.prError = pr.error
+	}
+
+	const compare = buildCompareUrl(branch, base)
+	if (compare) {
+		result.compareUrl = compare
+		result.message = push.ok
+			? `Stage branch \`${branch}\` is pushed. The provider CLI didn't create the draft PR (${result.prError ?? "no tool found"}). Click here to open one manually: ${compare}`
+			: `Failed to push \`${branch}\` (${push.error}). After resolving, open the draft stage PR at: ${compare}`
+		return result
+	}
+
+	result.message = push.ok
+		? `Pushed \`${branch}\` but no compare URL could be built (origin host not recognised). Open the draft stage PR manually from \`${branch}\` into \`${base}\`.`
 		: `Failed to push \`${branch}\` (${push.error}) and no compare URL could be built.`
 	return result
 }
@@ -3747,7 +3815,7 @@ export function createUnitWorktree(
 	// `createFixChainWorktree`.
 	ensureIntentGitAttributes(slug)
 	// Guarantee the worktree pool is ignored before any worktree lands in it.
-	ensureWorktreesGitignored()
+	ensureHaikuGitignored()
 	const unitBranch = `haiku/${slug}/${unit}`
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
 	const worktreePath = join(worktreeBase, unit)
@@ -4140,7 +4208,7 @@ export function createDiscoveryWorktree(
 	// `createFixChainWorktree`.
 	ensureIntentGitAttributes(slug)
 	// Guarantee the worktree pool is ignored before any worktree lands in it.
-	ensureWorktreesGitignored()
+	ensureHaikuGitignored()
 	const discBranch = discoveryBranchName(slug, stage, template)
 	const worktreePath = discoveryWorktreePath(slug, stage, template)
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
@@ -4435,7 +4503,7 @@ export function createFixChainWorktree(
 	// JSONL appends still trip the integrator cap.
 	ensureIntentGitAttributes(slug)
 	// Guarantee the worktree pool is ignored before any worktree lands in it.
-	ensureWorktreesGitignored()
+	ensureHaikuGitignored()
 	const fixBranch = fixChainBranchName(slug, scope, feedbackId)
 	const worktreePath = fixChainWorktreePath(slug, scope, feedbackId)
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)

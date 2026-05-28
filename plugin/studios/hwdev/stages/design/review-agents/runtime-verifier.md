@@ -7,7 +7,7 @@ interpretation: lens
 
 ## Check
 
-Open a view session via `haiku_view({ stage: "design" })` and use the bundled `haiku-playwright` MCP to navigate to each design artifact through the SPA's artifact-browser route. The SPA dispatches `.kicad_sch` / `.kicad_pcb` to KiCanvas, `.gbr` / `.drl` to Tracespace, `.glb` / `.gltf` to `<model-viewer>`, and `.tsx` circuit code to tscircuit's renderer. Call `browser_take_screenshot` for each artifact you assert on. **Save each screenshot** to disk under `.haiku/intents/<intent>/stages/design/proof/<artifact-slug>-<view>.png` using the `Write` tool. Attach screenshots to every finding.
+Open a view session via `haiku_view({ stage: "design" })` and navigate to each design artifact through the SPA's artifact-browser route from your Playwright script (per the runtime-verification doctrine — records video + screenshots). The SPA dispatches `.kicad_sch` / `.kicad_pcb` to KiCanvas, `.gbr` / `.drl` to Tracespace, `.glb` / `.gltf` to `<model-viewer>`, and `.tsx` circuit code to tscircuit's renderer. Screenshot each artifact you assert on into `.haiku/intents/<intent>/stages/design/proof/` (e.g. `<artifact-slug>-<view>.png`). That `proof/` dir is gitignored — upload the captures to this stage's PR per the doctrine, and attach them (or their links) to every finding.
 
 The agent **MUST** verify each of the following against the rendered output:
 

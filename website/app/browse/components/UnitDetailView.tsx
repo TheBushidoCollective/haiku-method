@@ -502,9 +502,9 @@ function UnitFeedbackCard({ fb }: { fb: HaikuFeedback }) {
 							{resolutionBadge.label}
 						</span>
 					)}
-					{fb.origin && (
+					{(fb.author ?? fb.origin) && (
 						<span className="rounded bg-stone-50 dark:bg-stone-900 px-1.5 py-0.5 text-[10px] font-mono text-stone-500 dark:text-stone-400">
-							{fb.origin}
+							{fb.author ?? fb.origin}
 						</span>
 					)}
 					<span

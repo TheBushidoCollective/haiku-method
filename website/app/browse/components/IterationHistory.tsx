@@ -5,6 +5,8 @@
 // IntentDetailView (FeedbackCard "Fix history") so both read the handoff
 // the same way.
 
+import { BrowseMarkdown } from "./BrowseMarkdown"
+
 /** One hat-loop iteration from a unit or feedback frontmatter
  *  (VCS-parsed). Units use `result: advance | reject`; feedback uses
  *  `advanced | closed | reopened | rejected`. */
@@ -32,6 +34,49 @@ export function iterationResultClass(result?: string | null): string {
 	return "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
 }
 
+/** The visible heading row for one iteration — hat name, result pill, and the
+ *  optional bolt index / commit short-sha. Used as the `<summary>` of a
+ *  collapsible iteration (or standalone when there's no handoff body). */
+function IterationHeading({
+	hat,
+	result,
+	commit,
+	bolt,
+}: {
+	hat?: string
+	result?: string | null
+	commit?: string
+	bolt?: number
+}) {
+	return (
+		<>
+			{typeof bolt === "number" && (
+				<span className="font-mono text-[10px] text-stone-400">
+					bolt {bolt}
+				</span>
+			)}
+			<span className="font-semibold text-stone-800 dark:text-stone-200">
+				{hat ?? "—"}
+			</span>
+			{result && (
+				<span
+					className={`rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${iterationResultClass(result)}`}
+				>
+					{result}
+				</span>
+			)}
+			{commit && (
+				<code
+					className="font-mono text-[11px] text-stone-500 dark:text-stone-400"
+					title={commit}
+				>
+					{commit.slice(0, 7)}
+				</code>
+			)}
+		</>
+	)
+}
+
 /** Hat-history timeline for a browsed unit — the per-hat handoffs the
  *  engine recorded as the unit walked its hat sequence. Reads
  *  `iterations[]` from the unit frontmatter; renders nothing when absent. */
@@ -52,30 +97,30 @@ export function HatHistory({ iterations }: { iterations?: unknown }) {
 							key={`hat-iter-${idx}`}
 							className="border-l-2 border-stone-200 pl-3 dark:border-stone-700"
 						>
-							<div className="flex flex-wrap items-center gap-2">
-								<span className="font-semibold text-stone-800 dark:text-stone-200">
-									{it.hat ?? "—"}
-								</span>
-								{it.result && (
-									<span
-										className={`rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${iterationResultClass(it.result)}`}
-									>
-										{it.result}
-									</span>
-								)}
-								{it.commit && (
-									<code
-										className="font-mono text-[11px] text-stone-500 dark:text-stone-400"
-										title={it.commit}
-									>
-										{it.commit.slice(0, 7)}
-									</code>
-								)}
-							</div>
-							{handoff && (
-								<p className="mt-1 text-sm text-stone-600 [overflow-wrap:anywhere] dark:text-stone-300">
-									{handoff}
-								</p>
+							{handoff ? (
+								<details className="group">
+									<summary className="flex cursor-pointer list-none flex-wrap items-center gap-2">
+										<span className="text-stone-400 transition-transform group-open:rotate-90">
+											▸
+										</span>
+										<IterationHeading
+											hat={it.hat}
+											result={it.result}
+											commit={it.commit}
+										/>
+									</summary>
+									<div className="mt-2 prose prose-sm prose-stone max-w-none [overflow-wrap:anywhere] dark:prose-invert">
+										<BrowseMarkdown>{handoff}</BrowseMarkdown>
+									</div>
+								</details>
+							) : (
+								<div className="flex flex-wrap items-center gap-2">
+									<IterationHeading
+										hat={it.hat}
+										result={it.result}
+										commit={it.commit}
+									/>
+								</div>
 							)}
 						</li>
 					)
@@ -104,27 +149,30 @@ export function FixHistory({ iterations }: { iterations?: unknown }) {
 							// biome-ignore lint/suspicious/noArrayIndexKey: append-only ordered log
 							key={`fb-iter-${idx}`}
 						>
-							<div className="flex flex-wrap items-center gap-2">
-								{typeof it.bolt === "number" && (
-									<span className="font-mono text-[10px] text-stone-400">
-										bolt {it.bolt}
-									</span>
-								)}
-								<span className="text-sm font-medium text-stone-800 dark:text-stone-200">
-									{it.hat ?? "—"}
-								</span>
-								{it.result && (
-									<span
-										className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${iterationResultClass(it.result)}`}
-									>
-										{it.result}
-									</span>
-								)}
-							</div>
-							{handoff && (
-								<p className="mt-0.5 text-sm text-stone-600 [overflow-wrap:anywhere] dark:text-stone-300">
-									{handoff}
-								</p>
+							{handoff ? (
+								<details className="group">
+									<summary className="flex cursor-pointer list-none flex-wrap items-center gap-2">
+										<span className="text-[10px] text-stone-400 transition-transform group-open:rotate-90">
+											▸
+										</span>
+										<IterationHeading
+											hat={it.hat}
+											result={it.result}
+											bolt={it.bolt}
+										/>
+									</summary>
+									<div className="mt-1 prose prose-sm prose-stone max-w-none [overflow-wrap:anywhere] dark:prose-invert">
+										<BrowseMarkdown>{handoff}</BrowseMarkdown>
+									</div>
+								</details>
+							) : (
+								<div className="flex flex-wrap items-center gap-2">
+									<IterationHeading
+										hat={it.hat}
+										result={it.result}
+										bolt={it.bolt}
+									/>
+								</div>
 							)}
 						</li>
 					)

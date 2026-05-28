@@ -3,7 +3,6 @@ import { createRelayEnvironment } from "./graphql/environment"
 import type { operationsBatchBlobsQuery$data } from "./graphql/gitlab/__generated__/operationsBatchBlobsQuery.graphql"
 import BatchBlobsQuery from "./graphql/gitlab/__generated__/operationsBatchBlobsQuery.graphql"
 import type { operationsIntentTreeQuery$data } from "./graphql/gitlab/__generated__/operationsIntentTreeQuery.graphql"
-import IntentTreeQuery from "./graphql/gitlab/__generated__/operationsIntentTreeQuery.graphql"
 import type { operationsListBranchNamesQuery$data } from "./graphql/gitlab/__generated__/operationsListBranchNamesQuery.graphql"
 import ListBranchNamesQuery from "./graphql/gitlab/__generated__/operationsListBranchNamesQuery.graphql"
 import ListFilesQueryArtifact from "./graphql/gitlab/__generated__/operationsListFilesQuery.graphql"
@@ -600,12 +599,26 @@ export class GitLabProvider implements BrowseProvider {
 		const basePath = `.haiku/intents/${slug}`
 		const refLabel = ref || "HEAD"
 
-		// Step 1: Recursive tree listing
-		const treeCacheKey = `gl:${this.host}:${this.projectPath}:intentTree:${slug}:${refLabel}`
-		const treeData = await this.cachedQuery<operationsIntentTreeQuery$data>(
-			IntentTreeQuery,
+		// Step 1: Recursive tree listing. Raw GraphQL (not the Relay artifact) on
+		// purpose: GitLab's TreeEntry `id` is content-addressed (the blob SHA), so
+		// two identical files at different paths (e.g. a DESIGN-BRIEF.md copied into
+		// both `knowledge/` and `stages/design/`) return the SAME id with different
+		// `path`. The Relay artifact auto-injects `id` for the Node-typed entries,
+		// and the normalizer then warns "conflicting field ... same id" and lets one
+		// path clobber the other. We only read `name`/`path` into plain objects (no
+		// Relay store use), so request exactly those — no id, no normalization.
+		const treeData = await this.rawGraphql<operationsIntentTreeQuery$data>(
+			`query($fullPath: ID!, $path: String!, $ref: String) {
+				project(fullPath: $fullPath) {
+					repository {
+						tree(path: $path, ref: $ref, recursive: true) {
+							blobs(first: 500) { nodes { name path } }
+							trees(first: 100) { nodes { name path } }
+						}
+					}
+				}
+			}`,
 			{ fullPath: this.projectPath, path: basePath, ref },
-			treeCacheKey,
 		)
 
 		const allBlobs = (

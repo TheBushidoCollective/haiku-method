@@ -233,6 +233,7 @@ export function IntentDetailView({
 				intentSlug={intent.slug}
 				intentTitle={intent.title}
 				intentMode={intent.mode}
+				studio={intent.studio}
 				schemaIsV4={isV4Intent(intent.raw)}
 				provider={provider}
 				intentBranch={intent.branch}

@@ -1,5 +1,7 @@
 "use client"
 
+import matter from "gray-matter"
+import Link from "next/link"
 import { useEffect, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -38,6 +40,22 @@ function splitUnitName(name: string): { badge: string | null; title: string } {
 	return { badge: null, title: titleCase(name) }
 }
 
+/** Serialize unit frontmatter to YAML (its on-disk format) for the raw-FM
+ *  accordion. Uses gray-matter's stringify (already the website's YAML lib)
+ *  and strips the `---` fences so it reads as a plain YAML doc. Falls back to
+ *  pretty JSON if a value can't be dumped. */
+function frontmatterYaml(raw: Record<string, unknown>): string {
+	try {
+		return matter
+			.stringify("", raw)
+			.replace(/^---\n/, "")
+			.replace(/\n---\s*$/, "")
+			.trimEnd()
+	} catch {
+		return JSON.stringify(raw, null, 2)
+	}
+}
+
 const FIELD_LABELS: Record<string, string> = {
 	ticket: "Ticket",
 	epic: "Epic",
@@ -55,6 +73,9 @@ interface Props {
 	/** Intent mode (autopilot drops the user gate) — drives the expected
 	 *  review/approval role set in the sign-offs section. */
 	intentMode: string
+	/** Studio slug — links each non-engine review/approval role to its studio
+	 *  definition on the stage page. */
+	studio: string
 	/** Whether the intent is v4+ (has the review/approval model). v3 units
 	 *  predate it — the sign-offs section then shows only what's stamped
 	 *  rather than fabricating a matrix of never-signed gates. */
@@ -78,6 +99,7 @@ export function UnitDetailView({
 	stageName,
 	intentSlug,
 	intentMode,
+	studio,
 	provider,
 	intentBranch,
 	assets = [],
@@ -270,6 +292,8 @@ export function UnitDetailView({
 				unit={unit}
 				intentMode={intentMode}
 				schemaIsV4={schemaIsV4}
+				studio={studio}
+				stageName={stageName}
 			/>
 
 			{/* Feedback targeting this unit */}
@@ -413,15 +437,19 @@ export function UnitDetailView({
 			{/* Hat history — per-hat handoffs as the unit walked its sequence */}
 			<HatHistory iterations={unit.raw.iterations} />
 
-			{/* Frontmatter Debug (collapsed) */}
+			{/* Frontmatter Debug (collapsed) — rendered as syntax-highlighted YAML
+			    (the on-disk format) rather than raw JSON. */}
 			{Object.keys(unit.raw).length > 0 && (
 				<details className="mt-8">
 					<summary className="cursor-pointer text-xs text-stone-400 hover:text-stone-600">
 						Raw frontmatter
 					</summary>
-					<pre className="mt-2 overflow-x-auto rounded-lg bg-stone-50 p-4 text-xs text-stone-600 dark:bg-stone-900 dark:text-stone-400">
-						{JSON.stringify(unit.raw, null, 2)}
-					</pre>
+					<div className="mt-2">
+						<FilePreview
+							name="frontmatter.yaml"
+							content={frontmatterYaml(unit.raw)}
+						/>
+					</div>
 				</details>
 			)}
 		</div>
@@ -966,6 +994,32 @@ function roleLabel(role: string): string {
 		.join(" ")
 }
 
+/** Engine-owned roles + the human/gate slots have no studio definition page —
+ *  they're built into the workflow, not authored as `review-agents/*.md`.
+ *  Everything else stamped is a studio review agent with a def we can link. */
+const ENGINE_OR_GATE_ROLES = new Set([
+	"spec",
+	"continuity",
+	"cross-stage-consistency",
+	"quality_gates",
+	"user",
+])
+
+/** Deep-link a studio review/approval agent role to its definition on the
+ *  stage page (`#agent-<role>` for the review walk, `#approve-agent-<role>`
+ *  for the approval walk — both render the same def). Returns null for engine
+ *  roles / gates, which have no def page. */
+function roleDefHref(
+	role: string,
+	studio: string,
+	stageName: string,
+	walk: "review" | "approve",
+): string | null {
+	if (!studio || ENGINE_OR_GATE_ROLES.has(role)) return null
+	const anchor = walk === "approve" ? `approve-agent-${role}` : `agent-${role}`
+	return `/studios/${studio}/stages/${stageName}/#${anchor}`
+}
+
 /**
  * Per-unit review + approval sign-offs. The cursor stamps `reviews.<role>` as
  * each pre-execute reviewer signs the spec and `approvals.<role>` as each
@@ -979,10 +1033,14 @@ function SignOffsSection({
 	unit,
 	intentMode,
 	schemaIsV4,
+	studio,
+	stageName,
 }: {
 	unit: HaikuUnit
 	intentMode: string
 	schemaIsV4: boolean
+	studio: string
+	stageName: string
 }) {
 	const isAutopilot = intentMode === "autopilot"
 	const reviewsRaw = recordOf(unit.raw.reviews)
@@ -1011,10 +1069,22 @@ function SignOffsSection({
 			</h2>
 			<div className="grid gap-4 sm:grid-cols-2">
 				{reviews.length > 0 && (
-					<SignOffGroup title="Reviews" entries={reviews} />
+					<SignOffGroup
+						title="Reviews"
+						entries={reviews}
+						studio={studio}
+						stageName={stageName}
+						walk="review"
+					/>
 				)}
 				{approvals.length > 0 && (
-					<SignOffGroup title="Approvals" entries={approvals} />
+					<SignOffGroup
+						title="Approvals"
+						entries={approvals}
+						studio={studio}
+						stageName={stageName}
+						walk="approve"
+					/>
 				)}
 			</div>
 		</section>
@@ -1024,9 +1094,15 @@ function SignOffsSection({
 function SignOffGroup({
 	title,
 	entries,
+	studio,
+	stageName,
+	walk,
 }: {
 	title: string
 	entries: Array<{ role: string; signed: boolean; signedAt: string | null }>
+	studio: string
+	stageName: string
+	walk: "review" | "approve"
 }) {
 	return (
 		<div className="rounded-xl border border-stone-200 dark:border-stone-700">
@@ -1070,9 +1146,21 @@ function SignOffGroup({
 									/>
 								)}
 							</span>
-							<span className="truncate text-sm text-stone-700 dark:text-stone-300">
-								{roleLabel(role)}
-							</span>
+							{(() => {
+								const href = roleDefHref(role, studio, stageName, walk)
+								return href ? (
+									<Link
+										href={href}
+										className="truncate text-sm text-teal-700 hover:underline dark:text-teal-400"
+									>
+										{roleLabel(role)}
+									</Link>
+								) : (
+									<span className="truncate text-sm text-stone-700 dark:text-stone-300">
+										{roleLabel(role)}
+									</span>
+								)
+							})()}
 						</div>
 						<span className="flex-shrink-0 text-xs text-stone-400">
 							{signedAt ? formatDate(signedAt) : signed ? "signed" : "pending"}

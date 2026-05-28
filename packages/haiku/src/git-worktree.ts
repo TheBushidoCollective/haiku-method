@@ -501,7 +501,10 @@ function engineProtectedMergeInCwd(
 	}
 	// Re-assert the target's authoritative engine state over any silent
 	// auto-resolve to the source side. `HEAD` is still the pre-merge target
-	// (we passed `--no-commit`).
+	// (we passed `--no-commit`). The target (the branch being merged INTO) is
+	// canonical for engine state in every engine merge — including the
+	// downstream intent-main → stage sync, where the stage branch is ahead
+	// (the stage-branch invariant; see downstream-sync-clobber.test.mjs).
 	restoreEngineStateFromBase(gitC, "HEAD", slug)
 	// Any remaining unresolved paths are genuine conflicts on non-engine
 	// (agent) content — surface them; the engine guard already settled the
@@ -2078,6 +2081,25 @@ export function mergeStageBranchIntoMain(
 				tryRun(["git", ...cwdArgs, "diff", "--name-only", "--diff-filter=U"])
 					.split("\n")
 					.filter(Boolean)
+			// Engine-owned intent state (intent.md, units, feedback) is
+			// sole-engine-write and lives authoritatively on intent main (HEAD
+			// here) — it must NEVER reach the agent conflicted. Re-assert it
+			// from HEAD, then return only the REMAINING (agent/non-engine)
+			// conflicts; if engine state was the only conflict, finish the
+			// merge commit. Without this, the v9→v10 migration rewriting
+			// intent.md diverged it from the stage branch and a plain merge
+			// left conflict markers in intent.md, breaking the seal
+			// (worker-new-badge 2026-05-28; same class as the forward-merge
+			// fix, this is the stage-completion path).
+			const settleEngineConflicts = (raw: string[]): string[] => {
+				if (raw.length === 0) return []
+				restoreEngineStateFromBase(cwdArgs, "HEAD", slug)
+				const remaining = collectConflicts()
+				if (remaining.length === 0) {
+					tryRun(["git", ...cwdArgs, "commit", "--no-edit", "-m", mergeMessage])
+				}
+				return remaining
+			}
 			const doMerge = (): void => {
 				run([
 					"git",
@@ -2095,7 +2117,8 @@ export function mergeStageBranchIntoMain(
 				return { conflictFiles: [] }
 			} catch (mergeErr) {
 				const conflicts = collectConflicts()
-				if (conflicts.length > 0) return { conflictFiles: conflicts }
+				if (conflicts.length > 0)
+					return { conflictFiles: settleEngineConflicts(conflicts) }
 
 				// Not a content conflict. The classic blocker for an engine
 				// stage-close merge is untracked working-tree files the merge
@@ -2142,7 +2165,7 @@ export function mergeStageBranchIntoMain(
 					// Restore the stashed working tree regardless of outcome.
 					tryRun(["git", ...cwdArgs, "stash", "pop"])
 					if (retryConflicts.length > 0) {
-						return { conflictFiles: retryConflicts }
+						return { conflictFiles: settleEngineConflicts(retryConflicts) }
 					}
 					tryRun(["git", ...cwdArgs, "merge", "--abort"])
 					throw retryErr
@@ -2155,7 +2178,7 @@ export function mergeStageBranchIntoMain(
 				// `git stash list`. Neither data loss nor a silent no-op — the
 				// merge happened, which is the whole point.
 				tryRun(["git", ...cwdArgs, "stash", "pop"])
-				return { conflictFiles: collectConflicts() }
+				return { conflictFiles: settleEngineConflicts(collectConflicts()) }
 			}
 		}
 
@@ -2931,55 +2954,44 @@ export function ensureOnStageBranch(
 					}
 				}
 			}
-			// Stage 2: merge main into the (now checked-out) stage branch.
-			// A failure here is a real conflict — leave it for human resolution.
-			try {
-				run([
-					"git",
-					"merge",
-					intentMain,
-					"--no-ff",
-					"--no-edit",
-					"-m",
-					`haiku: merge intent-main → stage ${stage} (workflow engine branch enforcement)`,
-				])
+			// Stage 2: merge main into the (now checked-out) stage branch,
+			// ENGINE-FM-PROTECTED. A plain `git merge` here left conflict
+			// markers in intent.md whenever a mid-flight migration (e.g. v9→v10
+			// materializing `stages`) diverged intent main from the stage
+			// branch — the seal then choked parsing the workflow-managed file
+			// (worker-new-badge 2026-05-28). `engineProtectedMergeInCwd`
+			// re-asserts engine-owned state (intent.md, units, feedback) from
+			// intent main — the authoritative branch for that state — so only
+			// genuine conflicts on agent (non-engine) content surface.
+			const protectedMerge = engineProtectedMergeInCwd(
+				[],
+				intentMain,
+				slug,
+				`haiku: merge intent-main → stage ${stage} (workflow engine branch enforcement)`,
+			)
+			if (protectedMerge.ok) {
 				return {
 					ok: true,
 					branch: stageBranch,
 					message: `merged main → stage, now on ${stageBranch}`,
 					switched: true,
 				}
-			} catch (err) {
-				const raw = err instanceof Error ? err.message : String(err)
-				const status = tryRun(["git", "status", "--porcelain"])
-				const conflicts = (status || "")
-					.split("\n")
-					.filter(
-						(l) =>
-							l.startsWith("UU ") ||
-							l.startsWith("AA ") ||
-							l.startsWith("DD ") ||
-							l.startsWith("AU ") ||
-							l.startsWith("UA ") ||
-							l.startsWith("DU ") ||
-							l.startsWith("UD "),
-					)
-					.map((l) => l.slice(3).trim())
-				return {
-					ok: false,
-					branch: stageBranch,
-					message:
-						conflicts.length > 0
-							? `Merge intent-main → stage '${stage}' left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. ` +
-								`Resolve on '${stageBranch}', then \`git add\` + \`git commit\` and retry.\n\n` +
-								`While this merge is in progress the workflow-file guardrails are SUSPENDED (both raw Read/Write/Edit and the internal MCP write tools' lifecycle/ownership preventions), so you can resolve the conflicts directly. Prefer the schema-safe internal tools (\`haiku_feedback_write\`, \`haiku_unit_set\`, \`haiku_intent_set\`) — their schema validation still runs, so the resolved files stay valid.\n\n` +
-								`Resolution rule for engine-owned feedback/unit YAML: the MORE-ADVANCED state wins. A terminal (closed/rejected) feedback beats an open one; more iterations / a later closure timestamp beats fewer. BUT feedback that exists only on this (incomplete, not-yet-merged) stage branch must be KEPT — intent-main doesn't have it yet, so don't drop it in favor of main's absence.`
-							: `failed to merge main into stage: ${raw}. Resolve manually on '${stageBranch}', then retry.`,
-					switched: false,
-					block: conflicts.length > 0 ? "merge_conflict" : undefined,
-					dirty_files: conflicts.length > 0 ? conflicts : undefined,
-					target_branch: stageBranch,
-				}
+			}
+			const conflicts = protectedMerge.conflictFiles ?? []
+			return {
+				ok: false,
+				branch: stageBranch,
+				message:
+					conflicts.length > 0
+						? `Merge intent-main → stage '${stage}' left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. ` +
+							`Resolve on '${stageBranch}', then \`git add\` + \`git commit\` and retry.\n\n` +
+							`While this merge is in progress the workflow-file guardrails are SUSPENDED (both raw Read/Write/Edit and the internal MCP write tools' lifecycle/ownership preventions), so you can resolve the conflicts directly. Prefer the schema-safe internal tools (\`haiku_feedback_write\`, \`haiku_unit_set\`, \`haiku_intent_set\`) — their schema validation still runs, so the resolved files stay valid.\n\n` +
+							`Resolution rule for engine-owned feedback/unit YAML: the MORE-ADVANCED state wins. A terminal (closed/rejected) feedback beats an open one; more iterations / a later closure timestamp beats fewer. BUT feedback that exists only on this (incomplete, not-yet-merged) stage branch must be KEPT — intent-main doesn't have it yet, so don't drop it in favor of main's absence.`
+						: `failed to merge main into stage: ${protectedMerge.message ?? "unknown error"}. Resolve manually on '${stageBranch}', then retry.`,
+				switched: false,
+				block: conflicts.length > 0 ? "merge_conflict" : undefined,
+				dirty_files: conflicts.length > 0 ? conflicts : undefined,
+				target_branch: stageBranch,
 			}
 		}
 	}

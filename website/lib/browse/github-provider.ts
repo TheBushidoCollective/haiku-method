@@ -42,6 +42,9 @@ import { normalizeIntentStatus, parseFrontmatter, parseUnit } from "./types"
 
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 const apiCache = new Map<string, { data: unknown; ts: number }>()
+/** Per-request alias fan-out size for the lean list-view batch (mirrors the
+ *  GitLab provider's CHUNK_SIZE). */
+const CHUNK_SIZE = 10
 
 export class GitHubProvider implements BrowseProvider {
 	readonly name = "GitHub"
@@ -155,9 +158,8 @@ export class GitHubProvider implements BrowseProvider {
 				entries?: Array<{ name?: string | null; type?: string | null }>
 			} | null
 		>
-		const CHUNK = 10
-		for (let i = 0; i < mains.length; i += CHUNK) {
-			const chunk = mains.slice(i, i + CHUNK)
+		for (let i = 0; i < mains.length; i += CHUNK_SIZE) {
+			const chunk = mains.slice(i, i + CHUNK_SIZE)
 			const fields = chunk
 				.map((m, j) => {
 					const md = JSON.stringify(

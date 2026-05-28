@@ -78,8 +78,8 @@ import {
 	resolveStudioFixHats,
 } from "../studio.js"
 import { engineHandleDriftEvents } from "./drift-handle-events.js"
-import { intentDeliveryState } from "./intent-delivery.js"
 import { runDriftSweep } from "./drift-sweep.js"
+import { intentDeliveryState } from "./intent-delivery.js"
 
 // Roles that dispatch as serial sequential gates (one per tick).
 // Everything else (continuity, cross-stage-consistency, studio agents)
@@ -2123,16 +2123,22 @@ export function derivePosition(args: {
 	// (squash-merge-aware) read — this decides whether the lock holds.
 	// Inapplicable in filesystem mode / no default branch → merged === true
 	// → the short-circuit fires exactly as before.
+	// Computed once per tick when a seal stamp exists, then reused by the merge
+	// gate at the terminal below — `intentDeliveryState` falls back to `gh pr
+	// list` in a squash-merge repo, so probing it twice in this state is two CLI
+	// invocations per pickup tick until the PR finally seals.
+	let sealedDelivery: ReturnType<typeof intentDeliveryState> | undefined
 	if (
 		intentResult &&
 		typeof intentResult.data.sealed_at === "string" &&
 		(intentResult.data.sealed_at as string).length > 0
 	) {
-		const sealedDelivery = intentDeliveryState(slug)
+		sealedDelivery = intentDeliveryState(slug)
 		if (!sealedDelivery.applicable || sealedDelivery.merged) {
 			return { track: "sealed", action: { kind: "sealed" } }
 		}
-		// else: sealed but not delivered — fall through to the walk.
+		// else: sealed but not delivered — fall through to the walk; the merge
+		// gate below reuses `sealedDelivery` instead of probing again.
 	}
 
 	// Pre-intent verifier (2026-05-08). The conversation that produced
@@ -2407,7 +2413,7 @@ export function derivePosition(args: {
 		// (squash-merge-aware) read. Inapplicable in filesystem mode / when no
 		// default branch resolves → `merged` is true and the seal proceeds as
 		// before.
-		const delivery = intentDeliveryState(slug)
+		const delivery = sealedDelivery ?? intentDeliveryState(slug)
 		if (delivery.applicable && !delivery.merged) {
 			return {
 				track: "intent",

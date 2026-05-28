@@ -236,6 +236,14 @@ export class GitLabProvider implements BrowseProvider {
 						)
 							.map((n) => n?.name)
 							.filter((n): n is string => typeof n === "string" && n.length > 0)
+						if (!rawText) {
+							// Batch AND fallback both missed — the intent silently
+							// falls back to its default-branch baseline. Surface it so
+							// a vanished/half-loaded intent is debuggable.
+							console.warn(
+								`[haiku-browse] intent.md unreadable for ${m.slug}@${m.branch} (batch + fallback both null); using default-branch baseline`,
+							)
+						}
 					}
 					out.set(m.slug, { rawText, stageDirs })
 				}),
@@ -607,19 +615,32 @@ export class GitLabProvider implements BrowseProvider {
 		// and the normalizer then warns "conflicting field ... same id" and lets one
 		// path clobber the other. We only read `name`/`path` into plain objects (no
 		// Relay store use), so request exactly those — no id, no normalization.
-		const treeData = await this.rawGraphql<operationsIntentTreeQuery$data>(
-			`query($fullPath: ID!, $path: String!, $ref: String) {
-				project(fullPath: $fullPath) {
-					repository {
-						tree(path: $path, ref: $ref, recursive: true) {
-							blobs(first: 500) { nodes { name path } }
-							trees(first: 100) { nodes { name path } }
+		// Cache the listing in glCache (TTL + cleared by clearBranchCache, which
+		// already purges `intentTree` keys) so re-mounting the detail view for the
+		// same intent doesn't re-fetch — rawGraphql bypasses Relay's store, so it
+		// has no cache of its own.
+		const treeCacheKey = `gl:${this.host}:${this.projectPath}:intentTree:${slug}:${refLabel}`
+		const cachedTree = glCache.get(treeCacheKey)
+		let treeData: operationsIntentTreeQuery$data | undefined
+		if (cachedTree && Date.now() - cachedTree.ts < GL_CACHE_TTL) {
+			treeData = cachedTree.data as operationsIntentTreeQuery$data
+		} else {
+			treeData = await this.rawGraphql<operationsIntentTreeQuery$data>(
+				`query($fullPath: ID!, $path: String!, $ref: String) {
+					project(fullPath: $fullPath) {
+						repository {
+							tree(path: $path, ref: $ref, recursive: true) {
+								blobs(first: 500) { nodes { name path } }
+								trees(first: 100) { nodes { name path } }
+							}
 						}
 					}
-				}
-			}`,
-			{ fullPath: this.projectPath, path: basePath, ref },
-		)
+				}`,
+				{ fullPath: this.projectPath, path: basePath, ref },
+			)
+			if (treeData)
+				glCache.set(treeCacheKey, { data: treeData, ts: Date.now() })
+		}
 
 		const allBlobs = (
 			treeData?.project?.repository?.tree?.blobs?.nodes ?? []

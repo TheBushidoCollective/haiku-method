@@ -44,12 +44,12 @@ import {
 	uncommittedAgentWork,
 } from "../../git-worktree.js"
 import { adaptInstructions } from "../../harness-instructions.js"
+import { PR_INTERACTION_ROLES } from "../../orchestrator/review-role-classes.js"
 import {
 	findCurrentStage,
 	isStageComplete,
 	stageOwesObservations,
 } from "../../orchestrator/workflow/cursor.js"
-import { PR_INTERACTION_ROLES } from "../../orchestrator/review-role-classes.js"
 import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
 import type { OrchestratorAction as OrchestratorActionType } from "../../orchestrator.js"
 import {
@@ -1324,14 +1324,17 @@ export default defineTool({
 		// and reflected, but its hub branch hasn't landed on the default
 		// branch — so the cursor is HOLDING it in `pending_seal` (no
 		// `sealed_at` written; the merge is the user's call). A pickup is the
-		// user's explicit "I'm back, re-check the delivery" signal: re-open
-		// the delivery PR-interaction approval(s) so the cursor re-dispatches
-		// the delivery-verifier, which re-reads the open change request, files
-		// feedback for any NEW review comments, and re-confirms
+		// user's explicit "I'm back, re-check the delivery" signal: re-open any
+		// ALREADY-STAMPED delivery PR-interaction approval(s) so the cursor
+		// re-dispatches the delivery-verifier, which re-reads the open change
+		// request, files feedback for any NEW review comments, and re-confirms
 		// CI/mergeability before the intent can seal again. Keyed on
 		// `PR_INTERACTION_ROLES` (not a hardcoded name) so a studio that
-		// overrides or adds a PR-interaction role is re-audited too. A plain
-		// (non-pickup) tick just returns the holding prompt.
+		// overrides or adds a PR-interaction role is re-audited too. NOTE: this
+		// only re-opens slots already present in `approvals` — if the
+		// delivery-verifier hasn't run yet (no slot stamped), nothing is
+		// re-opened here and the next regular tick dispatches it normally. A
+		// plain (non-pickup) tick just returns the holding prompt.
 		if (result.action === "pending_seal" && args.pickup === true) {
 			try {
 				const intentMd = join(findHaikuRoot(), "intents", slug, "intent.md")

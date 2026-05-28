@@ -22,7 +22,8 @@ const TEMPLATE = loadTemplate(import.meta.url)
 
 export default definePromptBuilder(({ slug, action, dir }) => {
 	const defaultBranch =
-		(action as { default_branch?: string }).default_branch || "the default branch"
+		(action as { default_branch?: string }).default_branch ||
+		"the default branch"
 	// Surface the delivery PR/MR url if we stamped one at intent_create
 	// (informational — the engine never gates on it). Read from intent.md
 	// FM; absent when no provider CLI was available.

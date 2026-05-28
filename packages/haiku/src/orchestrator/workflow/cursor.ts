@@ -1574,10 +1574,21 @@ function walkIntentTrack(args: {
 				readFm(join(intentDir, "intent.md"))?.data ?? {},
 				studio,
 			)
+			// Hold discovery/decompose while the keep-or-drop decision is
+			// pending. Surfacing them here would have the agent fan out
+			// discovery + decompose subagents on a stage it may immediately
+			// drop — throwaway work, and (worse) decompose authors units that
+			// flip the `units.length === 0` offer condition off, stranding the
+			// drop path. Recording the conversation (writes elaboration.md) is
+			// the gate that clears this one-shot offer; the NEXT tick then
+			// surfaces discovery + decompose normally on keep, or nothing on
+			// drop. So the offer carries ONLY the conversation-class signal(s).
+			const OFFER_SIGNALS = new Set(["conversation", "verify_conversation"])
+			const offerSignals = signalsUnmet.filter((s) => OFFER_SIGNALS.has(s))
 			return {
 				kind: "elaborate_loop",
 				stage,
-				signals_unmet: signalsUnmet,
+				signals_unmet: offerSignals,
 				optional_offer: true,
 				dependents: computeStageDependents(studio, stage, planStages),
 			}

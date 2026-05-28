@@ -1766,7 +1766,7 @@ export default defineTool({
 				: ((result.next_stage as string | null) ?? null)
 			if (isUserGate && gateKind === "approval" && stage) {
 				try {
-					const { resolveStudioStages } = await import(
+					const { resolveIntentStages } = await import(
 						"../../orchestrator/studio.js"
 					)
 					const intentFile = join(findHaikuRoot(), "intents", slug, "intent.md")
@@ -1775,7 +1775,10 @@ export default defineTool({
 						: {}
 					const studioName = (intentFm.studio as string) || ""
 					if (studioName) {
-						const stages = resolveStudioStages(studioName) ?? []
+						// Route by the intent's CANONICAL plan, not the studio
+						// superset — a dropped optional stage is skipped, and a gate
+						// on the plan's true final stage routes to completion.
+						const stages = resolveIntentStages(intentFm, studioName)
 						const idx = stages.indexOf(stage)
 						if (idx >= 0 && idx < stages.length - 1) {
 							nextStage = stages[idx + 1]

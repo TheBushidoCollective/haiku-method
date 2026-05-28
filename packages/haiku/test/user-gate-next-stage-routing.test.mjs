@@ -74,6 +74,17 @@ function setupRepo(slug, stage) {
 			studio: "software",
 			mode: "continuous",
 			plugin_version: "4.0.0",
+			// Explicit application plan — the canonical intent.stages IS the
+			// plan, dropping the optional `release` stage, so `security` is the
+			// final stage (the software studio superset now ends at `release`).
+			stages: [
+				"inception",
+				"design",
+				"product",
+				"development",
+				"operations",
+				"security",
+			],
 		}),
 	)
 	mkdirSync(join(tmp, ".haiku", "studios"), { recursive: true })
@@ -90,7 +101,7 @@ async function simulateUserGatePrepare({ tmp, intentDir, stage, gateKind }) {
 	const orig = process.cwd()
 	try {
 		process.chdir(tmp)
-		const { resolveStudioStages } = await import(
+		const { resolveIntentStages } = await import(
 			`${REPO_ROOT}/packages/haiku/src/orchestrator/studio.ts`
 		)
 		const { parseFrontmatter } = await import(
@@ -102,7 +113,8 @@ async function simulateUserGatePrepare({ tmp, intentDir, stage, gateKind }) {
 			typeof intentFm.studio === "string" ? intentFm.studio : ""
 		let nextStage = null
 		if (gateKind === "approval") {
-			const stages = resolveStudioStages(studioName) ?? []
+			// Mirror haiku_run_next: route by the intent's canonical plan.
+			const stages = resolveIntentStages(intentFm, studioName) ?? []
 			const idx = stages.indexOf(stage)
 			if (idx >= 0 && idx < stages.length - 1) {
 				nextStage = stages[idx + 1]

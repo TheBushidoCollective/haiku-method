@@ -17,8 +17,13 @@ import { fileURLToPath } from "node:url"
 const __dirname = dirname(fileURLToPath(import.meta.url))
 process.env.CLAUDE_PLUGIN_ROOT = resolve(__dirname, "..", "..", "..", "plugin")
 
-const { resolveIntentStages, filterInputsByPlanStages, resolveStudioStages } =
-	await import("../src/orchestrator/studio.ts")
+const {
+	resolveIntentStages,
+	filterInputsByPlanStages,
+	resolveStudioStages,
+	resolveStageOptional,
+	computeStageDependents,
+} = await import("../src/orchestrator/studio.ts")
 const { buildStudioConfig } = await import(
 	"../src/orchestrator/workflow/build-studio-config.ts"
 )
@@ -116,8 +121,61 @@ test("StageConfig.optional defaults to false for a mandatory stage", () => {
 	assert.strictEqual(software.stages.development.optional, false)
 })
 
+test("StageConfig.optional is true for software design / product / operations", () => {
+	assert.strictEqual(software.stages.design.optional, true)
+	assert.strictEqual(software.stages.product.optional, true)
+	assert.strictEqual(software.stages.operations.optional, true)
+})
+
+test("mandatory software stages stay non-optional", () => {
+	assert.strictEqual(software.stages.inception.optional, false)
+	assert.strictEqual(software.stages.development.optional, false)
+	assert.strictEqual(software.stages.security.optional, false)
+})
+
 test("StudioConfig.deprecated defaults to false for an active studio", () => {
 	assert.strictEqual(software.deprecated, false)
+})
+
+console.log("=== resolveStageOptional / computeStageDependents ===")
+
+test("resolveStageOptional reads STAGE.md optional:", () => {
+	assert.strictEqual(resolveStageOptional("software", "design"), true)
+	assert.strictEqual(resolveStageOptional("software", "inception"), false)
+	assert.strictEqual(resolveStageOptional("software", "development"), false)
+})
+
+test("computeStageDependents finds downstream refs to design", () => {
+	const plan = [
+		"inception",
+		"design",
+		"product",
+		"development",
+		"operations",
+		"security",
+	]
+	const deps = computeStageDependents("software", "design", plan)
+	// development declares design-brief / design-tokens / design-artifacts
+	// inputs AND pulls design's consistency / accessibility review agents.
+	const dev = deps.find((d) => d.stage === "development")
+	assert.ok(dev, "development should depend on design")
+	assert.ok(
+		dev.inputs.includes("design-brief"),
+		`expected design-brief in ${JSON.stringify(dev.inputs)}`,
+	)
+	assert.ok(
+		dev.reviewAgents.includes("consistency") &&
+			dev.reviewAgents.includes("accessibility"),
+		`expected consistency+accessibility in ${JSON.stringify(dev.reviewAgents)}`,
+	)
+})
+
+test("computeStageDependents returns nothing for a leaf optional stage", () => {
+	// operations is referenced by security's review-agents-include (reliability)
+	// — but a stage with no downstream references returns []. Use a plan where
+	// the target is last to prove the empty case.
+	const plan = ["inception", "development", "operations"]
+	assert.deepStrictEqual(computeStageDependents("software", "operations", plan), [])
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)

@@ -342,6 +342,39 @@ export function deriveV4ActiveStage(
 }
 
 /**
+ * Enforce the sequential-pipeline invariant on a derived stage-status map:
+ * completing a LATER stage proves every EARLIER stage finished. Returns a new
+ * map with completion propagated backward — `complete*` then at most one
+ * `active`, then `pending*`.
+ *
+ * Why this is needed: each stage's status is derived independently from its own
+ * units (`deriveStageStateFromUnits`). An advanced stage whose unit frontmatter
+ * lacks the full review/approval stamp set the browse heuristic expects reads
+ * as "active" even though the engine moved past it — so the pipeline can show
+ * an earlier stage active while a later one is complete (worker-new-badge:
+ * Operations "active" while Security, after it, "complete"). A sequential
+ * pipeline can't be in that state, so the later completion is the stronger
+ * signal: back-fill the earlier stages to complete. `deriveV4ActiveStage` on
+ * the normalized map then lands on the correct (later) active stage.
+ */
+export function normalizeStageProgression(
+	ordered: ReadonlyArray<string>,
+	statusByName: Record<string, "pending" | "active" | "complete">,
+): Record<string, "pending" | "active" | "complete"> {
+	const out: Record<string, "pending" | "active" | "complete"> = {
+		...statusByName,
+	}
+	let lastComplete = -1
+	for (let i = 0; i < ordered.length; i++) {
+		if (out[ordered[i]] === "complete") lastComplete = i
+	}
+	for (let i = 0; i < lastComplete; i++) {
+		out[ordered[i]] = "complete"
+	}
+	return out
+}
+
+/**
  * Derive a stage's "v3-style" status from its unit list. Delegates to
  * `deriveStageStatePure` — the same function the MCP engine calls so
  * the cursor walk and the browse UI cannot drift on what "completed"

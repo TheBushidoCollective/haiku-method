@@ -14,6 +14,7 @@ import {
 	deriveStageStateFromUnits,
 	deriveStageStatusFromUnits,
 	deriveV4ActiveStage,
+	normalizeStageProgression,
 	parseElaborationVerified,
 	parseFeedback,
 	parseIntentApprovals,
@@ -630,6 +631,43 @@ body
 `
 	const fb = parseFeedback("local", "s", "x", "FB-01.md", raw, "p")
 	assert.strictEqual(fb.resolution, null)
+})
+
+console.log("\n── normalizeStageProgression ──────────────────────────────")
+
+test("back-fills earlier stages when a later one is complete (worker-new-badge)", () => {
+	const order = [
+		"inception",
+		"design",
+		"product",
+		"development",
+		"operations",
+		"security",
+	]
+	// Operations reads active while security (after it) reads complete — the
+	// contradiction. Back-fill: everything up to the last complete is complete.
+	const got = normalizeStageProgression(order, {
+		inception: "complete",
+		design: "complete",
+		product: "complete",
+		development: "complete",
+		operations: "active",
+		security: "complete",
+	})
+	assert.strictEqual(got.operations, "complete", "operations back-fills to complete")
+	assert.strictEqual(got.security, "complete")
+	// Active stage now lands past the contradiction (all complete → last).
+	assert.strictEqual(deriveV4ActiveStage(order, got), "security")
+})
+
+test("leaves a monotonic sequence untouched", () => {
+	const order = ["a", "b", "c"]
+	const got = normalizeStageProgression(order, {
+		a: "complete",
+		b: "active",
+		c: "pending",
+	})
+	assert.deepStrictEqual(got, { a: "complete", b: "active", c: "pending" })
 })
 
 console.log(`\n── Result: ${passed} passed, ${failed} failed ──────────────`)

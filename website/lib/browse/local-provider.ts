@@ -9,6 +9,7 @@ import {
 	isCollectibleIntentAsset,
 	isCollectibleStageFile,
 	isV4Intent,
+	normalizeStageProgression,
 	parseElaborationVerified,
 	parseFeedback,
 	parseIntentApprovals,
@@ -453,9 +454,18 @@ export class LocalProvider implements BrowseProvider {
 		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
 			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
+		// Enforce the monotonic pipeline invariant: a later complete stage
+		// back-fills earlier ones (an advanced stage can read "active" when its
+		// unit FM lacks the full stamp set). Write the corrected status back so
+		// the dots can't show an earlier stage active while a later is complete.
+		const normalizedStatus = normalizeStageProgression(
+			stageNames,
+			stageStatusByName,
+		)
+		for (const s of stages) s.status = normalizedStatus[s.name] ?? s.status
 		const refinedActiveStage = activeStage
 			? activeStage
-			: deriveV4ActiveStage(stageNames, stageStatusByName)
+			: deriveV4ActiveStage(stageNames, normalizedStatus)
 
 		// Intent-scope feedback
 		const intentFeedbackFiles = await this.listFiles(

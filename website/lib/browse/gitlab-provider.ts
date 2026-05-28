@@ -19,6 +19,7 @@ import {
 	deriveV4ActiveStage,
 	isCollectibleStageFile,
 	isV4Intent,
+	normalizeStageProgression,
 	mergeKnowledge as mergeKnowledgeShared,
 	parseElaborationVerified,
 	parseFeedback,
@@ -1106,8 +1107,16 @@ export class GitLabProvider implements BrowseProvider {
 		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
 			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
+		// Monotonic pipeline invariant: a later complete stage back-fills
+		// earlier ones, so the dots can't show an earlier stage active while a
+		// later is complete (see normalizeStageProgression).
+		const normalizedStatus = normalizeStageProgression(
+			orderedStages,
+			stageStatusByName,
+		)
+		for (const s of stages) s.status = normalizedStatus[s.name] ?? s.status
 		const refinedActiveStage =
-			deriveV4ActiveStage(orderedStages, stageStatusByName) || activeStage
+			deriveV4ActiveStage(orderedStages, normalizedStatus) || activeStage
 
 		// Re-parse intent.md off the current stage's branch when one is
 		// present. Engine invariant: every commit during a stage's work
@@ -1285,8 +1294,16 @@ export class GitLabProvider implements BrowseProvider {
 		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
 			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
+		// Monotonic pipeline invariant: a later complete stage back-fills
+		// earlier ones, so the dots can't show an earlier stage active while a
+		// later is complete (see normalizeStageProgression).
+		const normalizedStatus = normalizeStageProgression(
+			orderedStages,
+			stageStatusByName,
+		)
+		for (const s of stages) s.status = normalizedStatus[s.name] ?? s.status
 		const refinedActiveStage =
-			deriveV4ActiveStage(orderedStages, stageStatusByName) || activeStage
+			deriveV4ActiveStage(orderedStages, normalizedStatus) || activeStage
 
 		const knowledge = this.parseKnowledgeFromBlobs(slug, data)
 		const operations = this.parseOperationsFromBlobs(slug, data)

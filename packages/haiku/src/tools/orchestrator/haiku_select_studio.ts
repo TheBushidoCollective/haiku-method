@@ -97,7 +97,10 @@ export default defineTool({
 			}
 		}
 
-		const allStudios = listStudios()
+		// Hide deprecated studios from the new-intent picker. They stay
+		// resolvable by name (resolveStudio) so in-flight intents on a
+		// deprecated studio keep working — they just can't be picked anew.
+		const allStudios = listStudios().filter((s) => s.data.deprecated !== true)
 		if (allStudios.length === 0) {
 			return {
 				content: [{ type: "text" as const, text: "No studios available." }],

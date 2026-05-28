@@ -27,6 +27,8 @@ const {
 const { buildStudioConfig } = await import(
 	"../src/orchestrator/workflow/build-studio-config.ts"
 )
+const { resolveStudio } = await import("../src/studio-reader.ts")
+const { handleStateTool } = await import("../src/state-tools.ts")
 
 let passed = 0
 let failed = 0
@@ -176,6 +178,23 @@ test("computeStageDependents returns nothing for a leaf optional stage", () => {
 	// the target is last to prove the empty case.
 	const plan = ["inception", "development", "operations"]
 	assert.deepStrictEqual(computeStageDependents("software", "operations", plan), [])
+})
+
+console.log("=== deprecated studios: hidden from pickers, resolvable by name ===")
+
+test("libdev is marked deprecated in its config", () => {
+	assert.strictEqual(buildStudioConfig("libdev")?.deprecated, true)
+})
+
+test("a deprecated studio still resolves by name (in-flight intents work)", () => {
+	assert.ok(resolveStudio("libdev"), "resolveStudio(libdev) should resolve")
+})
+
+test("haiku_studio_list excludes deprecated studios but keeps active ones", () => {
+	const r = handleStateTool("haiku_studio_list", {})
+	const slugs = JSON.parse(r.content[0].text).studios.map((s) => s.slug)
+	assert.ok(!slugs.includes("libdev"), "libdev should be hidden from studio_list")
+	assert.ok(slugs.includes("appdev"), "appdev should remain in studio_list")
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)

@@ -11640,7 +11640,12 @@ export function handleStateTool(
 			if (studioListInputErr) return studioListInputErr
 			// Unified discovery — listStudios covers both plugin and project studios,
 			// honors name/slug/aliases from frontmatter, and exposes help links.
-			const studios = listStudios().map((s) => ({
+			// Deprecated studios are excluded — they're folded into a successor and
+			// hidden from new-intent discovery, but stay resolvable by name so
+			// in-flight intents on them keep working.
+			const studios = listStudios()
+				.filter((s) => s.data.deprecated !== true)
+				.map((s) => ({
 				name: s.name,
 				slug: s.slug,
 				aliases: s.aliases,

@@ -20,7 +20,7 @@ import {
 	writeFileSync,
 } from "node:fs"
 import { homedir } from "node:os"
-import { dirname, join, resolve, sep } from "node:path"
+import { basename, dirname, join, resolve, sep } from "node:path"
 import {
 	dedupeFrontmatterKeys,
 	isDuplicateKeyError,
@@ -2420,6 +2420,82 @@ export function unitOutputExists(
 		if (nonEmptyExists(wtRepoResolved)) return true
 	}
 	return false
+}
+
+/** The base directories a declared output path is resolved against —
+ *  the SAME roots `unitOutputExists` checks, in the same order. Factored
+ *  out so the repair helper looks in exactly the places the existence
+ *  check looks. Only roots that exist on disk are returned. */
+function outputResolutionRoots(slug: string, unit: string): string[] {
+	const roots: string[] = [intentDir(slug)]
+	const wtRoot = join(primaryRepoRoot(), ".haiku", "worktrees", slug, unit)
+	const wtIntentDir = join(wtRoot, ".haiku", "intents", slug)
+	if (existsSync(wtIntentDir)) roots.push(wtIntentDir)
+	try {
+		const repoRoot = execSync("git rev-parse --show-toplevel", {
+			encoding: "utf8",
+		}).trim()
+		if (repoRoot) roots.push(repoRoot)
+	} catch {
+		/* not a git repo — intent-relative roots still apply */
+	}
+	if (existsSync(wtRoot)) roots.push(wtRoot)
+	return roots.filter((r) => existsSync(r))
+}
+
+/** Strip ONLY the final extension. `WorkerDates.test.ts` → `WorkerDates.test`,
+ *  `Foo.tsx` → `Foo`. So a `.test.ts` ↔ `.test.tsx` mismatch shares a stem,
+ *  and a plain `.ts` ↔ `.tsx` mismatch does too. A name with no extension is
+ *  returned unchanged. */
+function finalExtStem(name: string): string {
+	const dot = name.lastIndexOf(".")
+	return dot <= 0 ? name : name.slice(0, dot)
+}
+
+/** Intelligent repair for a declared output that isn't on disk at the path
+ *  the unit declared. The common cause is an extension typo — the agent
+ *  wrote `outputs: [.../WorkerDates.test.ts]` but the real file is
+ *  `WorkerDates.test.tsx` (it has JSX). This finds a sibling in the SAME
+ *  directory (across the same resolution roots `unitOutputExists` uses)
+ *  whose name matches the declared basename with ONLY the final extension
+ *  differing, and returns the corrected RELATIVE path (declared dirname +
+ *  real basename).
+ *
+ *  Returns null when there's no candidate, or when MORE THAN ONE distinct
+ *  candidate basename exists (ambiguous — don't guess; let the fix loop /
+ *  a human decide). Never mutates anything — the caller decides whether to
+ *  rewrite the declaration. */
+export function repairDeclaredOutput(
+	slug: string,
+	unit: string,
+	declaredPath: string,
+): string | null {
+	const declaredName = basename(declaredPath)
+	// No final extension → this isn't an extension typo (could be a prose
+	// entry or a directory). Refuse to guess.
+	if (finalExtStem(declaredName) === declaredName) return null
+	const declaredStem = finalExtStem(declaredName)
+	const declaredDir = dirname(declaredPath)
+	const candidates = new Set<string>()
+	for (const root of outputResolutionRoots(slug, unit)) {
+		const absDir = resolve(root, declaredDir)
+		if (!existsSync(absDir)) continue
+		let entries: string[]
+		try {
+			entries = readdirSync(absDir)
+		} catch {
+			continue
+		}
+		for (const entry of entries) {
+			if (entry === declaredName) continue
+			if (finalExtStem(entry) !== declaredStem) continue
+			if (!nonEmptyExists(join(absDir, entry))) continue
+			candidates.add(entry)
+		}
+	}
+	if (candidates.size !== 1) return null
+	const realName = [...candidates][0]
+	return declaredDir === "." ? realName : join(declaredDir, realName)
 }
 
 export function stageDir(slug: string, stage: string): string {
@@ -9976,12 +10052,60 @@ export function handleStateTool(
 				// stage output-template validation): check the unit's
 				// worktree first, then the parent intent dir, then the
 				// repo root for repo-relative paths.
+				// First pass: for each declared output that isn't on disk, try
+				// an INTELLIGENT REPAIR before blocking. The common cause is an
+				// extension typo — the agent declared `WorkerDates.test.ts` but
+				// shipped `WorkerDates.test.tsx` (it has JSX). `repairDeclaredOutput`
+				// finds a same-stem sibling differing only in the final extension
+				// and returns the corrected path; we rewrite the declaration in
+				// place so the terminal hat completes against reality instead of
+				// blocking on a one-character mistake. Genuinely-absent outputs
+				// (no sibling, or ambiguous) still block — that's a real "claimed
+				// an artifact it never produced" gap the agent must fix.
 				const missingOutputs: string[] = []
+				const repairedOutputs: Array<{ from: string; to: string }> = []
+				const correctedOutputs: string[] = []
 				for (const out of unitOutputsAfter) {
 					if (
-						!unitOutputExists(args.intent as string, args.unit as string, out)
+						unitOutputExists(args.intent as string, args.unit as string, out)
 					) {
+						correctedOutputs.push(out)
+						continue
+					}
+					const repaired = repairDeclaredOutput(
+						args.intent as string,
+						args.unit as string,
+						out,
+					)
+					if (repaired) {
+						repairedOutputs.push({ from: out, to: repaired })
+						correctedOutputs.push(repaired)
+					} else {
 						missingOutputs.push(out)
+						correctedOutputs.push(out)
+					}
+				}
+				// Persist any repairs to the unit spec so the corrected paths flow
+				// downstream (SPA preview, intent-close sweep, output coverage).
+				if (repairedOutputs.length > 0) {
+					try {
+						const repairRaw = readFileSync(advPath, "utf8")
+						const { data: repairData, content: repairContent } =
+							matter(repairRaw)
+						repairData.outputs = correctedOutputs
+						writeFileSync(advPath, matter.stringify(repairContent, repairData))
+						const sf = args.state_file as string | undefined
+						if (sf)
+							logSessionEvent(sf, {
+								event: "outputs_repaired",
+								intent: args.intent,
+								stage: advStage,
+								unit: args.unit,
+								repaired: repairedOutputs.length,
+							})
+					} catch {
+						/* best-effort; if the write fails the unblock just doesn't
+						 * persist and the next pass retries */
 					}
 				}
 				if (missingOutputs.length > 0) {
@@ -9998,7 +10122,7 @@ export function handleStateTool(
 						{
 							error: "unit_outputs_missing",
 							missing: missingOutputs,
-							message: `Cannot complete unit: ${missingOutputs.length} declared output(s) do not exist on disk: [${missingOutputs.map((p) => `'${p}'`).join(", ")}]. Each entry in \`outputs:\` MUST be a real file path. If you wrote prose (e.g. "Weekly carryover roll: scheduler trigger, idempotent roll logic"), that's a completion-criteria description, not an output path — move it to the body's \`## Completion Criteria\` section and let auto-populate fill \`outputs:\` from the actual git diff.`,
+							message: `Cannot complete unit: ${missingOutputs.length} declared output(s) do not exist on disk: [${missingOutputs.map((p) => `'${p}'`).join(", ")}]. Each entry in \`outputs:\` MUST be a real file path. If you wrote prose (e.g. "Weekly carryover roll: scheduler trigger, idempotent roll logic"), that's a completion-criteria description, not an output path — move it to the body's \`## Completion Criteria\` section and let auto-populate fill \`outputs:\` from the actual git diff. (No same-name file with a different extension was found, so this wasn't auto-repairable.)`,
 						},
 						{ isError: true },
 					)

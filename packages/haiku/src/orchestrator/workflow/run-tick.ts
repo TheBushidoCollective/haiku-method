@@ -39,10 +39,12 @@ import { killAllOrphanedMicroApps } from "../../micro-app.js"
 import { writeStatuslineSnapshot } from "../../statusline/snapshot.js"
 import { killAllOrphanedBootSessions } from "../../view-boot.js"
 import { hasV3CruftInIntent } from "../migrations/v0-to-v4.js"
+import { resolveIntentStages } from "../studio.js"
 import {
 	type CursorAction,
 	type CursorPosition,
 	derivePosition,
+	findCurrentStage,
 } from "./cursor.js"
 import {
 	buildLoopHaltAction,
@@ -57,6 +59,7 @@ import {
 	recoverStaleLeasedUnits,
 	resetLostUnits,
 } from "./unit-branch-recovery.js"
+import { autoRepairOrFileMissingOutputs } from "./validate-output-existence-gate.js"
 import { autoFileMalformedUnitInputs } from "./validate-unit-inputs-gate.js"
 import { ensureNonce } from "./verifier-nonce.js"
 
@@ -502,6 +505,35 @@ export function runWorkflowTick(
 		}
 	} catch (err) {
 		emitTelemetry("haiku.input_validation.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Intent-closeout output sweep: when ALL stages are complete the intent
+	// is wrapping up, so every unit's declared outputs SHOULD exist on disk.
+	// Re-validate them — the per-unit terminal-hat gate only checked at the
+	// moment each unit completed, and a later unit / fix-loop / merge can move
+	// or delete a file afterward, leaving a stale declaration the SPA surfaces
+	// as a phantom ("not on disk") but no gate caught. Near-miss extension
+	// typos self-repair in place; the rest become open feedback the fix loop
+	// resolves. Gated on closeout (findCurrentStage === null) so it never
+	// flags an in-flight unit whose output legitimately isn't written yet.
+	// Best-effort — never wedges the tick, never rewinds a stage.
+	try {
+		if (findCurrentStage(slug, studio, iDir) === null) {
+			const closeoutStages = resolveIntentStages(intentFm, studio)
+			const sweep = autoRepairOrFileMissingOutputs(slug, studio, closeoutStages)
+			if (sweep.repaired.length > 0 || sweep.filed.length > 0) {
+				emitTelemetry("haiku.output_validation.closeout_sweep", {
+					intent: slug,
+					repaired: String(sweep.repaired.length),
+					filed: String(sweep.filed.length),
+				})
+			}
+		}
+	} catch (err) {
+		emitTelemetry("haiku.output_validation.failed", {
 			intent: slug,
 			error: String((err as Error)?.message ?? err),
 		})

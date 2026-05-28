@@ -201,10 +201,10 @@ export class GitHubProvider implements BrowseProvider {
 	 *  can't reach parent-origin blob URLs or attach an auth header. Mirrors
 	 *  the artifact rawUrl scheme used at session build
 	 *  (raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>). */
-	async resolveAssetUrl(path: string): Promise<string | null> {
+	async resolveAssetUrl(path: string, ref?: string): Promise<string | null> {
 		try {
-			const ref = this.branch || "HEAD"
-			const url = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${encodeURIComponent(ref)}/${path}`
+			const refName = ref || this.branch || "HEAD"
+			const url = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${encodeURIComponent(refName)}/${path}`
 			const headers: Record<string, string> = {}
 			if (this.token) headers.Authorization = `Bearer ${this.token}`
 			const res = await fetch(url, { headers })
@@ -234,13 +234,14 @@ export class GitHubProvider implements BrowseProvider {
 		return result as T | undefined
 	}
 
-	async readFile(path: string): Promise<string | null> {
-		const cacheKey = `gh:${this.owner}/${this.repo}:readFile:${path}`
+	async readFile(path: string, ref?: string): Promise<string | null> {
+		const expression = ref ? `${ref}:${path}` : this.expr(path)
+		const cacheKey = `gh:${this.owner}/${this.repo}:readFile:${expression}`
 		const data = await this.cachedQuery<{
 			repository: { object: { text?: string | null } | null } | null
 		}>(
 			ReadFileQuery,
-			{ owner: this.owner, name: this.repo, expression: this.expr(path) },
+			{ owner: this.owner, name: this.repo, expression },
 			cacheKey,
 		)
 		return data?.repository?.object?.text ?? null

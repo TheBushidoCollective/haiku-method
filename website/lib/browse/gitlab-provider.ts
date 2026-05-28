@@ -255,11 +255,11 @@ export class GitLabProvider implements BrowseProvider {
 	 *  CSS/images load inside the sandboxed (opaque-origin) iframe, which
 	 *  can't reach parent-origin blob URLs or attach an auth header. Mirrors
 	 *  the artifact rawUrl scheme used at session build (files/:path/raw). */
-	async resolveAssetUrl(path: string): Promise<string | null> {
+	async resolveAssetUrl(path: string, ref?: string): Promise<string | null> {
 		try {
 			const encodedPath = encodeURIComponent(path)
-			const ref = this.branch || "HEAD"
-			const url = `https://${this.host}/api/v4/projects/${this.encodedProject}/repository/files/${encodedPath}/raw?ref=${encodeURIComponent(ref)}`
+			const refName = ref || this.branch || "HEAD"
+			const url = `https://${this.host}/api/v4/projects/${this.encodedProject}/repository/files/${encodedPath}/raw?ref=${encodeURIComponent(refName)}`
 			const res = await fetch(url, { headers: this.restHeaders() })
 			if (!res.ok) return null
 			return blobToDataUrl(await res.blob(), mimeFromPath(path))
@@ -286,8 +286,9 @@ export class GitLabProvider implements BrowseProvider {
 		return result as T | undefined
 	}
 
-	async readFile(path: string): Promise<string | null> {
-		const cacheKey = `gl:${this.host}:${this.projectPath}:readFile:${path}`
+	async readFile(path: string, ref?: string): Promise<string | null> {
+		const refName = ref ?? this.ref
+		const cacheKey = `gl:${this.host}:${this.projectPath}:readFile:${refName ?? "HEAD"}:${path}`
 		type ReadData = {
 			project: {
 				repository: {
@@ -302,7 +303,7 @@ export class GitLabProvider implements BrowseProvider {
 		}
 		const data = await this.cachedQuery<ReadData>(
 			ReadFileQuery,
-			{ fullPath: this.projectPath, paths: [path], ref: this.ref },
+			{ fullPath: this.projectPath, paths: [path], ref: refName },
 			cacheKey,
 		)
 		const nodes = data?.project?.repository?.blobs?.nodes

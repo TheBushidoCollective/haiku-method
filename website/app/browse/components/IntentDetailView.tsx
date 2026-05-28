@@ -235,6 +235,7 @@ export function IntentDetailView({
 				intentMode={intent.mode}
 				schemaIsV4={isV4Intent(intent.raw)}
 				provider={provider}
+				intentBranch={intent.branch}
 				assets={intent.assets}
 				host={host || undefined}
 				feedback={unitFeedback}
@@ -517,6 +518,7 @@ export function IntentDetailView({
 										provider={provider}
 										providerName={provider.name}
 										slug={intent.slug}
+										intentBranch={intent.branch}
 										studio={intent.studio}
 										host={host || undefined}
 										project={location?.project || ""}
@@ -1171,7 +1173,6 @@ function ArtifactThumbnail({
 	return null
 }
 
-
 /** Group a stage's artifacts by their top-level directory (`proof`, `artifacts`,
  *  …). Files that sit directly at the stage root (no slash in the name) land in
  *  the `(other)` group. Groups are sorted by name with `(other)` last so the
@@ -1321,11 +1322,13 @@ function UnitOutputsSection({
 	host,
 	provider,
 	slug,
+	intentBranch,
 }: {
 	units: HaikuUnit[]
 	host?: string
 	provider?: BrowseProvider
 	slug: string
+	intentBranch?: string
 }) {
 	// path → set of unit names that declare it
 	const byOutput = new Map<string, string[]>()
@@ -1366,6 +1369,7 @@ function UnitOutputsSection({
 					host={host}
 					provider={provider}
 					slug={slug}
+					intentBranch={intentBranch}
 				/>
 			))}
 		</div>
@@ -1383,12 +1387,14 @@ function LazyOutputPreview({
 	host,
 	provider,
 	slug,
+	intentBranch,
 }: {
 	path: string
 	unitNames: string[]
 	host?: string
 	provider?: BrowseProvider
 	slug: string
+	intentBranch?: string
 }) {
 	const [open, setOpen] = useState(false)
 	const [state, setState] = useState<{
@@ -1421,7 +1427,7 @@ function LazyOutputPreview({
 				if (isTextFile(path)) {
 					let text: string | null = null
 					for (const c of candidates) {
-						text = await provider.readFile(c)
+						text = await provider.readFile(c, intentBranch)
 						if (text != null) break
 					}
 					setState({
@@ -1437,7 +1443,7 @@ function LazyOutputPreview({
 					let url: string | null = null
 					if (provider.resolveAssetUrl) {
 						for (const c of candidates) {
-							url = await provider.resolveAssetUrl(c)
+							url = await provider.resolveAssetUrl(c, intentBranch)
 							if (url != null) break
 						}
 					}
@@ -1460,7 +1466,7 @@ function LazyOutputPreview({
 				})
 			}
 		})()
-	}, [open, provider, path, slug])
+	}, [open, provider, path, slug, intentBranch])
 
 	return (
 		<div className="rounded-lg border border-stone-200 dark:border-stone-700">
@@ -1483,9 +1489,7 @@ function LazyOutputPreview({
 			</button>
 			{open && (
 				<div className="border-t border-stone-100 p-4 dark:border-stone-800">
-					{state.loading && (
-						<p className="text-xs text-stone-400">Loading…</p>
-					)}
+					{state.loading && <p className="text-xs text-stone-400">Loading…</p>}
 					{!state.loading && state.error && (
 						<p className="text-xs text-stone-400">{state.error}</p>
 					)}
@@ -1642,6 +1646,7 @@ function StageDetail({
 	provider,
 	providerName,
 	slug,
+	intentBranch,
 	studio,
 	host,
 	project,
@@ -1652,6 +1657,9 @@ function StageDetail({
 	provider: BrowseProvider
 	providerName: string
 	slug: string
+	/** Branch the intent lives on (`haiku/<slug>/main`); lazy output reads
+	 *  target it so an unmerged intent's deliverables resolve. */
+	intentBranch?: string
 	/** Studio slug — links the stage to its definition in the studio browser. */
 	studio: string
 	host?: string
@@ -1667,7 +1675,9 @@ function StageDetail({
 	const stageRoot = `.haiku/intents/${slug}/stages/${stage.name}`
 	const artifactBaseDir = (name: string): string => {
 		const slash = name.lastIndexOf("/")
-		return slash >= 0 ? `${stageRoot}/${name.slice(0, slash + 1)}` : `${stageRoot}/`
+		return slash >= 0
+			? `${stageRoot}/${name.slice(0, slash + 1)}`
+			: `${stageRoot}/`
 	}
 	const hasUnits = stage.units.length > 0
 	const hasArtifacts = (stage.artifacts?.length ?? 0) > 0
@@ -1932,6 +1942,7 @@ function StageDetail({
 				host={host}
 				provider={provider}
 				slug={slug}
+				intentBranch={intentBranch}
 			/>
 			{/* Per-stage OBSERVATIONS — the agent's free-form reflection
 			    written at stage close. Shown last; it's a retrospective. */}
@@ -2342,7 +2353,10 @@ function FeedbackList({
 		"low",
 	]
 	const sevCounts = Object.fromEntries(
-		SEVERITIES.map((s) => [s, statusVisible.filter((f) => f.severity === s).length]),
+		SEVERITIES.map((s) => [
+			s,
+			statusVisible.filter((f) => f.severity === s).length,
+		]),
 	) as Record<"blocker" | "high" | "medium" | "low", number>
 	const hasSeverities = SEVERITIES.some((s) => sevCounts[s] > 0)
 	return (

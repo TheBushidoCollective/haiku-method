@@ -18,6 +18,7 @@ import type {
 import { formatDate, formatDuration } from "@/lib/browse/types"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
+import { FilePreview, isTextFile } from "./FilePreview"
 import { RESOLUTION_BADGES } from "./feedback-badges"
 import { FixHistory, HatHistory } from "./IterationHistory"
 import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
@@ -59,6 +60,10 @@ interface Props {
 	 *  rather than fabricating a matrix of never-signed gates. */
 	schemaIsV4: boolean
 	provider: BrowseProvider
+	/** Branch the intent lives on (`haiku/<slug>/main`); artifact reads target
+	 *  it so an unmerged intent's inputs/outputs resolve from where they live,
+	 *  not the default branch. */
+	intentBranch?: string
 	assets?: HaikuAsset[]
 	host?: string
 	feedback?: HaikuFeedback[]
@@ -74,6 +79,7 @@ export function UnitDetailView({
 	intentSlug,
 	intentMode,
 	provider,
+	intentBranch,
 	assets = [],
 	host,
 	feedback = [],
@@ -306,6 +312,7 @@ export function UnitDetailView({
 					paths={unit.inputs}
 					intentSlug={intentSlug}
 					provider={provider}
+					intentBranch={intentBranch}
 				/>
 			)}
 
@@ -316,6 +323,7 @@ export function UnitDetailView({
 					paths={unit.outputs}
 					intentSlug={intentSlug}
 					provider={provider}
+					intentBranch={intentBranch}
 				/>
 			)}
 
@@ -325,6 +333,7 @@ export function UnitDetailView({
 					refs={unit.refs}
 					intentSlug={intentSlug}
 					provider={provider}
+					intentBranch={intentBranch}
 					assets={assets}
 					host={host}
 				/>
@@ -508,34 +517,18 @@ function UnitFeedbackCard({ fb }: { fb: HaikuFeedback }) {
 	)
 }
 
-const TEXT_EXTENSIONS = new Set([
-	"md",
-	"json",
-	"yaml",
-	"yml",
-	"txt",
-	"toml",
-	"csv",
-	"xml",
-	"html",
-	"feature",
-])
-
-function isTextFile(path: string): boolean {
-	const ext = path.split(".").pop()?.toLowerCase() || ""
-	return TEXT_EXTENSIONS.has(ext)
-}
-
 function RefsSection({
 	refs,
 	intentSlug,
 	provider,
+	intentBranch,
 	assets,
 	host,
 }: {
 	refs: string[]
 	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 	assets: HaikuAsset[]
 	host?: string
 }) {
@@ -573,6 +566,7 @@ function RefsSection({
 								ref_={ref}
 								intentSlug={intentSlug}
 								provider={provider}
+								intentBranch={intentBranch}
 							/>
 						)
 					}
@@ -637,10 +631,12 @@ function TextRefItem({
 	ref_,
 	intentSlug,
 	provider,
+	intentBranch,
 }: {
 	ref_: string
 	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const [content, setContent] = useState<string | null>(null)
 	const [showModal, setShowModal] = useState(false)
@@ -655,6 +651,7 @@ function TextRefItem({
 		if (content === null) {
 			const raw = await provider.readFile(
 				`.haiku/intents/${intentSlug}/${ref_}`,
+				intentBranch,
 			)
 			setContent(raw || "(empty)")
 		}
@@ -774,9 +771,10 @@ function DocModal({
 					) : filePath.endsWith(".feature") ? (
 						<GherkinView content={content} />
 					) : (
-						<pre className="overflow-x-auto text-xs text-stone-600 dark:text-stone-400">
-							{content}
-						</pre>
+						// Source / config / text — FilePreview syntax-highlights code
+						// (its CODE_LANG map drives hljs) and falls back to a plain
+						// block for anything unmapped.
+						<FilePreview name={filePath} content={content} />
 					)}
 				</div>
 			</div>
@@ -1118,6 +1116,46 @@ function dirOf(path: string): string {
 	return path.includes("/") ? path.substring(0, path.lastIndexOf("/")) : ""
 }
 
+/** A unit's declared input/output path is EITHER repo-root-relative (a code
+ *  file the unit produced, e.g. `web/.../X.tsx`) OR intent-relative (a knowledge
+ *  artifact, e.g. `stages/<stage>/artifacts/plan.md`). Try as-is first (repo
+ *  root), then resolved under the intent dir — same resolution the stage view's
+ *  LazyOutputPreview uses, so both surfaces resolve both shapes. */
+function artifactCandidates(path: string, intentSlug: string): string[] {
+	if (path.startsWith(".haiku/")) return [path]
+	return [path, `.haiku/intents/${intentSlug}/${path}`]
+}
+
+/** Read the first candidate that resolves, from the intent's branch. */
+async function readArtifact(
+	provider: BrowseProvider,
+	path: string,
+	intentSlug: string,
+	ref?: string,
+): Promise<string | null> {
+	for (const c of artifactCandidates(path, intentSlug)) {
+		const text = await provider.readFile(c, ref)
+		if (text != null) return text
+	}
+	return null
+}
+
+/** Resolve the first candidate that yields a usable asset URL, from the
+ *  intent's branch. */
+async function resolveArtifactUrl(
+	provider: BrowseProvider,
+	path: string,
+	intentSlug: string,
+	ref?: string,
+): Promise<string | null> {
+	if (!provider.resolveAssetUrl) return null
+	for (const c of artifactCandidates(path, intentSlug)) {
+		const url = await provider.resolveAssetUrl(c, ref)
+		if (url != null) return url
+	}
+	return null
+}
+
 /**
  * A unit's intent-relative artifact paths (`.haiku/intents/<slug>/<path>`),
  * made viewable — used for both `inputs` (consumed) and `outputs` (produced).
@@ -1132,12 +1170,14 @@ function ArtifactsSection({
 	paths,
 	intentSlug,
 	provider,
+	intentBranch,
 }: {
 	/** Singular section noun, e.g. "Output" / "Input". */
 	noun: string
 	paths: string[]
 	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const intentPrefix = `.haiku/intents/${intentSlug}/`
 	const classified = paths.map((path) => ({
@@ -1164,16 +1204,18 @@ function ArtifactsSection({
 								<OutputImageCard
 									key={o.path}
 									path={o.path}
-									repoPath={`${intentPrefix}${o.path}`}
+									intentSlug={intentSlug}
 									provider={provider}
+									intentBranch={intentBranch}
 								/>
 							) : (
 								<OutputHtmlCard
 									key={o.path}
 									path={o.path}
-									repoPath={`${intentPrefix}${o.path}`}
+									intentSlug={intentSlug}
 									baseDir={`${intentPrefix}${dirOf(o.path)}${dirOf(o.path) ? "/" : ""}`}
 									provider={provider}
+									intentBranch={intentBranch}
 								/>
 							),
 						)}
@@ -1191,15 +1233,17 @@ function ArtifactsSection({
 								<OutputTextItem
 									key={o.path}
 									path={o.path}
-									repoPath={`${intentPrefix}${o.path}`}
+									intentSlug={intentSlug}
 									provider={provider}
+									intentBranch={intentBranch}
 								/>
 							) : (
 								<OutputDownloadItem
 									key={o.path}
 									path={o.path}
-									repoPath={`${intentPrefix}${o.path}`}
+									intentSlug={intentSlug}
 									provider={provider}
+									intentBranch={intentBranch}
 								/>
 							),
 						)}
@@ -1214,24 +1258,26 @@ function ArtifactsSection({
  *  private git repo) and previews it; click to view fullscreen. */
 function OutputImageCard({
 	path,
-	repoPath,
+	intentSlug,
 	provider,
+	intentBranch,
 }: {
 	path: string
-	repoPath: string
+	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const [url, setUrl] = useState<string | null>(null)
 	const [full, setFull] = useState(false)
 	useEffect(() => {
 		let cancelled = false
-		provider.resolveAssetUrl?.(repoPath).then((u) => {
+		resolveArtifactUrl(provider, path, intentSlug, intentBranch).then((u) => {
 			if (!cancelled) setUrl(u)
 		})
 		return () => {
 			cancelled = true
 		}
-	}, [repoPath, provider])
+	}, [path, intentSlug, provider, intentBranch])
 	return (
 		<>
 			<button
@@ -1275,14 +1321,16 @@ function OutputImageCard({
  *  relative assets resolved; click to view fullscreen. */
 function OutputHtmlCard({
 	path,
-	repoPath,
+	intentSlug,
 	baseDir,
 	provider,
+	intentBranch,
 }: {
 	path: string
-	repoPath: string
+	intentSlug: string
 	baseDir: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const [html, setHtml] = useState<string | null>(null)
 	const [full, setFull] = useState(false)
@@ -1294,7 +1342,12 @@ function OutputHtmlCard({
 		// the host flags an HTML file as binary/large, leaving the frame
 		// blank. Fall back to readFile only if the raw path is unavailable.
 		const load = async (): Promise<string | null> => {
-			const url = await provider.resolveAssetUrl?.(repoPath)
+			const url = await resolveArtifactUrl(
+				provider,
+				path,
+				intentSlug,
+				intentBranch,
+			)
 			if (url) {
 				try {
 					return await (await fetch(url)).text()
@@ -1302,7 +1355,7 @@ function OutputHtmlCard({
 					/* fall through to readFile */
 				}
 			}
-			return provider.readFile(repoPath)
+			return readArtifact(provider, path, intentSlug, intentBranch)
 		}
 		load().then((c) => {
 			if (!cancelled) setHtml(c)
@@ -1310,7 +1363,7 @@ function OutputHtmlCard({
 		return () => {
 			cancelled = true
 		}
-	}, [repoPath, provider])
+	}, [path, intentSlug, provider, intentBranch])
 	return (
 		<>
 			<button
@@ -1373,19 +1426,24 @@ function OutputHtmlCard({
 /** Text output — reads the source and opens it in the shared doc modal. */
 function OutputTextItem({
 	path,
-	repoPath,
+	intentSlug,
 	provider,
+	intentBranch,
 }: {
 	path: string
-	repoPath: string
+	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const [content, setContent] = useState<string | null>(null)
 	const [open, setOpen] = useState(false)
 	const isMarkdown = path.endsWith(".md")
 	const handleOpen = async () => {
 		if (content === null) {
-			setContent((await provider.readFile(repoPath)) || "(empty)")
+			setContent(
+				(await readArtifact(provider, path, intentSlug, intentBranch)) ||
+					"(empty)",
+			)
 		}
 		setOpen(true)
 	}
@@ -1435,23 +1493,25 @@ function OutputTextItem({
 /** Binary / unrecognized output — resolve to a data URL for download. */
 function OutputDownloadItem({
 	path,
-	repoPath,
+	intentSlug,
 	provider,
+	intentBranch,
 }: {
 	path: string
-	repoPath: string
+	intentSlug: string
 	provider: BrowseProvider
+	intentBranch?: string
 }) {
 	const [url, setUrl] = useState<string | null>(null)
 	useEffect(() => {
 		let cancelled = false
-		provider.resolveAssetUrl?.(repoPath).then((u) => {
+		resolveArtifactUrl(provider, path, intentSlug, intentBranch).then((u) => {
 			if (!cancelled) setUrl(u)
 		})
 		return () => {
 			cancelled = true
 		}
-	}, [repoPath, provider])
+	}, [path, intentSlug, provider, intentBranch])
 	const inner = (
 		<>
 			<svg

@@ -890,6 +890,14 @@ export function PortfolioView({
 													{intent.mode}
 												</strong>
 											</span>
+											{(intent.createdAt || intent.startedAt) && (
+												<span>
+													Created:{" "}
+													<strong className="text-stone-700 dark:text-stone-300">
+														{formatDate(intent.createdAt ?? intent.startedAt)}
+													</strong>
+												</span>
+											)}
 											{intent.branch && (
 												<span
 													className="font-mono text-xs text-stone-400 dark:text-stone-500"

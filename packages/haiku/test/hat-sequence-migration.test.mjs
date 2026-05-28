@@ -278,3 +278,53 @@ test("strips feedback-assessor from a unit — it's a fix hat, never a unit hat"
 		rmSync(tmp, { recursive: true, force: true })
 	}
 })
+
+test("feedback iterations: keeps fix_hats, strips a unit-rotation hat", async () => {
+	// development fix_hats: [classifier, builder, feedback-assessor].
+	// A stage FB whose iterations include a UNIT hat (reviewer) must have it
+	// stripped — units run reviewer, fix loops don't. The fix-hat tail stays.
+	const slug = "fb-val"
+	const tmp = mkdtempSync(join(tmpdir(), "haiku-fbval-"))
+	const iDir = join(tmp, ".haiku", "intents", slug)
+	const fbDir = join(iDir, "stages", "development", "feedback")
+	mkdirSync(fbDir, { recursive: true })
+	writeFileSync(
+		join(iDir, "intent.md"),
+		matter.stringify("# t\n", {
+			title: "t",
+			studio: "software",
+			mode: "continuous",
+			stages: ["development"],
+		}),
+	)
+	writeFileSync(
+		join(fbDir, "FB-001.md"),
+		matter.stringify("# fb\n", {
+			title: "fb",
+			iterations: [adv("classifier"), adv("builder"), adv("reviewer")],
+		}),
+	)
+	const orig = process.cwd()
+	try {
+		process.chdir(tmp)
+		const { reconcileOrphanedHatSequences } = await import(
+			`${SRC}/orchestrator/workflow/hat-sequence-migration.ts`
+		)
+		const res = reconcileOrphanedHatSequences(slug)
+		assert.deepStrictEqual(res.reconciled, ["development/feedback/FB-001"])
+		const iters = matter(readFileSync(join(fbDir, "FB-001.md"), "utf8")).data
+			.iterations
+		assert.deepStrictEqual(
+			iters.map((i) => i.hat),
+			["classifier", "builder"],
+			"unit-rotation hat (reviewer) stripped; fix_hats kept",
+		)
+	} finally {
+		try {
+			process.chdir(orig)
+		} catch {
+			process.chdir(tmpdir())
+		}
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})

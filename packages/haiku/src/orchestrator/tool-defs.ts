@@ -37,6 +37,7 @@ import {
 	HAIKU_STAGE_RESET_INPUT_SCHEMA,
 	HAIKU_UNIT_RESET_INPUT_SCHEMA,
 	HAIKU_UPLOAD_PROOF_INPUT_SCHEMA,
+	HAIKU_WRITE_BRIEF_INPUT_SCHEMA,
 } from "../state/schemas/index.js"
 import { jsonSchemaOf } from "../state/schemas/inputs/_validate.js"
 
@@ -64,6 +65,12 @@ export const orchestratorToolDefs = [
 		description:
 			"Upload a runtime-verification proof file to the intent's / stage's change request over the provider REST API. GitHub → release asset; GitLab → project uploads API + MR-ready markdown ref. Provider is detected from the repo origin; the bearer comes from ~/.haiku/settings.json (run haiku_auth_login first). Returns the durable proof URL.",
 		inputSchema: jsonSchemaOf(HAIKU_UPLOAD_PROOF_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_write_brief",
+		description:
+			"Write the current stage's user-facing BRIEF.md. Supply ONLY the markdown body (no frontmatter, no intent, no stage). The engine resolves the intent + stage from the current cursor position and stamps the `phase:` frontmatter itself — `pre` for the first write (the plan) and `post` when rewriting the existing brief at stage finish (what shipped). Called in-flow during the `write_brief` cursor action; the action's `phase` tells you which prose to write, but you never specify it.",
+		inputSchema: jsonSchemaOf(HAIKU_WRITE_BRIEF_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_run_next",

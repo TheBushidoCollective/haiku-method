@@ -18,17 +18,9 @@ Read what the stage actually produced, so the brief reflects reality, not the pl
 
 ## What to write
 
-Rewrite `BRIEF.md` with the Write tool at the stage root — `.haiku/intents/<%= slug %>/stages/<%= stage %>/BRIEF.md`. Overwrite the existing file in place. Start the file with a YAML frontmatter block whose first key is `phase: post`:
+Write the brief by calling `haiku_write_brief { body: "<the prose below>" }`. Pass ONLY the prose body — no frontmatter, no `---` block, no intent, no stage, no file path. The engine resolves the intent + stage from where you are and stamps the phase itself (it sees the brief already exists from the pre-execute write, so it marks this one as the closing brief). Don't use the Write tool and don't touch the file directly.
 
-```
----
-phase: post
----
-```
-
-> **Path is repo-relative — the project working tree, NOT the engine metadata dir.** Write under your repo root, into the same `.haiku/intents/<%= slug %>/` tree that already holds `units/` and `feedback/`. Do **NOT** write it into the `~/.haiku/projects/…` directory where this prompt file lives (that's engine bookkeeping; the engine reads `BRIEF.md` only from the repo tree, so a file written to the metadata dir is invisible).
-
-Shape it for a human skim, in plain prose with light headings:
+Shape the body for a human skim, in plain prose with light headings:
 
 - **What this stage delivered** — one or two sentences a non-engineer understands, in the past tense.
 - **Why it matters** — the value it added or the problem it solved for the user.
@@ -37,14 +29,10 @@ Shape it for a human skim, in plain prose with light headings:
 
 Keep it tight. It's a brief, not a report — favor a page the reviewer actually reads over an exhaustive one they skim past.
 
-## The phase signal
-
-The `phase: post` frontmatter you stamp at the top of `BRIEF.md` IS how the engine knows the closing brief is finalized — there is no separate marker file. The pre-execute brief carried `phase: pre`; rewriting the file with `phase: post` flips the gate off, and the next tick advances the stage to close. If you omit it (or leave `phase: pre`), the cursor re-emits the closing brief.
-
 ## Rules
 
-- The brief is USER-FACING. No other agent will ever read it — write for the human, not for the workflow. The `phase:` frontmatter is the only non-prose line; everything below it is for the human.
-- You only WRITE `BRIEF.md`. Do not modify any unit, the intent, feedback, or any code.
+- The brief is USER-FACING. No other agent will ever read it — write for the human, not for the workflow.
+- You only call `haiku_write_brief`. Do not modify any unit, the intent, feedback, or any code.
 - When done, your final message is one line: `rewrote BRIEF.md for <%= stage %> (post-execute)`.
 <% } else { %>
 # Briefer — write the user-facing brief for stage `<%= stage %>`
@@ -66,19 +54,9 @@ This is the one place where a wide read is the job — gather everything that ex
 
 ## What to write
 
-Write `BRIEF.md` with the Write tool at the stage root — `.haiku/intents/<%= slug %>/stages/<%= stage %>/BRIEF.md`. Start the file with a YAML frontmatter block whose first key is `phase: pre`:
+Write the brief by calling `haiku_write_brief { body: "<the prose below>" }`. Pass ONLY the prose body — no frontmatter, no `---` block, no intent, no stage, no file path. The engine resolves the intent + stage from where you are and stamps the phase itself (this is the first brief, so it marks it as the plan). Don't use the Write tool and don't touch the file directly.
 
-```
----
-phase: pre
----
-```
-
-That `phase:` line is the engine's signal for which brief this is — it stays `pre` until the stage finishes building, when the closing brief rewrites the file with `phase: post`. Everything below the frontmatter is human-facing prose.
-
-> **Path is repo-relative — the project working tree, NOT the engine metadata dir.** Write under your repo root, into the same `.haiku/intents/<%= slug %>/` tree that already holds `units/` and `feedback/`. Do **NOT** write it into the `~/.haiku/projects/…` directory where this prompt file lives (that's engine bookkeeping; the engine reads `BRIEF.md` only from the repo tree, so a file written to the metadata dir is invisible — the cursor will re-emit `write_brief` and make no progress).
-
-Shape it for a human skim, in plain prose with light headings:
+Shape the body for a human skim, in plain prose with light headings:
 
 - **What this stage delivers** — one or two sentences a non-engineer understands.
 - **Why it matters** — the value or the problem it solves for the user.
@@ -91,6 +69,6 @@ Keep it tight. It's a brief, not a report — favor a page the reviewer actually
 ## Rules
 
 - The brief is USER-FACING. No other agent will ever read it — write for the human, not for the workflow.
-- You only WRITE `BRIEF.md`. Do not modify any unit, the intent, feedback, or any code.
+- You only call `haiku_write_brief`. Do not modify any unit, the intent, feedback, or any code.
 - When done, your final message is one line: `wrote BRIEF.md for <%= stage %>`.
 <% } %>

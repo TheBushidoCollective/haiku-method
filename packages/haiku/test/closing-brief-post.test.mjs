@@ -42,6 +42,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs"
@@ -225,7 +226,7 @@ test("cursor (non-autopilot): adversarial+qg signed, user pending, BRIEF exists,
 		onStageBranch(repoRoot, slug, "design", () => {
 			writeFileSync(
 				join(intentDir, "stages", "design", "BRIEF.md"),
-				"---\nphase: pre\n---\n# Brief\nWhat this stage will deliver.\n",
+				matter.stringify("# Brief\nWhat this stage will deliver.\n", { phase: "pre" }),
 			)
 		})
 
@@ -252,7 +253,7 @@ test("cursor (non-autopilot): once BRIEF.md frontmatter is phase: post → falls
 			// signal that flips the closing-brief gate off.
 			writeFileSync(
 				join(intentDir, "stages", "design", "BRIEF.md"),
-				"---\nphase: post\n---\n# Brief\nWhat this stage delivered.\n",
+				matter.stringify("# Brief\nWhat this stage delivered.\n", { phase: "post" }),
 			)
 		})
 
@@ -302,7 +303,7 @@ test("run_next (autopilot): user signed, BRIEF exists, no marker → write_brief
 		onStageBranch(repoRoot, slug, "design", () => {
 			writeFileSync(
 				join(intentDir, "stages", "design", "BRIEF.md"),
-				"---\nphase: pre\n---\n# Brief\nWhat this stage will deliver.\n",
+				matter.stringify("# Brief\nWhat this stage will deliver.\n", { phase: "pre" }),
 			)
 		})
 
@@ -339,7 +340,7 @@ test("run_next (autopilot): once BRIEF.md frontmatter is phase: post → closing
 			// signal that flips the closing-brief gate off on the merge path.
 			writeFileSync(
 				join(intentDir, "stages", "design", "BRIEF.md"),
-				"---\nphase: post\n---\n# Brief\nWhat this stage delivered.\n",
+				matter.stringify("# Brief\nWhat this stage delivered.\n", { phase: "post" }),
 			)
 		})
 
@@ -402,3 +403,66 @@ test("cursor: pre-execute brief still fires with phase: pre (no regression)", as
 // existsSync imported for parity with the run_next surface helpers; referenced
 // here to keep the import meaningful if future assertions check landed files.
 void existsSync
+
+// ── haiku_write_brief tool: engine-owned phase determination ──────────────
+
+test("haiku_write_brief: body-only — engine resolves intent+stage, stamps pre then post", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo("write-brief-tool", async ({ repoRoot, intentDir, slug }) => {
+		twoStageStudio(repoRoot)
+		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
+		const { default: writeBrief } = await import(
+			"../src/tools/orchestrator/haiku_write_brief.ts"
+		)
+		const briefPath = join(intentDir, "stages", "design", "BRIEF.md")
+		const origCwd = process.cwd()
+		// On `haiku/<slug>/main` (initTestRepo's checkout) the engine resolves
+		// the intent from the branch and the stage from the cursor — the agent
+		// passes ONLY the body.
+		process.chdir(repoRoot)
+		try {
+			const r1 = JSON.parse(
+				writeBrief.handle({ body: "# Brief\nWhat this stage will deliver.\n" })
+					.content[0].text,
+			)
+			assert.strictEqual(r1.slug, slug, "engine resolves intent from branch")
+			assert.strictEqual(r1.stage, "design", "engine resolves stage from cursor")
+			assert.strictEqual(r1.phase, "pre", "first write must be pre")
+			const fm1 = matter(readFileSync(briefPath, "utf8")).data
+			assert.strictEqual(fm1.phase, "pre", "on-disk frontmatter must be pre")
+
+			// Second call: BRIEF.md exists → engine stamps phase: post.
+			const r2 = JSON.parse(
+				writeBrief.handle({ body: "# Brief\nWhat this stage delivered.\n" })
+					.content[0].text,
+			)
+			assert.strictEqual(r2.phase, "post", "rewrite must be post")
+			const parsed2 = matter(readFileSync(briefPath, "utf8"))
+			assert.strictEqual(parsed2.data.phase, "post", "frontmatter must flip to post")
+			assert.match(parsed2.content, /What this stage delivered/, "body must update")
+		} finally {
+			process.chdir(origCwd)
+		}
+	})
+})
+
+test("haiku_write_brief: no intent on disk returns intent_not_found", async () => {
+	if (!HAS_GIT) return
+	// initTestRepo checks out `haiku/<slug>/main` but we never makeIntent, so
+	// the branch resolves a slug with no intent.md behind it.
+	await withTmpRepo("write-brief-missing", async ({ repoRoot }) => {
+		const { default: writeBrief } = await import(
+			"../src/tools/orchestrator/haiku_write_brief.ts"
+		)
+		const origCwd = process.cwd()
+		process.chdir(repoRoot)
+		try {
+			const resp = writeBrief.handle({ body: "# x\n" })
+			assert.strictEqual(resp.isError, true)
+			assert.match(resp.content[0].text, /intent_not_found/)
+		} finally {
+			process.chdir(origCwd)
+		}
+	})
+})

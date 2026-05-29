@@ -1,20 +1,18 @@
 #!/usr/bin/env npx tsx
 // write-brief-path.test.mjs
 //
-// Regression for the 2026-05-26 bug: the briefer subagent wrote BRIEF.md
-// to the GLOBAL haiku dir (~/.haiku/projects/…, where the prompt file
-// itself lives in dev mode) instead of the repo's stage dir. Root cause:
-// the prompt said "Write BRIEF.md at the stage root — stages/<stage>/BRIEF.md",
-// dropping the `.haiku/intents/<slug>/` prefix. The agent writes it with
-// the generic Write tool, so the under-specified relative path resolved
-// outside the repo.
+// The 2026-05-26 bug class: the briefer subagent wrote BRIEF.md with the
+// generic Write tool, and an under-specified relative path resolved outside
+// the repo (into the GLOBAL ~/.haiku/projects/… dir where the prompt file
+// lives in dev mode), so the engine never saw it and the cursor re-emitted
+// write_brief forever.
 //
-// The engine ONLY reads BRIEF.md from `.haiku/intents/<slug>/stages/<stage>/
-// BRIEF.md` (cursor `stillOwesBrief`, session-api, and the guard regex), so
-// a brief written anywhere else is invisible and the cursor re-emits
-// write_brief forever. This test pins that the subagent prompt names the
-// full repo-relative path and warns against the metadata dir — matching the
-// fix already in record_observations.
+// The 2026-05-29 redesign eliminates that class structurally: the briefer
+// calls the `haiku_write_brief { body }` tool and the ENGINE writes BRIEF.md
+// to the canonical `.haiku/intents/<slug>/stages/<stage>/BRIEF.md` path it
+// reads from — the agent never names a path, so it can never get it wrong.
+// This test now pins that NEW contract: the prompt routes through the tool
+// (body only) and does NOT instruct a direct file write.
 
 import assert from "node:assert/strict"
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
@@ -45,36 +43,35 @@ function briefSubagentBody(slug = "demo-intent", stage = "design") {
 	)
 }
 
-test("briefer prompt names the FULL repo-relative BRIEF.md path", async () => {
+test("briefer prompt routes through haiku_write_brief with body only", async () => {
 	const body = await briefSubagentBody("demo-intent", "design")
 	assert.match(
 		body,
-		/\.haiku\/intents\/demo-intent\/stages\/design\/BRIEF\.md/,
-		"must name the full `.haiku/intents/<slug>/stages/<stage>/BRIEF.md` path the engine reads",
+		/haiku_write_brief\s*\{\s*body:/,
+		"must instruct calling `haiku_write_brief { body: … }`",
 	)
 })
 
-test("briefer prompt does NOT use the prefix-less `stages/<stage>/BRIEF.md` (the bug)", async () => {
+test("briefer prompt does NOT hand the agent a BRIEF.md filesystem path", async () => {
 	const body = await briefSubagentBody("demo-intent", "design")
-	// The truncated form must not appear except as the tail of the full
-	// path. Strip the full paths, then assert no bare occurrence remains.
-	const withoutFull = body.replace(
-		/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/BRIEF\.md/g,
-		"",
-	)
+	// The engine owns the path now — the prompt must not name any BRIEF.md
+	// filesystem path for the agent to write to. (Telling the agent NOT to use
+	// the Write tool is fine and expected; we only forbid a positive path.)
 	assert.doesNotMatch(
-		withoutFull,
-		/(^|[^/])stages\/[^/]*\/BRIEF\.md/,
-		"must not tell the agent to write a prefix-less stages/<stage>/BRIEF.md",
+		body,
+		/stages\/[^/]*\/BRIEF\.md|\.haiku\/intents\/[^/]*\/.*BRIEF\.md/,
+		"prompt must not name a BRIEF.md path — that's the tool's job",
 	)
 })
 
-test("briefer prompt warns against the global ~/.haiku metadata dir", async () => {
+test("briefer prompt does NOT make the agent specify intent/stage/phase", async () => {
 	const body = await briefSubagentBody("demo-intent", "design")
-	assert.match(
+	// Those are engine-resolved (intent from branch, stage from cursor, phase
+	// from file existence). The tool call the prompt shows must be body-only.
+	assert.doesNotMatch(
 		body,
-		/~\/\.haiku\/projects|metadata dir|repo-relative/i,
-		"must warn the brief is repo-relative, not the ~/.haiku metadata dir",
+		/haiku_write_brief\s*\{[^}]*\b(intent|stage|phase)\s*:/,
+		"the haiku_write_brief call must pass body only — no intent/stage/phase",
 	)
 })
 

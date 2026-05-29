@@ -685,30 +685,18 @@ export async function runTickWithBranchAlignment(
 		if (pendingMergeStage) return pendingMergeStage
 		const action = dispatchOrchestratorAction(slug, "")
 		if (autoBrief && action?.action === "write_brief" && action.stage) {
-			// Briefer stand-in: write BRIEF.md on the (already-aligned) stage
-			// branch, then re-tick. Writing the brief doesn't move the active
-			// stage, so alignment stays put and the next walk sees the file.
-			const briefPath = join(
-				repoRoot,
-				".haiku",
-				"intents",
-				slug,
-				"stages",
-				action.stage,
-				"BRIEF.md",
+			// Briefer stand-in: call the real haiku_write_brief tool with body
+			// only. The engine stamps the `phase:` frontmatter (pre/post) itself
+			// and commits on the aligned stage branch — so we exercise the same
+			// path production does, and the closing-brief gate clears. Writing
+			// the brief doesn't move the active stage, so alignment stays put
+			// and the next walk sees the file.
+			const { default: writeBrief } = await import(
+				"../src/tools/orchestrator/haiku_write_brief.ts"
 			)
-			writeFileSync(briefPath, "# Brief (test fixture)\n")
-			// Commit on the (already-aligned) stage branch — mirrors the
-			// brief being committed with the stage in production.
-			try {
-				execFileSync("git", ["add", "-A"], { cwd: repoRoot, stdio: "ignore" })
-				execFileSync("git", ["commit", "-q", "-m", "test: stage brief"], {
-					cwd: repoRoot,
-					stdio: "ignore",
-				})
-			} catch {
-				/* filesystem-mode or nothing to commit — non-fatal */
-			}
+			// Body only — the tool resolves intent + stage from the aligned
+			// branch / cursor, exactly as it does in production.
+			await writeBrief.handle({ body: "# Brief (test fixture)\n" })
 			// Re-dispatch in place: we're already on the aligned branch with
 			// BRIEF.md on disk, so the cursor advances past the brief without
 			// re-running the branch reconciliation dance.

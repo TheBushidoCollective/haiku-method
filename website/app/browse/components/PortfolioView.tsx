@@ -640,6 +640,7 @@ export function PortfolioView({
 				provider={provider}
 				location={location}
 				initialStage={location?.stage}
+				initialFeedback={location?.feedback}
 				onBack={handleBackFromIntent}
 			/>
 		)

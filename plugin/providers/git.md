@@ -35,9 +35,11 @@ The engine also opens a per-stage draft PR at stage start (base = `haiku/<slug>/
 
 ## Proof asset uploads (runtime-verification evidence)
 
-Runtime-verification proof (screenshots, video) is **gitignored** — it's regenerated every run and committing it bloats history. It does not travel on a branch merge, so a runtime-verifier uploads it to the relevant PR/MR to make it durable and reviewable. The two hosts differ:
+Runtime-verification proof (screenshots, video) is **gitignored** — it's regenerated every run and committing it bloats history. It does not travel on a branch merge, so a runtime-verifier uploads it to the relevant PR/MR to make it durable and reviewable.
 
-- **GitLab** — first-class: `glab` / `POST /projects/:id/uploads` returns a markdown snippet to embed in the MR description or a note. Access-controlled by project visibility.
+The engine-preferred path is the **`haiku_upload_proof`** tool: it detects the repo's provider, **authenticates when needed** through the haikumethod.ai OAuth broker (no pre-call to an auth tool), and posts the file to the change request over the provider REST API — GitHub **release asset**, GitLab **project-uploads** (returns a markdown ref). It returns the durable URL. The CLI is the fallback when the tool reports `proof_upload_auth_unavailable` (broker unreachable / no provider):
+
+- **GitLab** — `glab` / `POST /projects/:id/uploads` returns a markdown snippet to embed in the MR description or a note. Access-controlled by project visibility.
 - **GitHub** — no inline-attachment API. Attach captures as **release assets** (`gh release upload`) or push to an artifact bucket, then link them from the PR body. (Inline image paste is web-UI-only; a bot can't drive it. Note: GitHub's `user-attachments` CDN URLs are anonymized — anyone with the link can view, even for a private repo.)
 
 Keep uploads idempotent — replace the PR's "Proof" section on re-run rather than stacking duplicates.

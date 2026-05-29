@@ -6,6 +6,30 @@ import { stateAjv } from "../_ajv.js"
 
 const stateFile = Type.Optional(Type.String())
 
+// ── haiku_write_brief ───────────────────────────────────────────────
+//
+// Writes the current stage's user-facing BRIEF.md. The agent supplies ONLY
+// the prose body — everything else is engine-owned: the intent resolves from
+// the current branch (or sole active intent in filesystem mode), the stage
+// from the cursor's position, and the `phase:` frontmatter from whether
+// BRIEF.md already exists (absent → pre, present → post). This tool is only
+// ever called in-flow, so the engine always knows where it is.
+
+export const HAIKU_WRITE_BRIEF_INPUT_SCHEMA = Type.Object(
+	{
+		body: Type.String({
+			minLength: 1,
+			description:
+				"Markdown body of the brief (human-facing prose, no frontmatter). The engine resolves the intent + stage from the current cursor position and stamps the phase frontmatter; do not include a `---` block, an intent, or a stage yourself.",
+		}),
+	},
+	{ additionalProperties: false },
+)
+export type HaikuWriteBriefInput = Static<typeof HAIKU_WRITE_BRIEF_INPUT_SCHEMA>
+export const validateHaikuWriteBriefInputSchema = stateAjv.compile(
+	HAIKU_WRITE_BRIEF_INPUT_SCHEMA,
+)
+
 // ── haiku_stage_elaboration_record ──────────────────────────────────
 //
 // Captures the per-stage human-conversation outcome on disk at

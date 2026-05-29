@@ -23,13 +23,11 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { deleteStageBranch, ensureOnStageBranch } from "../../git-worktree.js"
 import {
-	resolveIntentStages,
+	findCurrentStageFromMain,
+	resolveCanonicalIntentStages,
 	resolveStageOptional,
 } from "../../orchestrator/studio.js"
-import {
-	findCurrentStage,
-	listUnitPaths,
-} from "../../orchestrator/workflow/cursor.js"
+import { listUnitPaths } from "../../orchestrator/workflow/cursor.js"
 import {
 	HAIKU_DROP_STAGE_INPUT_SCHEMA,
 	type HaikuDropStageInput,
@@ -89,8 +87,14 @@ export default defineTool({
 		}
 
 		// Guard 1 — the stage must be the intent's ACTIVE stage. Drop is an
-		// at-arrival decision; the cursor must currently be on it.
-		const activeStage = findCurrentStage(slug, studio, iDir) ?? ""
+		// at-arrival decision; the cursor must currently be on it. Resolve the
+		// active stage from the CANONICAL (intent-main) plan, NOT the current
+		// branch checkout — the deadlock that motivates this fix is exactly the
+		// two disagreeing: haiku_run_next reads main and keeps arriving at the
+		// dropped stage, while this guard read the diverged stage branch (where
+		// the old buggy drop already removed it) and refused as not-active. Both
+		// now read main, so they agree.
+		const activeStage = findCurrentStageFromMain(slug, studio) ?? ""
 		if (stage !== activeStage) {
 			return text(
 				JSON.stringify({
@@ -129,7 +133,7 @@ export default defineTool({
 		// materializes the current plan (handles a legacy intent whose `stages`
 		// wasn't materialized yet); filtering out `stage` both materializes AND
 		// drops in one write.
-		const planStages = resolveIntentStages(intentFm, studio)
+		const planStages = resolveCanonicalIntentStages(slug, studio, intentFm)
 		const droppedIdx = planStages.indexOf(stage)
 		const nextStage = planStages[droppedIdx + 1]
 		const nextStages = planStages.filter((s) => s !== stage)

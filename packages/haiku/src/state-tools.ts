@@ -32,6 +32,7 @@ import { classifyGateRun } from "./gate-environment.js"
 import { buildFbHatDispatchBlock } from "./orchestrator/fb-dispatch-builder.js"
 import { resolveRejectTarget } from "./orchestrator/hat-loop-routing.js"
 import {
+	resolveActiveStageWithFallback,
 	resolveIntentStages,
 	resolveStageFixHats,
 	resolveStudioFixHats,
@@ -86,7 +87,7 @@ import {
 	listOrphanDiscreteIntents,
 	mergeFixChainWorktree,
 	mergeUnitWorktree,
-	openPullRequest,
+	openPullRequestCli,
 	pushFixChainWorktree,
 	pushUnitWorktree,
 	readFileFromBranch,
@@ -1585,7 +1586,7 @@ function repairAllBranches(autoApply: boolean): {
 				summary.pushError = push.pushError
 				if (push.committed && push.pushed && wasAlreadyMerged) {
 					summary.merged = true
-					const prResult = openPullRequest(
+					const prResult = openPullRequestCli(
 						branch,
 						mainline,
 						`repair: metadata fixes for ${slug}`,
@@ -1698,7 +1699,7 @@ function repairArchivedOnMainline(
 			summary.pushError = push.pushError
 
 			if (push.committed && push.pushed) {
-				const prResult = openPullRequest(
+				const prResult = openPullRequestCli(
 					repairBranch,
 					mainline,
 					"repair: metadata fixes for archived intents",
@@ -5019,11 +5020,12 @@ function injectPushWarning(
 
 /** Resolve the active stage for an intent from its frontmatter */
 function resolveActiveStage(intent: string): string {
-	const root = findHaikuRoot()
-	const intentFile = join(root, "intents", intent, "intent.md")
-	if (!existsSync(intentFile)) return ""
-	const { data } = parseFrontmatter(readFileSync(intentFile, "utf8"))
-	return (data.active_stage as string) || ""
+	// Delegate to the shared fallback resolver (stamp → derived-from-canonical-
+	// main → last plan stage) so a diverged or unstamped intent still resolves
+	// a stage and never collapses to "". studio.ts ↔ state-tools is a call-time
+	// ESM cycle (each only uses the other inside function bodies), so the static
+	// import is safe.
+	return resolveActiveStageWithFallback(intent)
 }
 
 /**
@@ -5092,6 +5094,49 @@ function enforceStageBranch(
 		}
 	}
 	return null
+}
+
+/**
+ * Align the checkout to the branch the ENGINE READS for a MANUAL feedback
+ * mutation (reject / delete) — the ACTIVE stage branch, NOT the finding's own
+ * (possibly earlier, already-completed) stage branch.
+ *
+ * The cursor walks every stage `0..active` on the ACTIVE stage branch's tree;
+ * an earlier stage's feedback dir is present there (inherited via the
+ * main→active downstream sync). So a manual mutation of an earlier-stage
+ * finding must land on the ACTIVE branch to be visible on the next tick —
+ * `enforceStageBranch(intent, fbStage)` would instead switch to the finding's
+ * own branch, stranding the mutation where the engine never reads it (and, when
+ * that branch doesn't even carry the file, failing to find it at all). This is
+ * the merge-trains-integration-gate failure-mode 3 (2026-05-28): a reject of a
+ * completed-stage finding done while a later stage was active appeared to "not
+ * take." Intent-scope findings (no stage) align to intent main as before.
+ *
+ * The fix-loop path does NOT use this — there the cursor has already rewound to
+ * the finding's stage (it IS the active stage), so `fbStage === active` and the
+ * old alignment is already correct.
+ */
+function enforceFeedbackBranch(
+	intent: string,
+	fbStage: string | undefined,
+): { content: Array<{ type: "text"; text: string }>; isError: true } | null {
+	if (!fbStage) return enforceStageBranch(intent, undefined)
+	let activeStage: string | null = null
+	try {
+		const intentMd = join(intentDir(intent), "intent.md")
+		if (existsSync(intentMd)) {
+			const studio =
+				(parseFrontmatter(readFileSync(intentMd, "utf8")).data
+					.studio as string) || ""
+			if (studio) activeStage = findCurrentStage(intent, studio)
+		}
+	} catch {
+		// Fall through: unresolved active stage → intent main (null below).
+	}
+	// Active stage drives the read branch. null (intent-completion phase, or
+	// unresolved) → intent main. When the active stage IS the finding's stage
+	// this is identical to the old `enforceStageBranch(intent, fbStage)`.
+	return enforceStageBranch(intent, activeStage ?? undefined)
 }
 
 /**
@@ -8679,7 +8724,7 @@ Frontmatter is workflow engine-controlled and cannot be set through this tool. F
   • workflow-driven (mutated over the FB lifecycle): ${FSM_DRIVEN_FB_FIELDS.join(", ")}
   • Set at creation, immutable thereafter: ${CREATE_TIME_FB_FIELDS.join(", ")}
 
-Use haiku_feedback_update for status transitions and haiku_feedback_reject for rejections.`,
+Status transitions are engine-driven — closure runs through the fix-loop's terminal hat (haiku_feedback_advance_hat), not a manual update. Use haiku_feedback_reject to mark a finding invalid/stale (it stamps rejected_at, so the open-feedback walk treats it as terminal and stops re-dispatching it).`,
 		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_WRITE_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
@@ -12898,7 +12943,10 @@ export function handleStateTool(
 					isError: true,
 				}
 
-			const feedbackDeleteBranchErr = enforceStageBranch(
+			// Align to the engine's READ branch (active stage), not the
+			// finding's own stage branch — so a manual delete of an
+			// earlier-stage finding lands where the next tick reads it (FM3).
+			const feedbackDeleteBranchErr = enforceFeedbackBranch(
 				intent,
 				stage || undefined,
 			)
@@ -13103,9 +13151,13 @@ export function handleStateTool(
 
 			// Enforce branch BEFORE reading the feedback file — if main has
 			// drifted ahead, the file may only exist on the stage branch.
-			// Reading first would spuriously report "not found". Intent-
-			// scope ("") resolves to intent-main via ensureOnStageBranch.
-			const feedbackRejectBranchErr = enforceStageBranch(
+			// Reading first would spuriously report "not found". Align to the
+			// engine's READ branch (the ACTIVE stage), not the finding's own
+			// stage branch: an earlier-stage finding lives on the active
+			// branch's tree, and a reject must land there to be visible next
+			// tick (FM3 — the merge-trains-integration-gate stranded reject).
+			// Intent-scope ("") resolves to intent main.
+			const feedbackRejectBranchErr = enforceFeedbackBranch(
 				intent,
 				stage || undefined,
 			)

@@ -54,6 +54,7 @@ import {
 import { completePendingFixChainMerges } from "./fix-chain-merge-gate.js"
 import { reconcileOrphanedHatSequences } from "./hat-sequence-migration.js"
 import { healDuplicateFeedbackIds } from "./heal-duplicate-feedback-ids.js"
+import { healOptionalStageDivergence } from "./heal-optional-stage-divergence.js"
 import { purgeDeadSidecars } from "./purge-dead-sidecars.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
 import {
@@ -364,6 +365,13 @@ export function runWorkflowTick(
 			},
 		})
 	}
+
+	// Pre-tick self-heal: a pre-2026-05-28 buggy drop wrote an optional-stage
+	// removal to the stage branch but not intent main, so the cursor (reads
+	// main) keeps re-arriving at a stage the branches already dropped. Detect
+	// the divergence (cheap, no checkout) and propagate the drop up to main.
+	// Idempotent; no-op for healthy intents and in filesystem mode.
+	healOptionalStageDivergence(slug, studio)
 
 	const mode = (intentFm.mode as string) || ""
 	if (!mode) {

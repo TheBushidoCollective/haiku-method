@@ -12,6 +12,7 @@
 import { execFileSync } from "node:child_process"
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
+import { parseGitRemote } from "../git-worktree.js"
 import {
 	resolveIntentStages,
 	resolveStageFixHats,
@@ -55,6 +56,14 @@ import {
 	parseFrontmatter,
 } from "../state-tools.js"
 import { readStageArtifactDefs } from "../studio-reader.js"
+import {
+	feedbackBrowseUrl,
+	intentBrowseUrl,
+	type RepoCoords,
+	stageDefUrl,
+	studioDefUrl,
+	unitBrowseUrl,
+} from "./links.js"
 import type {
 	HatSegment,
 	StatuslinePhaseKind,
@@ -81,6 +90,21 @@ function currentBranch(): string {
 		}).trim()
 	} catch {
 		return ""
+	}
+}
+
+/** Best-effort repo coordinates from `origin` for the browse deep links.
+ *  Null when there's no origin / it can't be parsed (a local-only repo
+ *  isn't browseable on the website, so instance links are omitted). */
+function repoCoords(): RepoCoords | null {
+	try {
+		const origin = execFileSync("git", ["remote", "get-url", "origin"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim()
+		return parseGitRemote(origin)
+	} catch {
+		return null
 	}
 }
 
@@ -352,6 +376,9 @@ type ItemBar = {
 	 *  classifier hasn't ranked it yet). Drives the leading severity glyph
 	 *  and the highest-first bar order, mirroring fix-loop dispatch. */
 	severity?: FeedbackSeverity | null
+	/** OSC 8 deep link for the chip — the unit (execute) or feedback
+	 *  (fix-loop) browse URL. Undefined when the repo isn't browseable. */
+	url?: string
 }
 type AgentChip = {
 	id: string
@@ -447,7 +474,13 @@ export function hatSegments(
  *  the whole wave, not just the units that happen to be mid-flight. Wave
  *  membership reuses the cursor's own wave computation, so it matches the
  *  real pool and the `wave N/M` aggregate. */
-function unitBars(studio: string, stage: string, iDir: string): ItemBar[] {
+function unitBars(
+	studio: string,
+	stage: string,
+	iDir: string,
+	repo: RepoCoords | null,
+	slug: string,
+): ItemBar[] {
 	const unitsDir = join(iDir, "stages", stage, "units")
 	if (!existsSync(unitsDir)) return []
 	const hats = resolveStageHats(studio, stage)
@@ -483,9 +516,11 @@ function unitBars(studio: string, stage: string, iDir: string): ItemBar[] {
 			(typeof fm.started_at === "string" &&
 				(fm.started_at as string).length > 0) ||
 			iters.length > 0
+		const unitName = f.replace(/\.md$/, "")
 		out.push({
 			id: `U-${fileNumber(f)}`,
 			segments: hatSegments(iters, hats, started),
+			url: unitBrowseUrl(repo, slug, stage, unitName) ?? undefined,
 		})
 	}
 	return out
@@ -495,7 +530,13 @@ function unitBars(studio: string, stage: string, iDir: string): ItemBar[] {
  *  given fix-hat sequence. Closed/rejected FBs are excluded. A
  *  zero-iteration (queued) FB reads as an empty bar; a dispatched one
  *  fills to its current fix-hat. */
-function feedbackBars(dir: string, fixHats: string[]): ItemBar[] {
+function feedbackBars(
+	dir: string,
+	fixHats: string[],
+	repo: RepoCoords | null,
+	slug: string,
+	stage: string,
+): ItemBar[] {
 	if (!existsSync(dir) || fixHats.length === 0) return []
 	const out: ItemBar[] = []
 	for (const f of readdirSync(dir)
@@ -521,10 +562,12 @@ function feedbackBars(dir: string, fixHats: string[]): ItemBar[] {
 		// started_at on feedback (deriveFeedbackStatus: iterations[] non-empty
 		// → "fixing"). A zero-iteration FB is queued, so it shows empty
 		// progress (no in-progress pip) until the fix loop dispatches it.
+		const fbId = `FB-${fileNumber(f)}`
 		out.push({
-			id: `FB-${fileNumber(f)}`,
+			id: fbId,
 			segments: hatSegments(iters, fixHats, iters.length > 0),
 			severity,
+			url: feedbackBrowseUrl(repo, slug, stage, fbId) ?? undefined,
 		})
 	}
 	return out
@@ -549,6 +592,14 @@ export function resolveStatuslineState(): StatuslineState | null {
 	if (intentFm.composite) return null // composite intents aren't single-walk
 	const studio = typeof intentFm.studio === "string" ? intentFm.studio : ""
 
+	// Repo coords (from origin) drive the browse-SPA instance links (intent,
+	// unit, feedback). Null for a local-only repo → those render unlinked.
+	// Resolved once per status-line render. The studio/stage DEFINITION links
+	// are repo-independent (static site routes), so they work even offline.
+	const repo = repoCoords()
+	const intentUrl = intentBrowseUrl(repo, slug) ?? undefined
+	const studioUrl = studioDefUrl(studio) ?? undefined
+
 	// ── intent-level SETUP phases (precede any stage walk) ──
 	// These mirror the pre-cursor selection gates in run-tick.ts. The
 	// pipeline can't render yet (stages aren't resolvable), so we show the
@@ -557,7 +608,9 @@ export function resolveStatuslineState(): StatuslineState | null {
 	// setup state carries its own bar index over that band.
 	const setupState = (phaseLabel: string, idx: number): StatuslineState => ({
 		intent: slug,
+		intentUrl,
 		studio,
+		studioUrl,
 		stages: [],
 		activeStage: "",
 		phaseLabel,
@@ -606,8 +659,14 @@ export function resolveStatuslineState(): StatuslineState | null {
 		const awaitingMerge = isAwaitingMerge(slug, { localOnly: true })
 		return {
 			intent: slug,
+			intentUrl,
 			studio,
-			stages: stageList.map((name) => ({ name, status: "done" as const })),
+			studioUrl,
+			stages: stageList.map((name) => ({
+				name,
+				status: "done" as const,
+				url: stageDefUrl(studio, name) ?? undefined,
+			})),
 			activeStage: "",
 			phaseLabel: awaitingMerge ? "pending seal" : "sealed",
 			phaseKind: awaitingMerge ? "pending_seal" : "sealed",
@@ -676,20 +735,26 @@ export function resolveStatuslineState(): StatuslineState | null {
 	// review / reflection / intent-scope fix-loop). Otherwise: done =
 	// isStageComplete up to the active stage, active = the action's stage,
 	// pending = the rest.
+	const dotUrl = (name: string): string | undefined =>
+		stageDefUrl(studio, name) ?? undefined
 	let stages: StatuslineStageDot[]
 	if (pastAllStages) {
-		stages = stageList.map((name) => ({ name, status: "done" as const }))
+		stages = stageList.map((name) => ({
+			name,
+			status: "done" as const,
+			url: dotUrl(name),
+		}))
 	} else {
 		let sawActive = false
 		stages = stageList.map((name) => {
 			if (actStage && name === actStage) {
 				sawActive = true
-				return { name, status: "active" as const }
+				return { name, status: "active" as const, url: dotUrl(name) }
 			}
 			if (!sawActive && isStageComplete(iDir, studio, name, mode)) {
-				return { name, status: "done" as const }
+				return { name, status: "done" as const, url: dotUrl(name) }
 			}
-			return { name, status: "pending" as const }
+			return { name, status: "pending" as const, url: dotUrl(name) }
 		})
 	}
 	const activeStage = actStage
@@ -824,7 +889,7 @@ export function resolveStatuslineState(): StatuslineState | null {
 		// Show the WHOLE current wave — no concurrency slice. unitBars already
 		// bounds to the active dependency level (the cursor's wave), so the
 		// line is the wave itself, not an arbitrary MAX_CONCURRENT cap.
-		const bars = unitBars(studio, activeStage, iDir)
+		const bars = unitBars(studio, activeStage, iDir, repo, slug)
 		if (bars.length > 0) itemBars = bars
 	} else if (kind === "fixloop") {
 		const bars: ItemBar[] = []
@@ -833,11 +898,20 @@ export function resolveStatuslineState(): StatuslineState | null {
 				...feedbackBars(
 					join(iDir, "stages", activeStage, "feedback"),
 					resolveStageFixHats(studio, activeStage),
+					repo,
+					slug,
+					activeStage,
 				),
 			)
 		}
 		bars.push(
-			...feedbackBars(join(iDir, "feedback"), resolveStudioFixHats(studio)),
+			...feedbackBars(
+				join(iDir, "feedback"),
+				resolveStudioFixHats(studio),
+				repo,
+				slug,
+				"",
+			),
 		)
 		// Highest-severity first across BOTH scopes — mirrors the fix-loop's
 		// dispatch order (`feedbackSeverityRank`: blocker < high < medium <
@@ -1008,7 +1082,9 @@ export function resolveStatuslineState(): StatuslineState | null {
 
 	return {
 		intent: slug,
+		intentUrl,
 		studio,
+		studioUrl,
 		stages,
 		activeStage,
 		phaseLabel: label,

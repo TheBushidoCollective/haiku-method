@@ -310,8 +310,17 @@ function applyResponse(intentDir, action, root, slug) {
 		}
 		case "write_brief": {
 			// Briefer stand-in: write the user-facing BRIEF.md so the cursor
-			// advances past the pre-execute brief step.
-			writeFileSync(join(stageDir, "BRIEF.md"), "# Brief (test fixture)\n")
+			// advances past the brief step. Mirror haiku_write_brief's
+			// engine-owned phase rule — absent → pre, present → post — and
+			// stamp it via gray-matter (never a hand-rolled `---` block).
+			// `stageOwesClosingBrief` gates on `phase: post`, so a brief without
+			// it loops forever.
+			const briefFile = join(stageDir, "BRIEF.md")
+			const phase = existsSync(briefFile) ? "post" : "pre"
+			writeFileSync(
+				briefFile,
+				matter.stringify("# Brief (test fixture)\n", { phase }),
+			)
 			break
 		}
 		case "dispatch_review": {

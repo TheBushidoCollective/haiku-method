@@ -59,6 +59,32 @@ export {
 	validateHaikuFeedbackInputSchema,
 } from "./feedback.js"
 export type {
+	GlobalSettings,
+	ProviderName,
+	ProviderToken,
+} from "./global-settings.js"
+export {
+	GLOBAL_SETTINGS_SCHEMA,
+	PROVIDER_NAMES,
+	PROVIDER_TOKEN_SCHEMA,
+	validateGlobalSettingsSchema,
+	validateProviderTokenSchema,
+} from "./global-settings.js"
+export {
+	HAIKU_AUTH_LOGIN_INPUT_SCHEMA,
+	HAIKU_AUTH_LOGOUT_INPUT_SCHEMA,
+	HAIKU_AUTH_STATUS_INPUT_SCHEMA,
+	HAIKU_UPLOAD_PROOF_INPUT_SCHEMA,
+	type HaikuAuthLoginInput,
+	type HaikuAuthLogoutInput,
+	type HaikuAuthStatusInput,
+	type HaikuUploadProofInput,
+	validateHaikuAuthLoginInputSchema,
+	validateHaikuAuthLogoutInputSchema,
+	validateHaikuAuthStatusInputSchema,
+	validateHaikuUploadProofInputSchema,
+} from "./inputs/auth-tools.js"
+export type {
 	HaikuAwaitDesignDirectionInput,
 	HaikuAwaitGateInput,
 	HaikuAwaitVisualAnswerInput,
@@ -221,6 +247,7 @@ export type {
 	HaikuStageElaborationSealInput,
 	HaikuStageGetInput,
 	HaikuStageSetInput,
+	HaikuWriteBriefInput,
 } from "./inputs/stages.js"
 export {
 	HAIKU_INTENT_SEAL_INPUT_SCHEMA,
@@ -229,12 +256,14 @@ export {
 	HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA,
 	HAIKU_STAGE_GET_INPUT_SCHEMA,
 	HAIKU_STAGE_SET_INPUT_SCHEMA,
+	HAIKU_WRITE_BRIEF_INPUT_SCHEMA,
 	validateHaikuIntentSealInputSchema,
 	validateHaikuStageDecomposeSealInputSchema,
 	validateHaikuStageElaborationRecordInputSchema,
 	validateHaikuStageElaborationSealInputSchema,
 	validateHaikuStageGetInputSchema,
 	validateHaikuStageSetInputSchema,
+	validateHaikuWriteBriefInputSchema,
 } from "./inputs/stages.js"
 export type {
 	HaikuReadDiscoveryInput,

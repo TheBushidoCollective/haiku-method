@@ -65,7 +65,11 @@ async function withRepo(slug, fn) {
 		} catch {
 			process.chdir(tmpdir())
 		}
-		rmSync(root, { recursive: true, force: true })
+		// maxRetries/retryDelay rides out the git-objects async-write race —
+		// a `git` background write (auto-gc / pack finalize) can drop a file
+		// into `.git/objects` between readdir and rmdir, which surfaces as
+		// `ENOTEMPTY` on a bare rmSync (CI-only flake, 2026-05-29).
+		rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 	}
 }
 

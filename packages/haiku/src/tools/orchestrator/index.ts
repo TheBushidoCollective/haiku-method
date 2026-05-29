@@ -10,6 +10,9 @@
 // tools. As more tools migrate, the chain shrinks toward zero.
 
 import type { ToolDef } from "../types.js"
+import haiku_auth_login from "./haiku_auth_login.js"
+import haiku_auth_logout from "./haiku_auth_logout.js"
+import haiku_auth_status from "./haiku_auth_status.js"
 import haiku_await_gate from "./haiku_await_gate.js"
 // v9: haiku_baseline_init removed — premise-witness model has no baseline.json.
 // v4: haiku_classify_drift removed — drift sweep auto-files FBs.
@@ -35,10 +38,15 @@ import haiku_stage_elaboration_record from "./haiku_stage_elaboration_record.js"
 import haiku_stage_elaboration_seal from "./haiku_stage_elaboration_seal.js"
 import haiku_stage_reset from "./haiku_stage_reset.js"
 import haiku_unit_reset from "./haiku_unit_reset.js"
+import haiku_upload_proof from "./haiku_upload_proof.js"
+import haiku_write_brief from "./haiku_write_brief.js"
 
 export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 	(
 		[
+			haiku_auth_login,
+			haiku_auth_logout,
+			haiku_auth_status,
 			haiku_await_gate,
 			haiku_coverage_acknowledge,
 			haiku_debug,
@@ -62,6 +70,8 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 			haiku_stage_elaboration_seal,
 			haiku_stage_reset,
 			haiku_unit_reset,
+			haiku_upload_proof,
+			haiku_write_brief,
 		] satisfies ToolDef[]
 	).map((t) => [t.name, t]),
 )

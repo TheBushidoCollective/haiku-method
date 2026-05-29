@@ -46,6 +46,10 @@ export type StatuslinePhaseKind =
 export interface StatuslineStageDot {
 	name: string
 	status: "done" | "active" | "pending"
+	/** Optional OSC 8 target — the stage DEFINITION page. When set, the
+	 *  stage's hexagon (and, for the active stage, its name word) becomes a
+	 *  clickable link to haikumethod.ai/studios/<studio>/stages/<stage>. */
+	url?: string
 }
 
 /** Per-hat status within a unit/feedback progress bar. `done` = the hat
@@ -57,9 +61,15 @@ export type HatSegment = "done" | "active" | "rejected" | "pending"
 export interface StatuslineState {
 	/** Intent slug. */
 	intent: string
+	/** Optional OSC 8 target for the intent word — the intent browse page.
+	 *  Null/absent when the repo has no browseable origin. */
+	intentUrl?: string
 	/** Studio (lifecycle template) name — rendered as a dim tag. Empty
 	 *  before studio selection. */
 	studio: string
+	/** Optional OSC 8 target for the studio tag — the studio DEFINITION
+	 *  page on haikumethod.ai. */
+	studioUrl?: string
 	/** Ordered stage pipeline with per-stage status. Empty for
 	 *  intent-level phases that precede stage resolution. */
 	stages: StatuslineStageDot[]
@@ -113,6 +123,9 @@ export interface StatuslineState {
 		id: string
 		segments: HatSegment[]
 		severity?: "blocker" | "high" | "medium" | "low" | null
+		/** Optional OSC 8 target for the chip — the unit or feedback deep
+		 *  link in the browse SPA. Null/absent → chip renders unlinked. */
+		url?: string
 	}> | null
 	/** Per-agent status chips for the SECOND line during the await phases
 	 *  (pre-execute review, post-execute approval, quality gates, the
@@ -294,6 +307,21 @@ function phaseColor(kind: StatuslinePhaseKind, gated: boolean): string {
 	return C[kind] ?? C.execute
 }
 
+// OSC 8 hyperlink: `ESC ] 8 ; ; URL BEL TEXT ESC ] 8 ; ; BEL`. A terminal
+// that supports hyperlinks (iTerm2, Kitty, WezTerm, Ghostty, …) makes TEXT
+// Cmd/Ctrl-clickable; one that doesn't simply renders TEXT and ignores the
+// wrapper. It's NOT an SGR color code, so it's emitted regardless of
+// NO_COLOR — links and color are orthogonal. `url` empty/undefined → TEXT
+// unchanged (no wrapper), so an unbrowseable repo / pre-studio line just
+// renders plain. The URL is intentionally NOT escaped here: callers build it
+// with encodeURIComponent on each path segment (links.ts), and OSC 8
+// terminates the URL on BEL (`\x07`), which can't appear in a percent-encoded
+// URL. BEL is the widely-supported terminator (ST `\x1b\\` also works).
+function osc8(url: string | undefined, text: string): string {
+	if (!url) return text
+	return `\x1b]8;;${url}\x07${text}\x1b]8;;\x07`
+}
+
 /** Render the status line. When `color` is false (or NO_COLOR is set),
  *  emit the same glyphs with no escape codes. */
 export function renderStatusline(
@@ -310,10 +338,13 @@ export function renderStatusline(
 	// one mark.
 	const wordmark = paint(C.brand, WORDMARK)
 	const brand = paint(C.brand, BRAND)
-	const intent = paint(C.intent, state.intent)
+	// The intent word links to its browse page (when the repo is browseable).
+	const intent = osc8(state.intentUrl, paint(C.intent, state.intent))
 
-	// ── studio tag (dim) ──
-	const studio = state.studio ? paint(C.dim, state.studio) : ""
+	// ── studio tag (dim) ── links to the studio DEFINITION page.
+	const studio = state.studio
+		? osc8(state.studioUrl, paint(C.dim, state.studio))
+		: ""
 
 	const phaseHue = phaseColor(state.phaseKind, state.gated)
 
@@ -336,21 +367,29 @@ export function renderStatusline(
 	// ── group 2: pipeline + stage/intent + phase bar + flow + phase ──
 	const dots = state.stages
 		.map((s) => {
-			if (s.status === "done") return paint(C.done, HEX_DONE)
-			if (s.status === "active") {
+			// Each hexagon links to its stage DEFINITION page (when known).
+			let glyph: string
+			if (s.status === "done") glyph = paint(C.done, HEX_DONE)
+			else if (s.status === "active")
 				// The active hexagon carries the PHASE hue so the active dot
 				// and the phase word read as one signal.
-				return paint(phaseHue, HEX_ACTIVE)
-			}
-			return paint(C.pending, HEX_PENDING)
+				glyph = paint(phaseHue, HEX_ACTIVE)
+			else glyph = paint(C.pending, HEX_PENDING)
+			return osc8(s.url, glyph)
 		})
 		.join("")
 	// Scope label in the stage slot. A stage-scoped line names the stage
 	// (`development`); an intent-level line (setup phases, intent review,
 	// sealing — no active stage) names the scope `intent`, so the
 	// structure stays uniform: `<pipeline> <scope> <bar> ❯ <phase>`.
+	// The active-stage word links to its stage DEFINITION page (same target
+	// as its hexagon). Resolve the URL from the matching pipeline dot. The
+	// intent-scope fallback ("intent") carries no stage def, so it stays plain.
+	const activeStageUrl = state.activeStage
+		? state.stages.find((s) => s.name === state.activeStage)?.url
+		: undefined
 	const stageName = state.activeStage
-		? paint(C.stage, state.activeStage)
+		? osc8(activeStageUrl, paint(C.stage, state.activeStage))
 		: paint(C.stage, "intent")
 	const flowGlyph = state.gated ? GATED : FLOW
 	const flow = paint(state.gated ? C.gate : C.dim, flowGlyph)
@@ -407,6 +446,7 @@ export function renderStatusline(
 		id: string
 		segments: HatSegment[]
 		severity?: "blocker" | "high" | "medium" | "low" | null
+		url?: string
 	}): string => {
 		// Resolve the chip's box + pip palette from severity. `undefined` = a
 		// unit bar (default near-white box, default pips); `null` = an
@@ -425,13 +465,15 @@ export function renderStatusline(
 				.map((s) => (s === "pending" ? PIP_PENDING : PIP_DONE))
 				.join("")
 			const mark = sev ? `${sev.mark} ` : ""
-			return `${mark}${it.id} ${bar}`
+			return osc8(it.url, `${mark}${it.id} ${bar}`)
 		}
 		const pips = it.segments
 			.map((s) => `${pal[s]}${s === "pending" ? PIP_PENDING : PIP_DONE}`)
 			.join("")
 		const chipBg = sev ? sev.bg : C.chipBg
-		return `${chipBg} ${C.chipLabel}${it.id} ${pips} ${C.reset}`
+		// Whole chip (box + label + pips) is the click target — the unit or
+		// feedback deep link.
+		return osc8(it.url, `${chipBg} ${C.chipLabel}${it.id} ${pips} ${C.reset}`)
 	}
 
 	// An agent chip: a solid pastel status box (no bar). The box color IS

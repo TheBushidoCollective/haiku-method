@@ -695,6 +695,17 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	)
 	if (outputExpectations) sections.push(outputExpectations)
 
+	// Verification gates over prose: a raw placeholder word-grep false-positives
+	// on any artifact that MENTIONS the banned words (deferral notes, self-check
+	// lines). Applies to every stage that authors `quality_gates:` — knowledge
+	// stages especially, whose artifacts are prose. (Reported 2026-05-28 on the
+	// `merge-trains-integration-gate` migration intent: a
+	// `! grep -nE '\b(TBD|TODO|FIXME|XXX)\b'` gate generated ~5 of 11 findings
+	// on metalinguistic prose.) Content directive, not workflow mechanics.
+	sections.push(
+		'## Quality Gates: don\'t grep prose for placeholder words\n\nA gate like `! grep -nE \'\\b(TBD|TODO|FIXME|XXX)\\b\' <artifact>` false-positives on any artifact that merely MENTIONS those words — a deferral note ("TBD in the next stage"), a self-check line ("…not left as a bare TODO"). On a prose / knowledge artifact this fails the gate on legitimate content. If you need a no-unfilled-placeholder check, SCOPE it: match only standalone placeholder lines (`^\\s*(TODO|TBD|FIXME)\\b`), exclude fenced code and quoted spans, or check for the specific unfilled TEMPLATE markers you actually left (e.g. `<FILL-IN>`, `__TODO__`) rather than any occurrence of the word. Never gate a prose document on a bare word-grep.',
+	)
+
 	// Build-class stages: every producing unit must carry a `quality_gates:`
 	// field. `haiku_unit_write` rejects a build-stage unit that declares
 	// `outputs:` but omits `quality_gates:`, so authoring it up front avoids a

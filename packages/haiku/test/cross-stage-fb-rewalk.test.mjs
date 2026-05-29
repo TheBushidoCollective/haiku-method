@@ -594,3 +594,212 @@ test("e2e (interpretation B): FB on s1 lands AFTER s4 merged → cursor walks Tr
 		)
 	})
 })
+
+// Bug report (merge-trains-integration-gate, 2026-05-28) failure-mode 3: an
+// AGENT finding on an EARLIER stage, MANUALLY rejected via haiku_feedback_reject
+// while a LATER stage is active. The reject lands on the FB's stage branch, but
+// the engine reads the active stage branch — so the reject must still propagate
+// (the earlier branch goes ahead-of-main → the cursor rewinds + re-merges it).
+// Pre-fix this stranded the reject and the engine kept re-walking an FB that
+// looked open on the active branch. Asserts the manual reject is NOT invisible:
+// the pipeline recovers and seals, and the FB ends terminal-rejected.
+test(
+	"e2e (FM3): manual reject of an earlier-stage agent FB while a later stage is active → reject propagates, pipeline seals",
+	{ timeout: 30000 },
+	async () => {
+		if (!HAS_GIT) return
+		await withRepo("cross-fb-reject", async ({ repoRoot, intentDir, slug }) => {
+			buildFourStageStudio(repoRoot)
+			makeIntent({
+				intentDir,
+				slug,
+				studio: "fb4",
+				mode: "continuous",
+				extraFm: { stages: ["s1", "s2", "s3", "s4"] },
+			})
+			const { handleStateTool } = await import("../src/state-tools.ts")
+
+			const seen = []
+			let injectedFb = false
+			let rejected = false
+			let s3MergedBeforeInject = false
+			const MAX_TICKS = 400
+
+			for (let i = 0; i < MAX_TICKS; i++) {
+				const action = await runTick(slug)
+				seen.push(`${action.action}/${action.stage ?? ""}`)
+
+				if (
+					!s3MergedBeforeInject &&
+					action.action === "complete_stage" &&
+					action.stage === "s3"
+				) {
+					applyResponse(intentDir, action, repoRoot, slug)
+					s3MergedBeforeInject = true
+					continue
+				}
+
+				// Once s4 is in flight, inject an AGENT FB on s1 and MANUALLY
+				// reject it (the bug's exact action — not the fix loop).
+				if (
+					!injectedFb &&
+					s3MergedBeforeInject &&
+					action.action === "start_unit_hat" &&
+					action.stage === "s4"
+				) {
+					applyResponse(intentDir, action, repoRoot, slug)
+					makeFeedback({
+						intentDir,
+						stage: "s1",
+						id: 1,
+						title: "spec misattribution on s1",
+						body: "agent finding the user judges stale after correcting the artifact",
+						origin: "adversarial-review",
+						author: "spec",
+					})
+					injectedFb = true
+					const resp = handleStateTool("haiku_feedback_reject", {
+						intent: slug,
+						stage: "s1",
+						feedback_id: 1,
+						reason: "stale — the s1 artifact was corrected; finding no longer applies",
+					})
+					assert.ok(
+						!resp.isError,
+						`reject failed: ${resp.content?.[0]?.text ?? ""}`,
+					)
+					rejected = true
+					continue
+				}
+
+				if (action.action === "sealed") break
+				applyResponse(intentDir, action, repoRoot, slug)
+				if (action.action === "seal_intent") {
+					const intentMd = join(intentDir, "intent.md")
+					const fm = readFm(intentMd)
+					writeFm(intentMd, { ...fm, sealed_at: new Date().toISOString() })
+				}
+			}
+
+			assert.ok(rejected, "FB never injected + rejected")
+			assert.ok(
+				seen[seen.length - 1].startsWith("sealed/"),
+				`manual reject stranded the FB — pipeline never sealed; recent: ${seen.slice(-12).join(" → ")}`,
+			)
+
+			// The reject must be VISIBLE on the engine's read surface — the FB
+			// ends terminal-rejected, not re-dispatched as open.
+			const fbDir = join(intentDir, "stages", "s1", "feedback")
+			const fbFiles = existsSync(fbDir)
+				? readdirSync(fbDir).filter((f) => f.endsWith(".md"))
+				: []
+			assert.ok(fbFiles.length >= 1, "FB file vanished from disk")
+			const fb = readFm(join(fbDir, fbFiles[0]))
+			assert.ok(
+				typeof fb.rejected_at === "string" && fb.rejected_at.length > 0,
+				`reject was invisible to the engine's read branch: ${JSON.stringify(fb)}`,
+			)
+		})
+	},
+)
+
+// User requirement (2026-05-29): feedback must stay ADDRESSABLE until the intent's
+// work is merged into the default branch. Under git, "not merged" == pending_seal
+// (work landed on the hub branch `haiku/<slug>/main` but not yet on the repo
+// default). So while HELD at pending_seal, a NEW open finding must (a) be
+// accepted, and (b) preempt the seal — the engine must NOT seal past open
+// feedback, and must re-seal only once it's addressed AND the merge lands.
+test(
+	"e2e (pending_seal): an open finding left while awaiting the default-branch merge blocks the seal, then the intent seals once addressed + merged",
+	{ timeout: 30000 },
+	async () => {
+		if (!HAS_GIT) return
+		await withRepo("pending-seal-fb", async ({ repoRoot, intentDir, slug }) => {
+			buildFourStageStudio(repoRoot)
+			makeIntent({
+				intentDir,
+				slug,
+				studio: "fb4",
+				mode: "continuous",
+				extraFm: { stages: ["s1", "s2", "s3", "s4"] },
+			})
+
+			const seen = []
+			let sawPendingSeal = false
+			let heldFbInjected = false
+			let sealedWhileFbOpen = false
+			const MAX_TICKS = 500
+
+			for (let i = 0; i < MAX_TICKS; i++) {
+				const action = await runTick(slug)
+				seen.push(`${action.action}/${action.stage ?? ""}`)
+
+				if (action.action === "pending_seal" && !heldFbInjected) {
+					// HELD at pending_seal: hub branch not yet on the default
+					// branch. Leave an open finding here — it must be accepted
+					// AND must keep the engine from sealing.
+					sawPendingSeal = true
+					makeFeedback({
+						intentDir,
+						stage: "s2",
+						id: 1,
+						title: "post-completion gap noticed before merge",
+						body: "user leaves feedback while the intent awaits the default-branch merge",
+						origin: "user-chat",
+						author: "user",
+					})
+					heldFbInjected = true
+					// Do NOT deliver yet. Next tick MUST NOT seal — the open FB
+					// preempts (Track B re-routes to s2's fix loop).
+					continue
+				}
+
+				if (action.action === "sealed") {
+					if (
+						heldFbInjected &&
+						existsSync(join(intentDir, "stages", "s2", "feedback"))
+					) {
+						const open = readdirSync(
+							join(intentDir, "stages", "s2", "feedback"),
+						).some((f) => {
+							if (!f.endsWith(".md")) return false
+							const d = readFm(join(intentDir, "stages", "s2", "feedback", f))
+							return !d.closed_at && !d.rejected_at
+						})
+						if (open) sealedWhileFbOpen = true
+					}
+					break
+				}
+				applyResponse(intentDir, action, repoRoot, slug)
+				if (action.action === "seal_intent") {
+					const intentMd = join(intentDir, "intent.md")
+					const fm = readFm(intentMd)
+					writeFm(intentMd, { ...fm, sealed_at: new Date().toISOString() })
+				}
+			}
+
+			assert.ok(
+				sawPendingSeal,
+				`never reached pending_seal; recent: ${seen.slice(-10).join(" → ")}`,
+			)
+			// The finding left at pending_seal pulled the cursor back into a fix
+			// cycle — proving feedback is still addressable pre-merge.
+			assert.ok(
+				seen.some(
+					(s) =>
+						s.startsWith("start_feedback_hat/") || s.startsWith("close_feedback/"),
+				),
+				`open feedback at pending_seal was never processed; recent: ${seen.slice(-15).join(" → ")}`,
+			)
+			assert.ok(
+				!sealedWhileFbOpen,
+				"engine sealed while a finding was still open — feedback was NOT addressable until merge",
+			)
+			assert.equal(
+				seen[seen.length - 1].startsWith("sealed/"),
+				true,
+				`intent never sealed after the finding was addressed; recent: ${seen.slice(-12).join(" → ")}`,
+			)
+		})
+	},
+)

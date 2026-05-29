@@ -48,6 +48,9 @@ import { PR_INTERACTION_ROLES } from "../../orchestrator/review-role-classes.js"
 import {
 	findCurrentStage,
 	isStageComplete,
+	// closing-brief gate (#17) — fires in the complete_stage interception
+	// below for the autopilot / prior-stage-merge path (no user gate there).
+	stageOwesClosingBrief,
 	stageOwesObservations,
 } from "../../orchestrator/workflow/cursor.js"
 import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
@@ -58,6 +61,7 @@ import {
 	enrichActionWithPreview,
 	getPrepareGateReview,
 	type OrchestratorAction,
+	resolveIntentStages,
 } from "../../orchestrator.js"
 
 /** Single-source dispatch: one workflow tick → one action. Handles
@@ -697,6 +701,44 @@ export default defineTool({
 						}
 					}
 				} else {
+					// PRE-TICK DANGLING-BRANCH ESCAPE (#22). If the checkout is
+					// parked on a stage branch whose stage is no longer in the
+					// canonical plan — a dropped optional stage whose branch
+					// wasn't reaped, or a stale checkout left after a heal — the
+					// user is stranded ("dropped the stage, was still on the
+					// branch, couldn't rescue off of it"). The post-walk
+					// realignment below is gated on the cursor's action carrying
+					// a `stage`, so a stage-less intent-level action (or any
+					// confusion) leaves us stuck on the dead branch forever.
+					// Escape to the active stage (or intent main) BEFORE the
+					// cursor walks, so every tick guarantees we're on a PLANNED
+					// branch. Conservative: we switch OFF, we do NOT reap — any
+					// stranded commits on the dangling branch survive for the
+					// user to recover.
+					{
+						const here = getCurrentBranch().startsWith(`haiku/${slug}/`)
+							? getCurrentBranch().slice(`haiku/${slug}/`.length)
+							: ""
+						if (here && here !== "main") {
+							const plan = resolveIntentStages(im, studio)
+							if (!plan.includes(here)) {
+								const active = findCurrentStage(slug, studio)
+								const escapeGuard = ensureOnStageBranch(
+									slug,
+									active ?? undefined,
+								)
+								if (!escapeGuard.ok) {
+									return buildGuardResponse(
+										slug,
+										active ?? undefined,
+										escapeGuard,
+										"run_next entry — escape dropped/dangling stage branch",
+									)
+								}
+							}
+						}
+					}
+
 					// PRE-CURSOR DOWNSTREAM SYNC. The cursor's walk reads
 					// per-unit FM from the current working tree. If the
 					// branch isn't up to date with intent main (and intent
@@ -1408,6 +1450,29 @@ export default defineTool({
 			}
 			completeStageLastSig = sig
 			const stageToComplete = result.stage
+			// Forward-only CLOSING-BRIEF gate (#17, 2026-05-28). Before a
+			// stage merges, rewrite the SAME user-facing BRIEF.md the
+			// pre-execute brief authored — flipping it from "this is what I
+			// am going to do" to "this is what I did" (the post-execution
+			// summary the human sees once work has landed). Fires here, in the
+			// complete_stage interception path, NOT in the cursor walk: when a
+			// stage's units are all signed, findCurrentStage advances to the
+			// NEXT stage, so a cursor-walk gate on the just-finished stage is
+			// never reached. This path runs for the frontier stage the cursor
+			// just produced complete_stage for — same forward-only guarantee
+			// the observations gate below relies on. Gated on the brief's OWN
+			// `phase: post` frontmatter (BRIEF.md already exists from the pre
+			// firing). Ordered BEFORE observations: the public "what I did"
+			// brief precedes the private reflection note; both precede merge.
+			if (stageOwesClosingBrief(intentDir(slug), stageToComplete)) {
+				result = {
+					action: "write_brief",
+					intent: slug,
+					stage: stageToComplete,
+					phase: "post",
+				}
+				break
+			}
 			// Forward-only observations gate. A stage owes its free-form
 			// observations.md before it merges (reflection on). Instead of
 			// merging, hand the agent the record_observations instruction;
@@ -1697,7 +1762,7 @@ export default defineTool({
 		) {
 			try {
 				const { openStagePullRequest } = await import("../../git-worktree.js")
-				const opened = openStagePullRequest({
+				const opened = await openStagePullRequest({
 					slug,
 					stage: result.stage as string,
 				})
@@ -1814,9 +1879,6 @@ export default defineTool({
 				: ((result.next_stage as string | null) ?? null)
 			if (isUserGate && gateKind === "approval" && stage) {
 				try {
-					const { resolveIntentStages } = await import(
-						"../../orchestrator/studio.js"
-					)
 					const intentFile = join(findHaikuRoot(), "intents", slug, "intent.md")
 					const intentFm = existsSync(intentFile)
 						? parseFrontmatter(readFileSync(intentFile, "utf8")).data

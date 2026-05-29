@@ -21,8 +21,12 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { resolvePluginRoot } from "../config.js"
+import { readIntentFileAtMain } from "../git-worktree.js"
 import { intentDir, parseFrontmatter } from "../state-tools.js"
 import { resolveStudio, studioSearchPaths } from "../studio-reader.js"
+// Call-time-only ESM cycle (binding used inside a function body, never at
+// module eval): cursor.ts statically imports this module. Safe in ESM.
+import { isStageComplete } from "./workflow/cursor.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
 	if (!existsSync(filePath)) return {}
@@ -78,6 +82,86 @@ export function resolveIntentStages(
 		return explicit.filter((s) => studioSet.has(s))
 	}
 	return studioStages
+}
+
+/** Read the intent's CANONICAL stage plan — `intent.stages` as it exists on
+ *  intent main (`haiku/<slug>/main`), the fork source every stage branch is
+ *  cut from. A diverged stage-branch checkout can carry a stale plan (e.g. the
+ *  old buggy `haiku_drop_stage` that wrote the drop to the stage branch instead
+ *  of main); main is authoritative. In filesystem mode (no branches) or when
+ *  main can't be read, falls back to the working-tree intent.md so behavior is
+ *  identical for healthy intents. */
+export function resolveCanonicalIntentStages(
+	slug: string,
+	studio: string,
+	workingTreeFm: Record<string, unknown>,
+): string[] {
+	const mainRaw = readIntentFileAtMain(slug)
+	if (mainRaw) {
+		const mainFm = parseFrontmatter(mainRaw).data
+		return resolveIntentStages(mainFm, studio)
+	}
+	return resolveIntentStages(workingTreeFm, studio)
+}
+
+/** Derive the active stage from the CANONICAL (intent-main) plan, walking it
+ *  against on-disk stage-completion. This is the branch-agnostic analog of
+ *  `findCurrentStage`: it reads the plan from main so a diverged stage-branch
+ *  checkout can't produce a contradictory active stage, but it still judges
+ *  completion from the working-tree (fast-forwarded) stage dirs the same way
+ *  the cursor does. Returns null when every canonical stage is complete (the
+ *  intent is at completion) or the plan is empty. */
+export function findCurrentStageFromMain(
+	slug: string,
+	studio: string,
+): string | null {
+	const iDir = intentDir(slug)
+	const intentFile = join(iDir, "intent.md")
+	const workingTreeFm = existsSync(intentFile)
+		? parseFrontmatter(readFileSync(intentFile, "utf8")).data
+		: {}
+	const stages = resolveCanonicalIntentStages(slug, studio, workingTreeFm)
+	if (stages.length === 0) return null
+	const mode =
+		typeof workingTreeFm.mode === "string" && workingTreeFm.mode.length > 0
+			? (workingTreeFm.mode as string)
+			: "continuous"
+	for (const stage of stages) {
+		if (!isStageComplete(iDir, studio, stage, mode)) return stage
+	}
+	return null
+}
+
+/** Resolve the active stage for SPA + tool readers with a full fallback chain:
+ *  stamped `intent.active_stage` → derived from the CANONICAL (intent-main)
+ *  plan → the last stage in that plan. Never returns "" when a plan exists.
+ *
+ *  This is the single source the stamp-only readers (`resolveActiveStage` in
+ *  state-tools, `readActiveStage` in session-routes) delegate to. The stamp
+ *  alone goes stale on a diverged stage-branch checkout (the old buggy drop)
+ *  or is simply absent on a freshly migrated intent; returning "" there is
+ *  what produced the SPA's `no_active_stage` 409 on feedback submit. Walking
+ *  the canonical plan recovers a real stage; the last-stage fallback covers
+ *  the "every stage already complete" edge so an intent at completion still
+ *  resolves a stage for stage-scoped writes. Returns "" only when there is
+ *  genuinely no plan (no studio, empty plan) — callers must tolerate that. */
+export function resolveActiveStageWithFallback(slug: string): string {
+	const intentFile = join(intentDir(slug), "intent.md")
+	if (!existsSync(intentFile)) return ""
+	let fm: Record<string, unknown>
+	try {
+		fm = parseFrontmatter(readFileSync(intentFile, "utf8")).data
+	} catch {
+		return ""
+	}
+	const stamped = (fm.active_stage as string) || ""
+	if (stamped) return stamped
+	const studio = (fm.studio as string) || ""
+	if (!studio) return ""
+	const derived = findCurrentStageFromMain(slug, studio)
+	if (derived) return derived
+	const plan = resolveCanonicalIntentStages(slug, studio, fm)
+	return plan.length > 0 ? plan[plan.length - 1] : ""
 }
 
 /** Filter cross-stage references (a stage's `inputs:` entries) to those whose

@@ -292,7 +292,20 @@ export type CursorAction =
 	// gate opens, a persistent repo artifact, and a website-browse surface.
 	// User-facing only — the focused work agents never read it. Forward-only
 	// (see `stageOwesBrief`): never interrupts a stage already executing.
-	| { kind: "write_brief"; stage: string }
+	//
+	// `phase` distinguishes the two firings of the SAME `BRIEF.md` artifact:
+	//   - `"pre"`  — PRE-execute (the original firing above): "this is what I
+	//                am going to do". Written from the planned units before any
+	//                code lands, gated on BRIEF.md absence.
+	//   - `"post"` — POST-execute (2026-05-28): "this is what I did". Rewrites
+	//                the SAME `BRIEF.md` in place after execution + adversarial
+	//                approval + quality gates, before the stage closes. Gated on
+	//                the brief's OWN frontmatter `phase:` reaching `post`
+	//                (BRIEF.md already exists from the pre firing, so absence
+	//                can't gate it; an in-content signal can't drift from the
+	//                content the way a sibling marker can). See
+	//                `stageOwesClosingBrief`.
+	| { kind: "write_brief"; stage: string; phase: "pre" | "post" }
 	// `role` is the lead role (back-compat / single-role shadow); `dispatches`
 	// carries the full parallel batch when >1 (the adversarial fan-out — same
 	// shape as `dispatch_review`). `spec` and `user` dispatch single (serial).
@@ -970,6 +983,57 @@ export function stageOwesBrief(
 }
 
 /**
+ * Does this stage still owe its CLOSING `BRIEF.md` rewrite before it can
+ * close? The pre-execute brief said "this is what I am going to do"; the
+ * closing brief rewrites the SAME `BRIEF.md` in place to say "this is what I
+ * did" — the post-execution summary the human sees once the work has landed.
+ *
+ * It fires POST-execute, after every approval is signed and the quality
+ * gates have run, BEFORE complete_stage. Two conditions, both required:
+ *   1. `BRIEF.md` EXISTS — the closing brief REWRITES the pre firing's file
+ *      in place; with no file there is nothing to rewrite, so the gate is a
+ *      no-op (a stage that never wrote a pre-execute brief — brief skipped,
+ *      or a legacy/fixture intent — must fall straight through to its merge,
+ *      not stall waiting for a closing brief on a file that will never
+ *      appear). This is the mirror of the pre-execute brief, which gates on
+ *      `BRIEF.md` ABSENCE.
+ *   2. The brief's OWN frontmatter `phase:` is not yet `post`. The signal
+ *      lives INSIDE the artifact, not in a sibling marker file — so it can
+ *      never drift from the content (a marker can say "finalized" next to a
+ *      stale pre-brief, or be missing next to a fresh post-brief; the
+ *      frontmatter is the content's state). The pre-execute brief stamps
+ *      `phase: pre`; the closing brief rewrites the file AND stamps
+ *      `phase: post` in the same write, then the next tick reads `post` and
+ *      falls through to complete_stage. A brief with no/other `phase` is
+ *      treated as still-owed (defaults to `pre`).
+ *
+ * Forward-only by construction: the cursor only walks the frontier
+ * (incomplete) stage, so a completed/merged stage is never re-entered to
+ * write a closing brief.
+ */
+export function stageOwesClosingBrief(
+	intentDir: string,
+	stage: string,
+): boolean {
+	if (!isBriefEnabled(intentDir)) return false
+	const briefPath = join(intentDir, "stages", stage, "BRIEF.md")
+	// Nothing to rewrite if the pre-execute brief never authored BRIEF.md.
+	if (!existsSync(briefPath)) return false
+	try {
+		// Read-only: gray-matter caches by content and returns a SHARED object;
+		// we only read `.data.phase`, never mutate it (see the shared-cache
+		// gotcha that bit the output-existence gate).
+		const parsed = matter(readFileSync(briefPath, "utf8"))
+		const phase = (parsed.data as { phase?: unknown } | undefined)?.phase
+		return phase !== "post"
+	} catch {
+		// Unreadable/unparseable brief → treat as not-yet-finalized so the
+		// closing brief re-fires (a re-run beats a silent false-complete).
+		return true
+	}
+}
+
+/**
  * Find the stage the cursor is currently positioned in — the first
  * stage that isn't complete on disk.
  *
@@ -1574,10 +1638,34 @@ function walkIntentTrack(args: {
 				readFm(join(intentDir, "intent.md"))?.data ?? {},
 				studio,
 			)
+			// Hold discovery/decompose while the keep-or-drop decision is
+			// pending — but ONLY when there's a human to hold for. Surfacing
+			// them would have the agent fan out discovery + decompose subagents
+			// on a stage it may immediately drop (throwaway work), and (worse)
+			// decompose authors units that flip the `units.length === 0` offer
+			// condition off, stranding the drop path. Recording the conversation
+			// (writes elaboration.md) clears this one-shot offer; the NEXT tick
+			// surfaces discovery + decompose normally on keep, or nothing on
+			// drop. So the offer carries ONLY the conversation-class signal(s).
+			//
+			// AUTOPILOT EXCEPTION: autopilot has no user to make a keep-or-drop
+			// call, so there's nothing to hold for — it auto-keeps and drives
+			// the stage to completion in one autonomous pass. Trimming the
+			// signal set there strands the autopilot harness (it acts on the
+			// signals in the action; a perpetually-re-emitted conversation-only
+			// offer that its drive loop can't clear trips the deadlock detector
+			// → loop_halted). So in autopilot we emit the FULL signal set, same
+			// as a mandatory stage. The `optional_offer` flag still rides along
+			// for surfaces that want to note it, but discovery isn't held.
+			const holdForDecision = mode !== "autopilot"
+			const OFFER_SIGNALS = new Set(["conversation", "verify_conversation"])
+			const offerSignals = holdForDecision
+				? signalsUnmet.filter((s) => OFFER_SIGNALS.has(s.signal))
+				: signalsUnmet
 			return {
 				kind: "elaborate_loop",
 				stage,
-				signals_unmet: signalsUnmet,
+				signals_unmet: offerSignals,
 				optional_offer: true,
 				dependents: computeStageDependents(studio, stage, planStages),
 			}
@@ -1721,7 +1809,7 @@ function walkIntentTrack(args: {
 				(u) => Boolean(u.fm.started_at) || pickIterations(u.fm).length > 0,
 			)
 			if (stageOwesBrief(intentDir, stage, anyUnitStarted)) {
-				return { kind: "write_brief", stage }
+				return { kind: "write_brief", stage, phase: "pre" }
 			}
 		}
 		// Brief written → the deferred review user gate.
@@ -2011,6 +2099,19 @@ function walkIntentTrack(args: {
 						units: first.units,
 					}
 				}
+				// Closing BRIEF (#17), non-autopilot path. Every adversarial
+				// approval + quality gate is signed and only the human approval
+				// gate remains — rewrite the SAME BRIEF.md from "what I'm going
+				// to do" to "what I did" BEFORE the user reviews it, so the gate
+				// shows the post-execution summary. Reached only when `user` is
+				// in approvalRoles (autopilot omits it — that path's closing
+				// brief fires in run_next's complete_stage interception instead).
+				// One-shot via the brief's `phase: post` frontmatter; once the
+				// rewrite stamps it, the next tick falls through to the user_gate
+				// below.
+				if (stageOwesClosingBrief(intentDir, stage)) {
+					return { kind: "write_brief", stage, phase: "post" }
+				}
 				return {
 					kind: "user_gate",
 					stage,
@@ -2069,6 +2170,16 @@ function walkIntentTrack(args: {
 			return { kind: "record_observations", stage }
 		}
 	}
+
+	// (Closing BRIEF #17 does NOT gate here. When every approval — including
+	// `user` — is signed, this stage's units are complete, so findCurrentStage
+	// advances to the NEXT stage and this per-stage walk never runs for the
+	// just-finished one. The closing brief instead fires at two REACHABLE
+	// points on the same `phase: post` frontmatter one-shot: (1) non-autopilot,
+	// in step 8 right before the `user_gate` return — while the stage is still
+	// frontier with user approval pending; (2) autopilot / prior-stage-merge,
+	// in haiku_run_next's complete_stage interception, before the observations
+	// gate.)
 
 	// 8b. Every approval signed AND observations recorded. Emit
 	//     `complete_stage` — a SEMANTIC action ("this stage is

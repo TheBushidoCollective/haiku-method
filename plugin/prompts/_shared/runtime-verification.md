@@ -62,9 +62,9 @@ Video of the run, step screenshots, response bodies, pane dumps, computed-style 
 
 **Proof is gitignored — upload it to the PR so it survives.** The `proof/` dir is gitignored on purpose: video and screenshots are regenerated every run, and committing that binary churn bloats history forever. So the captures do NOT travel when a branch merges. To make them durable and reviewable, **upload them to the change request** for this scope (your dispatch tells you the target PR/MR URL when you have one):
 
-- **GitLab** has a first-class upload: `glab` (or `POST /projects/:id/uploads`) returns a markdown snippet — embed it in the MR description/note under a "Proof" section.
-- **GitHub** has no inline-attachment API. Attach the video/screenshots as **release assets** (`gh release upload`, draft/tag release) or push them to an artifact bucket, then link them from the PR body's "Proof" section. (Inline image paste only works in the web UI, which you can't drive.)
-- Keep it **idempotent**: re-running replaces the PR's "Proof" section rather than stacking duplicates. If you have no PR URL (no provider CLI / not a git repo), skip the upload — the captures still sit on disk and the SPA serves them live over the tunnel.
+- **Preferred: `haiku_upload_proof { intent, stage, path }`** — call it once per capture file (the `.webm`, each step screenshot). It detects the repo's provider, **authenticates automatically** when needed (the haikumethod.ai broker — you NEVER pre-call an auth tool), and posts the file to the change request: a GitHub **release asset**, or the GitLab **project-uploads** API (which returns a markdown ref). It returns the durable URL; link the URLs from the PR/MR body's "Proof" section.
+- It returns `proof_upload_auth_unavailable` only when auth genuinely can't be obtained (broker unreachable, declined, or no provider remote). In that case fall back to the CLI: **GitLab** `glab` / `POST /projects/:id/uploads`; **GitHub** `gh release upload` (draft/tag release) — then link from the PR body. (Inline image paste is web-UI-only; you can't drive it.)
+- Keep it **idempotent**: re-running replaces the PR's "Proof" section rather than stacking duplicates. If you have no PR URL / not a git repo, skip the upload — the captures still sit on disk and the SPA serves them live over the tunnel.
 
 Attach the same captures (or their uploaded links) to any feedback you file.
 

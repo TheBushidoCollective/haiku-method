@@ -313,7 +313,22 @@ function install(args: string[]): void {
 		)
 	}
 
-	settings.statusLine = { type: "command", command: cmd, padding: 0 }
+	// `refreshInterval: 1` re-runs the line every second ON TOP OF Claude
+	// Code's event-driven updates. Event triggers (new assistant message, mode
+	// change, …) go quiet exactly when the H·AI·K·U engine is busiest: while the
+	// main agent waits on background subagents (a hat wave, a fix loop, discovery
+	// fan-out), the tick advances + rewrites the statusline snapshot but NO event
+	// fires, so a purely event-driven line freezes mid-wave. The 1s timer keeps
+	// the pipeline/phase/pool bars walking the cursor in near-real-time during
+	// those idle-but-working stretches. 1 is the documented minimum; the renderer
+	// is pure + cheap (on-disk FM reads, no network), so the per-tick cost is
+	// negligible.
+	settings.statusLine = {
+		type: "command",
+		command: cmd,
+		padding: 0,
+		refreshInterval: 1,
+	}
 	mkdirSync(dirname(settingsPath), { recursive: true })
 	writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`)
 	console.error(

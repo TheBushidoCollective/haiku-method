@@ -838,8 +838,11 @@ test("resolveStatuslineState: execute phase shows the WHOLE current wave (done +
 		// numeric order: completed (all done), in-flight (active hat), and the
 		// not-yet-started member (empty progress). Nothing is excluded.
 		const pend = (n) => Array(n).fill("pending")
+		// Compare id + segments only — bars also carry an optional `url` (the
+		// browse deep link, undefined without a parseable origin) that this
+		// wave-membership test doesn't assert on.
 		assert.deepEqual(
-			state.itemBars,
+			state.itemBars?.map((b) => ({ id: b.id, segments: b.segments })),
 			[
 				// all hats advanced → all done
 				{ id: "U-01", segments: Array(hats.length).fill("done") },

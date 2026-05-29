@@ -1137,6 +1137,34 @@ export function pushBranchToOrigin(branch: string): {
  *
  *  Returns null when the origin URL can't be parsed or the host isn't
  *  recognised (the caller should print the branch name + base instead). */
+/** Parse an `origin` URL into host / owner / repo (repo keeps subgroup
+ *  slashes). Handles SSH (`git@host:owner/repo.git`) and HTTPS. Null when
+ *  unparseable. Shared by the statusline browse deep-links so they map a
+ *  remote to coordinates the same way the PR/MR fallback does. */
+export function parseGitRemote(
+	originRaw: string,
+): { host: string; owner: string; repo: string } | null {
+	if (!originRaw) return null
+	let host = ""
+	let path = ""
+	const sshMatch = originRaw.match(/^[^@\s]+@([^:]+):(.+?)(?:\.git)?$/)
+	if (sshMatch) {
+		host = sshMatch[1]
+		path = sshMatch[2]
+	} else {
+		try {
+			const u = new URL(originRaw)
+			host = u.hostname
+			path = u.pathname.replace(/^\/+/, "").replace(/\.git$/, "")
+		} catch {
+			return null
+		}
+	}
+	const segments = path.split("/").filter(Boolean)
+	if (segments.length < 2) return null
+	return { host, owner: segments[0], repo: segments.slice(1).join("/") }
+}
+
 export function buildCompareUrl(
 	headBranch: string,
 	baseBranch: string,

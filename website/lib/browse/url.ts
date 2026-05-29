@@ -1,109 +1,149 @@
-// lib/browse/url.ts — parse + build /browse/... deep-link URLs.
+// H·AI·K·U Browse — path-based URL builder and parser
 //
-// URL shape:
-//   /browse/{host}/{...project}/intent/{slug}/{stage}/{unit}
-//   /browse/{host}/{...project}/intent/{slug}/feedback/{id}            (intent-scoped FB)
-//   /browse/{host}/{...project}/intent/{slug}/{stage}/feedback/{id}    (stage-scoped FB)
-//
-// Examples:
-//   /browse/github.com/acme/widgets
-//     → host=github.com, project=acme/widgets
-//   /browse/github.com/acme/widgets/intent/my-feature
-//     → + intent=my-feature
-//   /browse/github.com/acme/widgets/intent/my-feature/design
-//     → + stage=design
-//   /browse/github.com/acme/widgets/intent/my-feature/design/unit-01-foo
-//     → + stage=design, unit=unit-01-foo
-//   /browse/github.com/acme/widgets/intent/my-feature/design/feedback/FB-007
-//     → + stage=design, feedback=FB-007
-//   /browse/github.com/acme/widgets/intent/my-feature/feedback/FB-007
-//     → + feedback=FB-007 (intent-scoped, no stage)
-//
-// The {...project} part is variable-length (host + org + repo, or deeper for
-// self-hosted GitLab subgroups), so we anchor on the literal `intent`
-// segment: everything before it (after host) is the project path, the
-// segment after it is the slug, then optional stage + (unit | feedback/{id}).
-// The `feedback` keyword is a second anchor inside the post-intent tail so a
-// feedback id can't be mistaken for a unit name.
+// URL pattern: /browse/{host}/{...project}/[intent/{slug}/[stage/{stage}/[{unit}/]]]
+// Special views: /browse/{host}/{...project}/board/
+// Branch param: ?branch=feature
 
 export interface BrowseLocation {
 	host: string
-	project: string
+	project: string // "org/repo" or "org/group/subgroup/project"
 	intent?: string
 	stage?: string
 	unit?: string
-	/** Feedback finding id (e.g. `FB-007`) for a feedback deep link. When set,
-	 *  `stage` is the finding's stage scope (absent for an intent-scoped FB). */
-	feedback?: string
+	view?: "board"
 	branch?: string
 }
 
-export function parseBrowsePath(pathname: string): BrowseLocation | null {
-	const prefix = "/browse/"
-	if (!pathname.startsWith(prefix)) return null
-	const rest = pathname.slice(prefix.length).replace(/\/+$/, "")
-	if (!rest) return null
-	const segments = rest.split("/").map(decodeURIComponent)
+/** Reserved path keywords that delimit the end of the project path */
+const RESERVED_KEYWORDS = new Set(["intent", "board"])
 
-	const intentIdx = segments.indexOf("intent")
-	if (intentIdx === -1) {
-		// No intent marker → the whole tail is the project path.
-		return { host: segments[0], project: segments.slice(1).join("/") }
+/**
+ * Build a path-based browse URL from a BrowseLocation.
+ *
+ * Examples:
+ *   buildBrowseUrl({ host: "github.com", project: "org/repo" })
+ *   → "/browse/github.com/org/repo/"
+ *
+ *   buildBrowseUrl({ host: "github.com", project: "org/repo", view: "board" })
+ *   → "/browse/github.com/org/repo/board/"
+ *
+ *   buildBrowseUrl({ host: "github.com", project: "org/repo", intent: "add-login" })
+ *   → "/browse/github.com/org/repo/intent/add-login/"
+ *
+ *   buildBrowseUrl({ host: "github.com", project: "org/repo", intent: "add-login", stage: "dev", unit: "unit-01" })
+ *   → "/browse/github.com/org/repo/intent/add-login/stage/dev/unit/unit-01/"
+ */
+export function buildBrowseUrl(loc: BrowseLocation): string {
+	const base = `/browse/${loc.host}/${loc.project}`
+
+	let path: string
+	if (loc.intent) {
+		path = `${base}/intent/${loc.intent}/`
+		if (loc.stage) {
+			path = `${base}/intent/${loc.intent}/stage/${loc.stage}/`
+			if (loc.unit) {
+				// `unit/` keyword mirrors `intent/` and `stage/` — each level of the
+				// path is keyword-delimited rather than positional.
+				path = `${base}/intent/${loc.intent}/stage/${loc.stage}/unit/${loc.unit}/`
+			}
+		}
+	} else if (loc.view === "board") {
+		path = `${base}/board/`
+	} else {
+		path = `${base}/`
 	}
+
+	if (loc.branch) {
+		path += `?branch=${encodeURIComponent(loc.branch)}`
+	}
+
+	return path
+}
+
+/**
+ * Parse a catch-all path segment array into a BrowseLocation.
+ *
+ * The segments come from Next.js [...path] parameter. The first segment is always
+ * the host, then the parser scans for a reserved keyword ("intent" or "board") to
+ * determine where the project path ends.
+ *
+ * Examples:
+ *   ["github.com", "org", "repo"]
+ *   → { host: "github.com", project: "org/repo" }
+ *
+ *   ["github.com", "org", "repo", "board"]
+ *   → { host: "github.com", project: "org/repo", view: "board" }
+ *
+ *   ["github.com", "org", "repo", "intent", "add-login"]
+ *   → { host: "github.com", project: "org/repo", intent: "add-login" }
+ *
+ *   ["github.com", "org", "repo", "intent", "add-login", "stage", "dev", "unit-01"]
+ *   → { host: "github.com", project: "org/repo", intent: "add-login", stage: "dev", unit: "unit-01" }
+ *
+ *   ["gitlab.com", "org", "group", "subgroup", "project", "intent", "my-intent"]
+ *   → { host: "gitlab.com", project: "org/group/subgroup/project", intent: "my-intent" }
+ */
+export function parseBrowsePath(segments: string[]): BrowseLocation | null {
+	if (segments.length < 3) return null
 
 	const host = segments[0]
-	const project = segments.slice(1, intentIdx).join("/")
-	const afterIntent = segments.slice(intentIdx + 1)
-	const [intent, ...tail] = afterIntent
 
-	// `feedback` anchor: `<slug>/[<stage>/]feedback/<id>`. The segment AFTER
-	// `feedback` is the id; the segment BEFORE it (when present) is the stage.
-	const fbIdx = tail.indexOf("feedback")
-	if (fbIdx !== -1) {
-		const feedback = tail[fbIdx + 1]
-		const stage = fbIdx > 0 ? tail[fbIdx - 1] : undefined
-		return {
-			host,
-			project,
-			...(intent ? { intent } : {}),
-			...(stage ? { stage } : {}),
-			...(feedback ? { feedback } : {}),
+	// Scan for reserved keyword to find boundary between project path and action
+	let keywordIndex = -1
+	for (let i = 1; i < segments.length; i++) {
+		if (RESERVED_KEYWORDS.has(segments[i])) {
+			keywordIndex = i
+			break
 		}
 	}
 
-	// No feedback marker → the classic `<slug>/[<stage>/[<unit>]]` tail.
-	const [stage, unit] = tail
-	return {
-		host,
-		project,
-		...(intent ? { intent } : {}),
-		...(stage ? { stage } : {}),
-		...(unit ? { unit } : {}),
-	}
-}
+	let project: string
+	const loc: BrowseLocation = { host, project: "" }
 
-export function buildBrowseUrl(loc: {
-	host: string
-	project: string
-	intent?: string
-	stage?: string
-	unit?: string
-	feedback?: string
-	branch?: string
-}): string {
-	const parts = ["/browse", loc.host, loc.project]
-	if (loc.intent) {
-		parts.push("intent", loc.intent)
-		if (loc.feedback) {
-			// Feedback deep link: optional stage scope, then `feedback/<id>`.
-			if (loc.stage) parts.push(loc.stage)
-			parts.push("feedback", loc.feedback)
-		} else {
-			if (loc.stage) parts.push(loc.stage)
-			if (loc.unit) parts.push(loc.unit)
-		}
+	if (keywordIndex === -1) {
+		// No keyword found — everything after host is the project path (list view)
+		project = segments.slice(1).join("/")
+		loc.project = project
+		return loc
 	}
-	const url = `${parts.join("/")}`
-	const q = loc.branch ? `?branch=${encodeURIComponent(loc.branch)}` : ""
-	return `${url}${q}`
+
+	// Everything between host and keyword is the project path
+	project = segments.slice(1, keywordIndex).join("/")
+	if (!project) return null
+	loc.project = project
+
+	const keyword = segments[keywordIndex]
+
+	if (keyword === "board") {
+		loc.view = "board"
+		return loc
+	}
+
+	if (keyword === "intent") {
+		const remaining = segments.slice(keywordIndex + 1)
+		if (remaining.length >= 1) loc.intent = remaining[0]
+		// Parse stage: either "stage/{name}" keyword format or legacy "{name}" positional format
+		if (remaining.length >= 3 && remaining[1] === "stage") {
+			// New format: intent/{slug}/stage/{stage}[/unit/{unit}]
+			loc.stage = remaining[2]
+			if (remaining.length >= 5 && remaining[3] === "unit") {
+				// Keyword form: …/stage/{stage}/unit/{unit}
+				loc.unit = remaining[4]
+			} else if (remaining.length >= 4 && remaining[3] !== "unit") {
+				// Legacy positional: …/stage/{stage}/{unit}
+				loc.unit = remaining[3]
+			}
+		} else if (remaining.length >= 2 && remaining[1] !== "stage") {
+			// Legacy format: intent/{slug}/{stage}[/{unit}] (pre-stage-keyword)
+			loc.stage = remaining[1]
+			if (remaining.length >= 4 && remaining[2] === "unit") {
+				loc.unit = remaining[3]
+			} else if (remaining.length >= 3 && remaining[2] !== "unit") {
+				loc.unit = remaining[2]
+			}
+		}
+		return loc
+	}
+
+	return loc
 }

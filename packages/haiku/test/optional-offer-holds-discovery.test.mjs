@@ -38,41 +38,24 @@ function setup(stages) {
 }
 
 test("optional-offer action holds discovery/decompose signals", async () => {
-	const { dir, slug, iDir } = setup(["inception", "design", "product"])
+	// Put the optional `design` stage FIRST so it's the active, unstarted stage
+	// immediately — no upstream stage to complete (the proven shape from
+	// drop-stage-lands-on-main). First-arrival fires the keep-or-drop offer.
+	const { dir, slug, iDir } = setup(["design", "product"])
 	const prevCwd = process.cwd()
 	const prevPlugin = process.env.CLAUDE_PLUGIN_ROOT
 	process.chdir(dir)
 	process.env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT
 	try {
-		// inception complete (one signed unit — v4 completeness reads unit FM,
-		// not a gate.md sentinel), so the cursor walks past it to design, the
-		// next + optional + unstarted stage that triggers the keep-or-drop offer.
-		const incUnits = join(iDir, "stages", "inception", "units")
-		mkdirSync(incUnits, { recursive: true })
-		writeFileSync(
-			join(incUnits, "unit-01-foo.md"),
-			[
-				"---",
-				"name: unit-01-foo",
-				"status: complete",
-				"hats: []",
-				"reviews: {}",
-				"approvals: {}",
-				"depends_on: []",
-				"outputs: []",
-				"quality_gates: []",
-				"---",
-				"",
-				"Body",
-			].join("\n"),
-		)
 		const { derivePosition } = await import(
 			`../src/orchestrator/workflow/cursor.ts?d=${Date.now()}`
 		)
-		// derivePosition takes an options object, and signals_unmet holds
-		// SIGNAL OBJECTS ({ signal: "discovery", … }), not bare strings — so
-		// membership is tested via .some(s => s.signal === …), not .includes().
-		const action = derivePosition({ slug, intentDir: iDir, studio: "software" })
+		// derivePosition takes an options object and returns a CursorPosition
+		// ({ track, action }); the cursor action is on `.action`. signals_unmet
+		// holds SIGNAL OBJECTS ({ signal: "discovery", … }), not bare strings —
+		// so membership is tested via .some(s => s.signal === …), not .includes().
+		const pos = derivePosition({ slug, intentDir: iDir, studio: "software" })
+		const action = pos.action
 		assert.equal(action.kind, "elaborate_loop")
 		assert.equal(action.optional_offer, true)
 		assert.ok(

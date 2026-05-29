@@ -5126,8 +5126,8 @@ function enforceFeedbackBranch(
 		const intentMd = join(intentDir(intent), "intent.md")
 		if (existsSync(intentMd)) {
 			const studio =
-				(parseFrontmatter(readFileSync(intentMd, "utf8")).data.studio as string) ||
-				""
+				(parseFrontmatter(readFileSync(intentMd, "utf8")).data
+					.studio as string) || ""
 			if (studio) activeStage = findCurrentStage(intent, studio)
 		}
 	} catch {

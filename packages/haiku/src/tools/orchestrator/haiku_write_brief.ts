@@ -103,8 +103,7 @@ export default defineTool({
 		// else the cursor's current stage.
 		const intentFm = parseFrontmatter(readFileSync(intentMd, "utf8")).data ?? {}
 		const studio = (intentFm.studio as string) || ""
-		const stage =
-			branchInfo?.stage ?? findCurrentStage(slug, studio, intentDir)
+		const stage = branchInfo?.stage ?? findCurrentStage(slug, studio, intentDir)
 		if (!stage) {
 			return err(
 				"write_brief_no_active_stage",

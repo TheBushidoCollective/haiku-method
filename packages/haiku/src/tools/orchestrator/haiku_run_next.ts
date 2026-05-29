@@ -725,12 +725,15 @@ export default defineTool({
 							const plan = resolveIntentStages(im, studio)
 							if (!plan.includes(here)) {
 								const active = findCurrentStage(slug, studio)
-								const escape = ensureOnStageBranch(slug, active ?? undefined)
-								if (!escape.ok) {
+								const escapeGuard = ensureOnStageBranch(
+									slug,
+									active ?? undefined,
+								)
+								if (!escapeGuard.ok) {
 									return buildGuardResponse(
 										slug,
 										active ?? undefined,
-										escape,
+										escapeGuard,
 										"run_next entry — escape dropped/dangling stage branch",
 									)
 								}

@@ -57,7 +57,7 @@ export interface RepoCoords {
  *  coord is missing. Repo may itself contain slashes (GitLab subgroups), so
  *  it's emitted as-is (already a path); host/owner are single segments. */
 function browseProjectPrefix(repo: RepoCoords | null): string | null {
-	if (!repo || !repo.host || !repo.owner || !repo.repo) return null
+	if (!repo?.host || !repo.owner || !repo.repo) return null
 	const repoPath = repo.repo.split("/").map(seg).join("/")
 	return `${webBase()}/browse/${seg(repo.host)}/${seg(repo.owner)}/${repoPath}`
 }

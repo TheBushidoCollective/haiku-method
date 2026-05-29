@@ -54,9 +54,15 @@ export class ProviderRestError extends Error {
  *  GitHub Enterprise → https://<host>/api/v3 (REST) + /api/graphql. */
 function githubApiBase(host: string): { rest: string; graphql: string } {
 	if (host === "github.com") {
-		return { rest: "https://api.github.com", graphql: "https://api.github.com/graphql" }
+		return {
+			rest: "https://api.github.com",
+			graphql: "https://api.github.com/graphql",
+		}
 	}
-	return { rest: `https://${host}/api/v3`, graphql: `https://${host}/api/graphql` }
+	return {
+		rest: `https://${host}/api/v3`,
+		graphql: `https://${host}/api/graphql`,
+	}
 }
 
 /** GitLab REST base for a host (always /api/v4). */

@@ -26,6 +26,7 @@ import {
 import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
 import { broadcastIntent } from "../intent-broadcaster.js"
 import { closeMicroApp } from "../micro-app.js"
+import { resolveActiveStageWithFallback } from "../orchestrator/studio.js"
 import {
 	buildApprovalRecord,
 	buildReviewRecord,

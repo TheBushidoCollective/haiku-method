@@ -28,10 +28,12 @@ function setup(stages) {
 			`stages: [${stages.join(", ")}]`,
 			"mode: discrete",
 			"status: active",
-			// Past the pre-intent intent.md substance gate (elaboration_verified_at
-			// — see cursor.ts derivePosition) so derivePosition proceeds into the
+			// Past the pre-intent intent.md substance gate (`verified_at` — see
+			// cursor.ts derivePosition ~2189) so derivePosition proceeds into the
 			// per-stage walk instead of returning the pre-intent elaborate_loop.
-			"elaboration_verified_at: 2026-05-28T00:00:00.000Z",
+			// QUOTED — gray-matter parses an unquoted ISO date as a Date object,
+			// and the gate checks `typeof verified_at === "string"`.
+			`verified_at: "2026-05-28T00:00:00.000Z"`,
 			"---",
 			"",
 			"# T",

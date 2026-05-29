@@ -31,7 +31,7 @@ export default defineTool({
 		if (inputErr) return inputErr
 		const { provider } = args as HaikuAuthLogoutInput
 
-		const wasConnected = clearProviderToken(provider)
+		const wasConnected = clearProviderToken(provider as "github" | "gitlab")
 		return text(
 			JSON.stringify({
 				ok: true,

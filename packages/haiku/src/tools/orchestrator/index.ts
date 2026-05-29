@@ -10,6 +10,8 @@
 // tools. As more tools migrate, the chain shrinks toward zero.
 
 import type { ToolDef } from "../types.js"
+import haiku_auth_logout from "./haiku_auth_logout.js"
+import haiku_auth_status from "./haiku_auth_status.js"
 import haiku_await_gate from "./haiku_await_gate.js"
 // v9: haiku_baseline_init removed — premise-witness model has no baseline.json.
 // v4: haiku_classify_drift removed — drift sweep auto-files FBs.
@@ -39,6 +41,8 @@ import haiku_unit_reset from "./haiku_unit_reset.js"
 export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 	(
 		[
+			haiku_auth_logout,
+			haiku_auth_status,
 			haiku_await_gate,
 			haiku_coverage_acknowledge,
 			haiku_debug,

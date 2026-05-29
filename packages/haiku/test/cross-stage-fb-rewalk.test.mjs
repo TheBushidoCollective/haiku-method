@@ -702,3 +702,104 @@ test(
 		})
 	},
 )
+
+// User requirement (2026-05-29): feedback must stay ADDRESSABLE until the intent's
+// work is merged into the default branch. Under git, "not merged" == pending_seal
+// (work landed on the hub branch `haiku/<slug>/main` but not yet on the repo
+// default). So while HELD at pending_seal, a NEW open finding must (a) be
+// accepted, and (b) preempt the seal — the engine must NOT seal past open
+// feedback, and must re-seal only once it's addressed AND the merge lands.
+test(
+	"e2e (pending_seal): an open finding left while awaiting the default-branch merge blocks the seal, then the intent seals once addressed + merged",
+	{ timeout: 30000 },
+	async () => {
+		if (!HAS_GIT) return
+		await withRepo("pending-seal-fb", async ({ repoRoot, intentDir, slug }) => {
+			buildFourStageStudio(repoRoot)
+			makeIntent({
+				intentDir,
+				slug,
+				studio: "fb4",
+				mode: "continuous",
+				extraFm: { stages: ["s1", "s2", "s3", "s4"] },
+			})
+
+			const seen = []
+			let sawPendingSeal = false
+			let heldFbInjected = false
+			let sealedWhileFbOpen = false
+			const MAX_TICKS = 500
+
+			for (let i = 0; i < MAX_TICKS; i++) {
+				const action = await runTick(slug)
+				seen.push(`${action.action}/${action.stage ?? ""}`)
+
+				if (action.action === "pending_seal" && !heldFbInjected) {
+					// HELD at pending_seal: hub branch not yet on the default
+					// branch. Leave an open finding here — it must be accepted
+					// AND must keep the engine from sealing.
+					sawPendingSeal = true
+					makeFeedback({
+						intentDir,
+						stage: "s2",
+						id: 1,
+						title: "post-completion gap noticed before merge",
+						body: "user leaves feedback while the intent awaits the default-branch merge",
+						origin: "user-chat",
+						author: "user",
+					})
+					heldFbInjected = true
+					// Do NOT deliver yet. Next tick MUST NOT seal — the open FB
+					// preempts (Track B re-routes to s2's fix loop).
+					continue
+				}
+
+				if (action.action === "sealed") {
+					if (
+						heldFbInjected &&
+						existsSync(join(intentDir, "stages", "s2", "feedback"))
+					) {
+						const open = readdirSync(
+							join(intentDir, "stages", "s2", "feedback"),
+						).some((f) => {
+							if (!f.endsWith(".md")) return false
+							const d = readFm(join(intentDir, "stages", "s2", "feedback", f))
+							return !d.closed_at && !d.rejected_at
+						})
+						if (open) sealedWhileFbOpen = true
+					}
+					break
+				}
+				applyResponse(intentDir, action, repoRoot, slug)
+				if (action.action === "seal_intent") {
+					const intentMd = join(intentDir, "intent.md")
+					const fm = readFm(intentMd)
+					writeFm(intentMd, { ...fm, sealed_at: new Date().toISOString() })
+				}
+			}
+
+			assert.ok(
+				sawPendingSeal,
+				`never reached pending_seal; recent: ${seen.slice(-10).join(" → ")}`,
+			)
+			// The finding left at pending_seal pulled the cursor back into a fix
+			// cycle — proving feedback is still addressable pre-merge.
+			assert.ok(
+				seen.some(
+					(s) =>
+						s.startsWith("start_feedback_hat/") || s.startsWith("close_feedback/"),
+				),
+				`open feedback at pending_seal was never processed; recent: ${seen.slice(-15).join(" → ")}`,
+			)
+			assert.ok(
+				!sealedWhileFbOpen,
+				"engine sealed while a finding was still open — feedback was NOT addressable until merge",
+			)
+			assert.equal(
+				seen[seen.length - 1].startsWith("sealed/"),
+				true,
+				`intent never sealed after the finding was addressed; recent: ${seen.slice(-12).join(" → ")}`,
+			)
+		})
+	},
+)

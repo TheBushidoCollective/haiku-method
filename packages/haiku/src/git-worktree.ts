@@ -5161,3 +5161,71 @@ export function prepareRevisitBranch(
 		}
 	}
 }
+
+// ── Provider remote parsing + REST helpers (auth + proof upload) ─────
+//
+// Appended for the provider-OAuth slice: login-host inference (#13) and the
+// proof-upload tool (#15). `parseGitRemote` exports the SSH/HTTPS remote parse
+// that `buildCompareUrl` does inline, so the auth + upload tools can resolve
+// the provider from the repo's origin without re-implementing it.
+
+/** Parsed pieces of a git remote URL. `owner` may contain slashes for nested
+ *  GitLab groups (`group/subgroup`). */
+export interface ParsedGitRemote {
+	host: string
+	owner: string
+	repo: string
+}
+
+/** Parse a raw `origin` URL (SSH or HTTPS) into host/owner/repo, or null when
+ *  it can't be understood. Mirrors the inline parse in `buildCompareUrl`. */
+export function parseGitRemote(originRaw: string): ParsedGitRemote | null {
+	const raw = originRaw.trim()
+	if (!raw) return null
+	let host = ""
+	let path = ""
+	// SSH form: git@host:owner/repo(.git) — also scp-like user@host:path
+	const sshMatch = raw.match(/^[^@\s]+@([^:]+):(.+?)(?:\.git)?$/)
+	if (sshMatch) {
+		host = sshMatch[1]
+		path = sshMatch[2]
+	} else {
+		// HTTPS / ssh:// form: scheme://host/owner/.../repo(.git)
+		try {
+			const u = new URL(raw)
+			host = u.hostname
+			path = u.pathname.replace(/^\/+/, "").replace(/\.git$/, "")
+		} catch {
+			return null
+		}
+	}
+	const segments = path.split("/").filter(Boolean)
+	if (segments.length < 2) return null
+	const owner = segments.slice(0, -1).join("/")
+	const repo = segments[segments.length - 1]
+	if (!host || !owner || !repo) return null
+	return { host, owner, repo }
+}
+
+/** Read the repo's `origin` URL via git, or null when there's no remote. */
+export function readOriginRemoteUrl(): string | null {
+	try {
+		const out = execFileSync("git", ["remote", "get-url", "origin"], {
+			encoding: "utf8",
+			stdio: "pipe",
+		}).trim()
+		return out || null
+	} catch {
+		return null
+	}
+}
+
+/** Map a remote host to a supported provider name. `includes()` is intentional
+ *  so GitHub Enterprise (`github.company.com`) and self-hosted GitLab
+ *  (`gitlab.internal`) resolve too. Returns null for unrecognized hosts. */
+export function providerFromHost(host: string): "github" | "gitlab" | null {
+	const h = host.toLowerCase()
+	if (h.includes("github")) return "github"
+	if (h.includes("gitlab")) return "gitlab"
+	return null
+}

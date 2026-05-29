@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.3.0] - 2026-05-29
+
+### Added
+
+- Optional stages (design, operations, security) can be dropped at elaboration start if they're not needed for the intent.
+- Stage briefs (BRIEF.md) document the plan at stage start and the results at completion.
+- Provider authentication: agents can authenticate with GitHub or GitLab, with credentials stored locally for PR operations and CI checks.
+- Feedback can be moved between stages when findings belong elsewhere.
+- Runtime verification proof uploads directly to delivery PRs, showing test evidence to reviewers.
+
 ## [10.2.1] - 2026-05-28
 
 No notable changes.

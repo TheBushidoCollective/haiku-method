@@ -1,11 +1,19 @@
 import type { HttpFunction } from "@google-cloud/functions-framework"
+import { handleCliRoute } from "./cli.js"
 
 // OAuth code→token exchange for GitHub and GitLab.
 // Deployed as a GCP Cloud Function (v2).
 //
 // Endpoints:
-//   POST /github/token — exchange GitHub authorization code
-//   POST /gitlab/token — exchange GitLab authorization code
+//   POST /github/token — exchange GitHub authorization code (browse site)
+//   POST /gitlab/token — exchange GitLab authorization code (browse site)
+//   POST /cli/start    — begin a CLI device-flow handshake (Phase 2)
+//   POST /cli/complete — browse callback writes the captured token (Phase 2)
+//   POST /cli/poll     — CLI polls for the token, one-time release (Phase 2)
+//   POST /cli/refresh  — refresh an access token via the held secret (Phase 2)
+//
+// The CLI endpoints (src/cli.ts) reuse the same provider exchange + Secret
+// Manager client secrets as the browse-site endpoints.
 
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || "https://haikumethod.ai")
 	.split(",")
@@ -55,6 +63,12 @@ export const authProxy: HttpFunction = async (req, res) => {
 	}
 
 	const path = req.path
+
+	// CLI device-flow routes (Phase 2). handleCliRoute returns true when it owns
+	// the path; falls through to the browse-site routes below otherwise.
+	if (await handleCliRoute(req, res)) {
+		return
+	}
 
 	if (path === "/github/token") {
 		await handleGitHub(req, res)

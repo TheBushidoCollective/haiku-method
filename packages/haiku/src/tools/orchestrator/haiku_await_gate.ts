@@ -451,7 +451,7 @@ export default defineTool({
 						)
 					}
 					stampGateApproval(slug, "intent_completion", stage)
-					workflowIntentComplete(slug)
+					await workflowIntentComplete(slug)
 					syncSessionMetadata(slug, stFile)
 					const gateResult = {
 						action: "intent_complete",
@@ -520,7 +520,7 @@ export default defineTool({
 				}
 				if (nextStage) {
 					stampGateApproval(slug, "stage_gate", stage)
-					workflowAdvanceStage(slug, stage, nextStage)
+					await workflowAdvanceStage(slug, stage, nextStage)
 					syncSessionMetadata(slug, stFile)
 					const gateResult = {
 						action: "advance_stage",
@@ -591,7 +591,7 @@ export default defineTool({
 					// signal (gate.ts reconciles on branch-merged-into-intent-main).
 					const stagePrUrl = existingStagePr.url
 					const { markPullRequestReady } = await import("../../git-worktree.js")
-					const ready = markPullRequestReady(stagePrUrl)
+					const ready = await markPullRequestReady(stagePrUrl)
 					try {
 						const intentMd = join(intentDir(slug), "intent.md")
 						setFrontmatterField(intentMd, "external_review_url", stagePrUrl)
@@ -616,7 +616,7 @@ export default defineTool({
 					}
 				} else if (isGitRepo()) {
 					const { openStagePullRequest } = await import("../../git-worktree.js")
-					const opened = openStagePullRequest({ slug, stage })
+					const opened = await openStagePullRequest({ slug, stage })
 					if (opened.createdUrl) {
 						// Persist the URL on intent.md so the next tick
 						// (and the discoverReviewUrl polling in

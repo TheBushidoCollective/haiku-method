@@ -87,7 +87,7 @@ import {
 	listOrphanDiscreteIntents,
 	mergeFixChainWorktree,
 	mergeUnitWorktree,
-	openPullRequest,
+	openPullRequestCli,
 	pushFixChainWorktree,
 	pushUnitWorktree,
 	readFileFromBranch,
@@ -1586,7 +1586,7 @@ function repairAllBranches(autoApply: boolean): {
 				summary.pushError = push.pushError
 				if (push.committed && push.pushed && wasAlreadyMerged) {
 					summary.merged = true
-					const prResult = openPullRequest(
+					const prResult = openPullRequestCli(
 						branch,
 						mainline,
 						`repair: metadata fixes for ${slug}`,
@@ -1699,7 +1699,7 @@ function repairArchivedOnMainline(
 			summary.pushError = push.pushError
 
 			if (push.committed && push.pushed) {
-				const prResult = openPullRequest(
+				const prResult = openPullRequestCli(
 					repairBranch,
 					mainline,
 					"repair: metadata fixes for archived intents",

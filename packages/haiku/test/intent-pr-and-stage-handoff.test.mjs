@@ -52,6 +52,24 @@ function test(name, fn) {
 	}
 }
 
+// Async variant: markPullRequestReady is async (it prefers the token-backed
+// REST path, falling back to the CLI). Awaited at the call site (top-level
+// await keeps these sequential with the sync `test` runs).
+async function atest(name, fn) {
+	_resetIsGitRepoForTests()
+	try {
+		await fn()
+		passed++
+		console.log(`  ✓ ${name}`)
+	} catch (err) {
+		failed++
+		console.log(`  ✗ ${name}`)
+		console.log(`    ${err.message}`)
+		if (err.stack)
+			console.log(`    ${err.stack.split("\n").slice(1, 4).join("\n    ")}`)
+	}
+}
+
 function withCwd(dir, fn) {
 	const prev = process.cwd()
 	process.chdir(dir)
@@ -102,41 +120,54 @@ test("no-git-repo path returns benign message, no exception", () => {
 
 console.log("\n=== openStageDraftPullRequest ===")
 
-test("no-git-repo path returns benign message, correct stage→intent-main branch pair", () => {
-	const dir = makeNonRepo()
-	withCwd(dir, () => {
-		const r = openStageDraftPullRequest({ slug: "test-intent", stage: "design" })
-		// Stage branch → intent main (NOT repo default).
-		assert.strictEqual(r.branch, "haiku/test-intent/design")
-		assert.strictEqual(r.base, "haiku/test-intent/main")
-		assert.match(r.message, /Not a git repo/i)
-		assert.strictEqual(r.createdUrl, undefined)
-	})
-	rmSync(dir, { recursive: true, force: true })
-})
+await atest(
+	"no-git-repo path returns benign message, correct stage→intent-main branch pair",
+	async () => {
+		const dir = makeNonRepo()
+		// openStageDraftPullRequest is async (REST-or-CLI), so we await it
+		// BEFORE restoring cwd — withCwd's sync finally would chdir back before
+		// the promise settled.
+		const prev = process.cwd()
+		process.chdir(dir)
+		try {
+			const r = await openStageDraftPullRequest({
+				slug: "test-intent",
+				stage: "design",
+			})
+			// Stage branch → intent main (NOT repo default).
+			assert.strictEqual(r.branch, "haiku/test-intent/design")
+			assert.strictEqual(r.base, "haiku/test-intent/main")
+			assert.match(r.message, /Not a git repo/i)
+			assert.strictEqual(r.createdUrl, undefined)
+		} finally {
+			process.chdir(prev)
+		}
+		rmSync(dir, { recursive: true, force: true })
+	},
+)
 
 console.log("\n=== markPullRequestReady ===")
 
-test("empty url returns benign error", () => {
-	const r = markPullRequestReady("")
+await atest("empty url returns benign error", async () => {
+	const r = await markPullRequestReady("")
 	assert.strictEqual(r.ok, false)
 	assert.match(r.error, /empty url/i)
 })
 
-test("invalid url returns benign error (no throw)", () => {
-	const r = markPullRequestReady("not a url at all")
+await atest("invalid url returns benign error (no throw)", async () => {
+	const r = await markPullRequestReady("not a url at all")
 	assert.strictEqual(r.ok, false)
 	assert.match(r.error, /not a valid URL/i)
 })
 
-test("unrecognised provider host surfaces in error", () => {
-	const r = markPullRequestReady("https://example.com/foo/bar")
+await atest("unrecognised provider host surfaces in error", async () => {
+	const r = await markPullRequestReady("https://example.com/foo/bar")
 	assert.strictEqual(r.ok, false)
 	assert.match(r.error, /unrecognised provider host/i)
 })
 
-test("gitlab URL without iid returns parse error", () => {
-	const r = markPullRequestReady("https://gitlab.com/owner/project/-/branches")
+await atest("gitlab URL without iid returns parse error", async () => {
+	const r = await markPullRequestReady("https://gitlab.com/owner/project/-/branches")
 	assert.strictEqual(r.ok, false)
 	assert.match(r.error, /could not parse MR iid/i)
 })

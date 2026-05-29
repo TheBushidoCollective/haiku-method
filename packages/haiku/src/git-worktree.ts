@@ -32,7 +32,14 @@ import {
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import matter from "gray-matter"
+import { readProviderToken } from "./global-settings.js"
 import { migrateIntent } from "./orchestrator/migrate-registry.js"
+import {
+	type CreatePrInput,
+	createPullRequestRest,
+	markPullRequestReadyRest,
+	type PrRestContext,
+} from "./provider-rest.js"
 // Named import also triggers the side-effect registration on
 // migrate-registry — without that registration, the post-merge sweep's
 // `migrateIntent("0", "4.0.0")` would throw "no migration path."
@@ -873,20 +880,82 @@ export function detectPrTool(): "gh" | "glab" | null {
 	return null
 }
 
-/** Open a PR/MR from `branch` into `mainline` using the detected tool.
- *  Returns the PR URL on success, an error message on failure.
- *  Set `options.draft` to true to open a draft PR/MR (gh `--draft`,
- *  glab `--draft`). */
-export function openPullRequest(
+/** Resolve a token-backed REST context from the repo origin + the GLOBAL token
+ *  store. Returns null when there's no remote, the host isn't a supported
+ *  provider, or no token is stored for that provider — in which case the caller
+ *  falls back to the `gh` / `glab` CLI. The token's `host` is NOT matched against
+ *  origin (a single provider token serves all repos on that provider); origin is
+ *  only used for owner/repo/host coordinates. */
+export function resolvePrRestContext(): PrRestContext | null {
+	const origin = readOriginRemoteUrl()
+	if (!origin) return null
+	const parsed = parseGitRemote(origin)
+	if (!parsed) return null
+	const provider = providerFromHost(parsed.host)
+	if (!provider) return null
+	const token = readProviderToken(provider)
+	if (!token?.access_token) return null
+	return {
+		provider,
+		host: parsed.host,
+		owner: parsed.owner,
+		repo: parsed.repo,
+		token: token.access_token,
+	}
+}
+
+/** Default fetch impl for the REST PR/MR helpers — wraps global fetch. */
+function defaultPrFetch(...a: Parameters<typeof fetch>): ReturnType<typeof fetch> {
+	return fetch(...a)
+}
+
+/** Open a PR/MR from `branch` into `mainline`, preferring the token-backed
+ *  REST path when a provider token is stored, falling back to the `gh` / `glab`
+ *  CLI otherwise (or on any REST miss). Returns the PR URL on success, an error
+ *  message on failure. Set `options.draft` for a draft PR/MR.
+ *
+ *  Async because the REST path is network I/O. The synchronous CLI-only body
+ *  lives in `openPullRequestCli` so the sync repair-admin path can reuse it
+ *  without going async. */
+export async function openPullRequest(
+	branch: string,
+	mainline: string,
+	title: string,
+	body: string,
+	options?: { draft?: boolean },
+): Promise<{ ok: boolean; url?: string; error?: string }> {
+	const draft = options?.draft === true
+
+	// Token-backed REST path: when a provider token is stored, drive the
+	// provider API directly (no authed CLI required). On any REST miss we fall
+	// through to the CLI below — REST is never the only path.
+	const rest = resolvePrRestContext()
+	if (rest) {
+		try {
+			const input: CreatePrInput = { branch, mainline, title, body, draft }
+			const { url } = await createPullRequestRest(rest, input, defaultPrFetch)
+			return { ok: true, url }
+		} catch {
+			// fall through to CLI
+		}
+	}
+
+	return openPullRequestCli(branch, mainline, title, body, options)
+}
+
+/** Synchronous CLI-only PR/MR open via `gh` / `glab`. The proven fallback that
+ *  `openPullRequest` delegates to, and the path the sync repair-admin flow uses
+ *  directly (no stored-token REST, no async). */
+export function openPullRequestCli(
 	branch: string,
 	mainline: string,
 	title: string,
 	body: string,
 	options?: { draft?: boolean },
 ): { ok: boolean; url?: string; error?: string } {
+	const draft = options?.draft === true
 	const tool = detectPrTool()
 	if (!tool) return { ok: false, error: "no PR tool (gh/glab) found on PATH" }
-	const draft = options?.draft === true
 	try {
 		if (tool === "gh") {
 			// Check for an existing PR for this branch first to avoid duplicates
@@ -1255,12 +1324,12 @@ export interface OpenStageMrResult {
  *  failure. The agent's external_review_requested response surfaces
  *  whichever URL we produced — programmatic when possible, manual link
  *  when not. */
-export function openStagePullRequest(opts: {
+export async function openStagePullRequest(opts: {
 	slug: string
 	stage: string
 	title?: string
 	body?: string
-}): OpenStageMrResult {
+}): Promise<OpenStageMrResult> {
 	const branch = `haiku/${opts.slug}/${opts.stage}`
 	const base = `haiku/${opts.slug}/main`
 	const title =
@@ -1288,7 +1357,7 @@ export function openStagePullRequest(opts: {
 	}
 
 	if (push.ok) {
-		const pr = openPullRequest(branch, base, title, body)
+		const pr = await openPullRequest(branch, base, title, body)
 		if (pr.ok && pr.url) {
 			result.createdUrl = pr.url
 			result.message = `Stage PR opened: ${pr.url}`
@@ -1363,7 +1432,11 @@ export function openIntentDraftPullRequest(opts: {
 	}
 
 	if (push.ok) {
-		const pr = openPullRequest(branch, base, title, body, { draft: true })
+		// CLI-only: this opens the intent-main draft PR once, from the
+		// synchronous haiku_intent_create handler. The token-backed REST path is
+		// only wired through the async-reachable PR ops (stage-PR open, both
+		// ready-flips) — see openPullRequest. A sync handler can't await REST.
+		const pr = openPullRequestCli(branch, base, title, body, { draft: true })
 		if (pr.ok && pr.url) {
 			result.createdUrl = pr.url
 			result.message = `Draft PR opened: ${pr.url}`
@@ -1399,12 +1472,12 @@ export function openIntentDraftPullRequest(opts: {
  *  it. Stage start never blocks on this. Shape mirrors
  *  openIntentDraftPullRequest — the only differences are the branch/base
  *  pair (stage → intent-main) and the default copy. */
-export function openStageDraftPullRequest(opts: {
+export async function openStageDraftPullRequest(opts: {
 	slug: string
 	stage: string
 	title?: string
 	body?: string
-}): OpenIntentMrResult {
+}): Promise<OpenIntentMrResult> {
 	const branch = `haiku/${opts.slug}/${opts.stage}`
 	const base = `haiku/${opts.slug}/main`
 	const title = opts.title ?? `H·AI·K·U: ${opts.slug} — stage ${opts.stage}`
@@ -1430,7 +1503,7 @@ export function openStageDraftPullRequest(opts: {
 	}
 
 	if (push.ok) {
-		const pr = openPullRequest(branch, base, title, body, { draft: true })
+		const pr = await openPullRequest(branch, base, title, body, { draft: true })
 		if (pr.ok && pr.url) {
 			result.createdUrl = pr.url
 			result.message = `Draft stage PR opened: ${pr.url}`
@@ -1458,10 +1531,10 @@ export function openStageDraftPullRequest(opts: {
  *  Detects provider from URL hostname: `gh pr ready <url>` or
  *  `glab mr update <iid> --ready`. Best-effort; the caller logs failures
  *  and continues with the user's merge action. */
-export function markPullRequestReady(url: string): {
+export async function markPullRequestReady(url: string): Promise<{
 	ok: boolean
 	error?: string
-} {
+}> {
 	if (!url) return { ok: false, error: "empty url" }
 	let parsed: URL
 	try {
@@ -1469,6 +1542,18 @@ export function markPullRequestReady(url: string): {
 	} catch {
 		return { ok: false, error: `not a valid URL: ${url}` }
 	}
+
+	// Token-backed REST path first; any REST miss falls through to the CLI.
+	const rest = resolvePrRestContext()
+	if (rest) {
+		try {
+			await markPullRequestReadyRest(rest, url, defaultPrFetch)
+			return { ok: true }
+		} catch {
+			// fall through to CLI
+		}
+	}
+
 	try {
 		// Loose `includes()` match (vs `=== "github.com"`) is intentional
 		// here: catches GitHub Enterprise (`github.company.com`) and self-

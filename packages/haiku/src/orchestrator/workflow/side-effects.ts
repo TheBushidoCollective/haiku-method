@@ -51,6 +51,7 @@ import {
 	mergeStageBranchForward,
 	mergeStageBranchIntoMain,
 	openStageDraftPullRequest,
+	resolvePrRestContext,
 	pushStageBranch,
 } from "../../git-worktree.js"
 import { withIntentMainLock } from "../../locks.js"
@@ -114,7 +115,10 @@ function readFrontmatter(filePath: string): Record<string, unknown> {
  *  Mode shaping: `discrete` opens a PR for EVERY stage. `discrete-hybrid`
  *  opens one ONLY for stages whose review gate is external (the others run
  *  continuous and keep their work on the intent-main PR). */
-function openStageDraftPrIfDelivery(slug: string, stage: string): void {
+async function openStageDraftPrIfDelivery(
+	slug: string,
+	stage: string,
+): Promise<void> {
 	const fm = readFrontmatter(join(intentDir(slug), "intent.md"))
 	const mode = (fm.mode as string) || ""
 	if (!PER_STAGE_PR_MODES.has(mode)) return
@@ -122,10 +126,13 @@ function openStageDraftPrIfDelivery(slug: string, stage: string): void {
 		const studio = (fm.studio as string) || ""
 		if (!studio || !stageRequiresExternalReview(studio, stage)) return
 	}
-	if (!isGitRepo() || detectPrTool() === null) return
+	// A stored provider token opens the PR over REST without a CLI on PATH, so
+	// the no-CLI early-return must also check for a REST context.
+	if (!isGitRepo()) return
+	if (detectPrTool() === null && resolvePrRestContext() === null) return
 	if (readStagePr(slug, stage)?.url) return
 	try {
-		const draft = openStageDraftPullRequest({ slug, stage })
+		const draft = await openStageDraftPullRequest({ slug, stage })
 		if (draft.createdUrl) {
 			setStagePrField(slug, stage, "url", draft.createdUrl)
 			setStagePrField(slug, stage, "status", "draft")
@@ -174,7 +181,10 @@ function findPreviousStage(slug: string, stage: string): string | undefined {
  *
  *  The intent's `mode` field controls iteration cadence and review
  *  rules but not branching topology — both modes branch per-stage. */
-export function workflowStartStage(slug: string, stage: string): void {
+export async function workflowStartStage(
+	slug: string,
+	stage: string,
+): Promise<void> {
 	createIntentBranch(slug)
 	cleanupOrphanedStageBranches(slug)
 
@@ -264,7 +274,7 @@ export function workflowStartStage(slug: string, stage: string): void {
 	// Per-stage delivery PR (discrete / discrete-hybrid): open a draft for
 	// this stage now that its branch exists, so proof + work land on it.
 	// Stamps the stage_prs map; the gitCommitState below commits the stamp.
-	openStageDraftPrIfDelivery(slug, stage)
+	await openStageDraftPrIfDelivery(slug, stage)
 
 	emitTelemetry("haiku.stage.started", { intent: slug, stage })
 	gitCommitState(`haiku: start stage ${stage}`)
@@ -322,16 +332,16 @@ export function workflowCompleteStage(
  *  completed branch between ticks (which would otherwise force the
  *  next tick's `ensureOnStageBranch` guard onto intent main via an
  *  auto-commit detour, stranding the advance). */
-export function workflowAdvanceStage(
+export async function workflowAdvanceStage(
 	slug: string,
 	currentStage: string,
 	nextStage: string,
-): void {
+): Promise<void> {
 	workflowCompleteStage(slug, currentStage, "advanced")
 
 	// `active_stage` write removed 2026-05-12 — see workflowStartStage
 	// for the rationale (cursor derives via findCurrentStage).
-	workflowStartStage(slug, nextStage)
+	await workflowStartStage(slug, nextStage)
 
 	// Reseal: workflowCompleteStage sealed against active_stage=currentStage,
 	// then workflowStartStage rewrote frontmatter again; the prior checksums are
@@ -585,7 +595,7 @@ export function completeOrReviewIntent(
 /** Mark intent completed and fan the last stage (and any unmerged
  *  prior stages) into intent main, checkout intent main, reap every
  *  merged stage branch so the intent lands on a single clean ref. */
-export function workflowIntentComplete(slug: string): void {
+export async function workflowIntentComplete(slug: string): Promise<void> {
 	const intentFile = join(intentDir(slug), "intent.md")
 	if (existsSync(intentFile)) {
 		// If we opened a draft PR at intent_create time, flip it to
@@ -598,7 +608,7 @@ export function workflowIntentComplete(slug: string): void {
 		const draftUrl = fmRaw.draft_pr_url as string | undefined
 		const draftStatus = fmRaw.draft_pr_status as string | undefined
 		if (draftUrl && draftStatus === "draft") {
-			const ready = markPullRequestReady(draftUrl)
+			const ready = await markPullRequestReady(draftUrl)
 			if (ready.ok) {
 				setFrontmatterField(intentFile, "draft_pr_status", "ready")
 				setFrontmatterField(intentFile, "draft_pr_ready_at", timestamp())

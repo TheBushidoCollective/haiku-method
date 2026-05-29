@@ -466,7 +466,9 @@ export default defineTool({
 		// The engine flips draft → ready in workflowIntentComplete on the
 		// final approval. Best-effort: failures stamp draft_pr_status:
 		// "failed" but never block intent creation. Skipped silently when
-		// the repo has no provider CLI (gh / glab) on PATH.
+		// the repo has no provider CLI (gh / glab) on PATH. (This one-time
+		// draft open runs in a synchronous handler, so it stays on the CLI; the
+		// token-backed REST path covers the async-reachable PR ops instead.)
 		let draftPrMessage = ""
 		if (isGitRepo() && detectPrTool() !== null) {
 			try {

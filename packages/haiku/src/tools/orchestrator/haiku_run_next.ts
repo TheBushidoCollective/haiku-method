@@ -1723,7 +1723,7 @@ export default defineTool({
 		) {
 			try {
 				const { openStagePullRequest } = await import("../../git-worktree.js")
-				const opened = openStagePullRequest({
+				const opened = await openStagePullRequest({
 					slug,
 					stage: result.stage as string,
 				})

@@ -22,7 +22,26 @@
 # bundle behavior in a dev checkout). HAIKU_DEV=1 forces source mode
 # (custom plugin install paths that should still hot-reload).
 set -euo pipefail
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Canonicalize this script's path through any symlinks BEFORE computing HERE.
+# An npx install (`npx -y haiku-method statusline`) is invoked through
+# `node_modules/.bin/haiku-method`, which npm creates as a symlink to
+# `../haiku-method/bin/haiku`. Without resolving it, `dirname "$BASH_SOURCE"`
+# is the `.bin` dir, so the bundle (`$HERE/haiku.mjs`) and source
+# (`$HERE/../../packages/...`) both resolve to non-existent paths and the
+# script dies with "cannot locate bundle". Resolving the symlink puts HERE at
+# the REAL `<pkg>/bin` dir where `haiku.mjs` lives. A no-op for dev / market-
+# place installs (there `bin/haiku` is a plain file, not a symlink), so it's
+# safe everywhere. macOS has no `readlink -f`, so walk the chain by hand.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+	DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+	SOURCE="$(readlink "$SOURCE")"
+	case "$SOURCE" in
+	/*) : ;;
+	*) SOURCE="$DIR/$SOURCE" ;;
+	esac
+done
+HERE="$(cd "$(dirname "$SOURCE")" && pwd)"
 BUNDLE="$HERE/haiku.mjs"
 SOURCE_ENTRY="$HERE/../../packages/haiku/src/main.ts"
 

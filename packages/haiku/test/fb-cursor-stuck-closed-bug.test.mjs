@@ -22,12 +22,7 @@
 //      the dispatch refuses to spawn a subagent that would loop.
 
 import assert from "node:assert/strict"
-import {
-	mkdirSync,
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { test } from "node:test"
@@ -138,6 +133,76 @@ test("cursor skips closed FB via closed_by fix-loop fallback", async () => {
 			action,
 			null,
 			`closed_by: 'fix-loop:*' alone MUST skip the FB. got: ${JSON.stringify(action)}`,
+		)
+	} finally {
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})
+
+test("cursor skips REJECTED FB via rejected_at — report 20260528", async () => {
+	// Bug haiku-bug-merge-trains-20260528: a valid-and-fixed finding closed
+	// with haiku_feedback_reject stamps `rejected_at` (the v8 terminal signal)
+	// and NO closed_at / no `status` key. The open-feedback walk must treat
+	// rejected_at as terminal and skip it — else it re-dispatches
+	// start_feedback_hat forever while the classifier refuses ("already
+	// rejected, terminal"). Locks isFbTerminal's rejected_at branch.
+	const { __testOnly } = await importCursor()
+	const tmp = mkdtempSync(join(tmpdir(), "haiku-fb-rej-"))
+	try {
+		const fbPath = join(tmp, "010-fb.md")
+		writeFbFile(
+			fbPath,
+			[
+				// Exactly what haiku_feedback_reject writes: rejected_at, no
+				// closed_at, no `status` key (stripped by normalizeLegacy…).
+				"rejected_at: '2026-05-28T14:46:18.472Z'",
+				"author_type: agent",
+				"targets:",
+				"  unit: unit-01",
+				"  invalidates: [spec]",
+			].join("\n"),
+		)
+		const action = __testOnly.nextActionForFeedback(
+			"security",
+			fbPath,
+			"software",
+		)
+		assert.equal(
+			action,
+			null,
+			`a rejected FB (rejected_at set) MUST be skipped — re-dispatching it deadlocks the classifier. got: ${JSON.stringify(action)}`,
+		)
+	} finally {
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})
+
+test("cursor skips REJECTED FB when rejected_at is a Date (unquoted YAML)", async () => {
+	// Same Date-vs-string trap that bit closed_at: an unquoted ISO rejected_at
+	// parses as a Date. isFbTerminal must accept both forms.
+	const { __testOnly } = await importCursor()
+	const tmp = mkdtempSync(join(tmpdir(), "haiku-fb-rej-"))
+	try {
+		const fbPath = join(tmp, "011-fb.md")
+		writeFbFile(
+			fbPath,
+			[
+				"rejected_at: 2026-05-28T14:46:18.472Z",
+				"author_type: agent",
+				"targets:",
+				"  unit: unit-01",
+				"  invalidates: [spec]",
+			].join("\n"),
+		)
+		const action = __testOnly.nextActionForFeedback(
+			"security",
+			fbPath,
+			"software",
+		)
+		assert.equal(
+			action,
+			null,
+			`rejected FB with Date-typed rejected_at MUST be skipped. got: ${JSON.stringify(action)}`,
 		)
 	} finally {
 		rmSync(tmp, { recursive: true, force: true })

@@ -48,6 +48,9 @@ import { PR_INTERACTION_ROLES } from "../../orchestrator/review-role-classes.js"
 import {
 	findCurrentStage,
 	isStageComplete,
+	// closing-brief gate (#17) — fires in the complete_stage interception
+	// below for the autopilot / prior-stage-merge path (no user gate there).
+	stageOwesClosingBrief,
 	stageOwesObservations,
 } from "../../orchestrator/workflow/cursor.js"
 import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
@@ -1408,6 +1411,29 @@ export default defineTool({
 			}
 			completeStageLastSig = sig
 			const stageToComplete = result.stage
+			// Forward-only CLOSING-BRIEF gate (#17, 2026-05-28). Before a
+			// stage merges, rewrite the SAME user-facing BRIEF.md the
+			// pre-execute brief authored — flipping it from "this is what I
+			// am going to do" to "this is what I did" (the post-execution
+			// summary the human sees once work has landed). Fires here, in the
+			// complete_stage interception path, NOT in the cursor walk: when a
+			// stage's units are all signed, findCurrentStage advances to the
+			// NEXT stage, so a cursor-walk gate on the just-finished stage is
+			// never reached. This path runs for the frontier stage the cursor
+			// just produced complete_stage for — same forward-only guarantee
+			// the observations gate below relies on. Gated on the brief's OWN
+			// `phase: post` frontmatter (BRIEF.md already exists from the pre
+			// firing). Ordered BEFORE observations: the public "what I did"
+			// brief precedes the private reflection note; both precede merge.
+			if (stageOwesClosingBrief(intentDir(slug), stageToComplete)) {
+				result = {
+					action: "write_brief",
+					intent: slug,
+					stage: stageToComplete,
+					phase: "post",
+				}
+				break
+			}
 			// Forward-only observations gate. A stage owes its free-form
 			// observations.md before it merges (reflection on). Instead of
 			// merging, hand the agent the record_observations instruction;

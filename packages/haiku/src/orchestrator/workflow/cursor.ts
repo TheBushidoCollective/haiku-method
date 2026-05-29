@@ -300,8 +300,10 @@ export type CursorAction =
 	//   - `"post"` — POST-execute (2026-05-28): "this is what I did". Rewrites
 	//                the SAME `BRIEF.md` in place after execution + adversarial
 	//                approval + quality gates, before the stage closes. Gated on
-	//                a one-shot `.brief-finalized` marker (BRIEF.md already
-	//                exists from the pre firing, so absence can't gate it). See
+	//                the brief's OWN frontmatter `phase:` reaching `post`
+	//                (BRIEF.md already exists from the pre firing, so absence
+	//                can't gate it; an in-content signal can't drift from the
+	//                content the way a sibling marker can). See
 	//                `stageOwesClosingBrief`.
 	| { kind: "write_brief"; stage: string; phase: "pre" | "post" }
 	// `role` is the lead role (back-compat / single-role shadow); `dispatches`
@@ -987,12 +989,23 @@ export function stageOwesBrief(
  * did" — the post-execution summary the human sees once the work has landed.
  *
  * It fires POST-execute, after every approval is signed and the quality
- * gates have run, BEFORE complete_stage. Because `BRIEF.md` already exists
- * from the pre firing, file absence can't gate this one — instead a one-shot
- * `.brief-finalized` sibling marker does (mirrors `stageOwesObservations`'s
- * existence-of-`observations.md` gate). The closing-brief dispatch rewrites
- * `BRIEF.md` and stamps the marker; the next tick sees the marker and falls
- * through to complete_stage.
+ * gates have run, BEFORE complete_stage. Two conditions, both required:
+ *   1. `BRIEF.md` EXISTS — the closing brief REWRITES the pre firing's file
+ *      in place; with no file there is nothing to rewrite, so the gate is a
+ *      no-op (a stage that never wrote a pre-execute brief — brief skipped,
+ *      or a legacy/fixture intent — must fall straight through to its merge,
+ *      not stall waiting for a closing brief on a file that will never
+ *      appear). This is the mirror of the pre-execute brief, which gates on
+ *      `BRIEF.md` ABSENCE.
+ *   2. The brief's OWN frontmatter `phase:` is not yet `post`. The signal
+ *      lives INSIDE the artifact, not in a sibling marker file — so it can
+ *      never drift from the content (a marker can say "finalized" next to a
+ *      stale pre-brief, or be missing next to a fresh post-brief; the
+ *      frontmatter is the content's state). The pre-execute brief stamps
+ *      `phase: pre`; the closing brief rewrites the file AND stamps
+ *      `phase: post` in the same write, then the next tick reads `post` and
+ *      falls through to complete_stage. A brief with no/other `phase` is
+ *      treated as still-owed (defaults to `pre`).
  *
  * Forward-only by construction: the cursor only walks the frontier
  * (incomplete) stage, so a completed/merged stage is never re-entered to
@@ -1003,7 +1016,21 @@ export function stageOwesClosingBrief(
 	stage: string,
 ): boolean {
 	if (!isBriefEnabled(intentDir)) return false
-	return !existsSync(join(intentDir, "stages", stage, ".brief-finalized"))
+	const briefPath = join(intentDir, "stages", stage, "BRIEF.md")
+	// Nothing to rewrite if the pre-execute brief never authored BRIEF.md.
+	if (!existsSync(briefPath)) return false
+	try {
+		// Read-only: gray-matter caches by content and returns a SHARED object;
+		// we only read `.data.phase`, never mutate it (see the shared-cache
+		// gotcha that bit the output-existence gate).
+		const parsed = matter(readFileSync(briefPath, "utf8"))
+		const phase = (parsed.data as { phase?: unknown } | undefined)?.phase
+		return phase !== "post"
+	} catch {
+		// Unreadable/unparseable brief → treat as not-yet-finalized so the
+		// closing brief re-fires (a re-run beats a silent false-complete).
+		return true
+	}
 }
 
 /**
@@ -2072,6 +2099,19 @@ function walkIntentTrack(args: {
 						units: first.units,
 					}
 				}
+				// Closing BRIEF (#17), non-autopilot path. Every adversarial
+				// approval + quality gate is signed and only the human approval
+				// gate remains — rewrite the SAME BRIEF.md from "what I'm going
+				// to do" to "what I did" BEFORE the user reviews it, so the gate
+				// shows the post-execution summary. Reached only when `user` is
+				// in approvalRoles (autopilot omits it — that path's closing
+				// brief fires in run_next's complete_stage interception instead).
+				// One-shot via the brief's `phase: post` frontmatter; once the
+				// rewrite stamps it, the next tick falls through to the user_gate
+				// below.
+				if (stageOwesClosingBrief(intentDir, stage)) {
+					return { kind: "write_brief", stage, phase: "post" }
+				}
 				return {
 					kind: "user_gate",
 					stage,
@@ -2131,22 +2171,15 @@ function walkIntentTrack(args: {
 		}
 	}
 
-	// 8a-bis. Closing BRIEF (2026-05-28). ON by default (same `brief:`
-	//     opt-out as the pre-execute brief); fires once per stage AFTER
-	//     every approval is signed, the quality gates have run, and
-	//     observations are recorded — but BEFORE complete_stage. It
-	//     rewrites the SAME user-facing `BRIEF.md` the pre-execute brief
-	//     authored, flipping it from "this is what I am going to do" to
-	//     "this is what I did": the post-execution summary the human sees
-	//     once the work has landed. Gated on a one-shot `.brief-finalized`
-	//     marker (BRIEF.md already exists from the pre firing, so absence
-	//     can't gate it). Idempotent — once the dispatch stamps the marker
-	//     the next tick falls through to complete_stage. Forward-only:
-	//     the cursor only walks the frontier stage, so a closed stage is
-	//     never pulled back to rewrite its brief.
-	if (stageOwesClosingBrief(intentDir, stage)) {
-		return { kind: "write_brief", stage, phase: "post" }
-	}
+	// (Closing BRIEF #17 does NOT gate here. When every approval — including
+	// `user` — is signed, this stage's units are complete, so findCurrentStage
+	// advances to the NEXT stage and this per-stage walk never runs for the
+	// just-finished one. The closing brief instead fires at two REACHABLE
+	// points on the same `phase: post` frontmatter one-shot: (1) non-autopilot,
+	// in step 8 right before the `user_gate` return — while the stage is still
+	// frontier with user approval pending; (2) autopilot / prior-stage-merge,
+	// in haiku_run_next's complete_stage interception, before the observations
+	// gate.)
 
 	// 8b. Every approval signed AND observations recorded. Emit
 	//     `complete_stage` — a SEMANTIC action ("this stage is

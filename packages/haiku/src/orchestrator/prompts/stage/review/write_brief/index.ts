@@ -13,8 +13,10 @@
 //     quality gates have run, and observations are recorded, but before the
 //     stage closes. The briefer rewrites the SAME `BRIEF.md` in place as
 //     "this is what I did" — reading the outputs, closed feedback, and
-//     iterations — then stamps a `.brief-finalized` marker so the cursor
-//     advances to complete_stage on the next tick.
+//     iterations — and stamps `phase: post` into the brief's OWN frontmatter.
+//     That in-content signal (not a sibling marker, which could drift from the
+//     content) is what `stageOwesClosingBrief` reads to advance to
+//     complete_stage on the next tick.
 //
 // The briefer mandate is ENGINE-OWNED and universal (every stage produces
 // something worth summarizing), inlined from `subagent.eta.md`, with the

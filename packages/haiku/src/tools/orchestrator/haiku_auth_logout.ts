@@ -5,6 +5,7 @@
 // an already-absent provider returns ok with was_connected:false (not an error).
 
 import { clearProviderToken } from "../../global-settings.js"
+import type { ProviderName } from "../../state/schemas/global-settings.js"
 import {
 	HAIKU_AUTH_LOGOUT_INPUT_SCHEMA,
 	type HaikuAuthLogoutInput,

@@ -243,7 +243,10 @@ export default defineTool({
 		if (inputErr) return inputErr
 		const { provider: requested } = args as HaikuAuthLoginInput
 
-		const provider = requested ?? inferProviderFromOrigin()
+		// The AJV enum gate already constrained `requested` to a PROVIDER_NAME (or
+		// undefined); the TypeBox Static widens the spread enum to `string`.
+		const provider =
+			(requested as ProviderName | undefined) ?? inferProviderFromOrigin()
 		if (!provider) {
 			return text(
 				JSON.stringify({

@@ -32,7 +32,7 @@ const baseCtx = {
 	repo: "haiku-method",
 	token: "gho_secret",
 	fileName: "proof.webm",
-	fileBytes: new Uint8Array([1, 2, 3, 4]),
+	fileBytes: Buffer.from([1, 2, 3, 4]),
 }
 
 test("uploadProofGitHub: existing release → asset PUT to uploads host", async () => {

@@ -45,7 +45,9 @@ export interface ProofUploadContext {
 	repo: string
 	token: string
 	fileName: string
-	fileBytes: Uint8Array
+	/** Proof bytes. `Buffer` (what `readFileSync` returns) is a valid `BodyInit`
+	 *  and `BlobPart`; tests pass a `Buffer.from([...])`. */
+	fileBytes: Buffer
 	prUrl?: string
 }
 
@@ -149,7 +151,9 @@ export async function uploadProofGitHub(
 			...authHeaders,
 			"content-type": "application/octet-stream",
 		},
-		body: ctx.fileBytes,
+		// Buffer is a valid request body at runtime; the DOM `BodyInit` type is
+		// narrower than the Node reality, so cast through it.
+		body: ctx.fileBytes as unknown as BodyInit,
 	})
 	if (!uploadRes.ok) {
 		throw new ProofUploadError(
@@ -179,7 +183,10 @@ export async function uploadProofGitLab(
 	const form = new FormData()
 	form.append(
 		"file",
-		new Blob([ctx.fileBytes], { type: "application/octet-stream" }),
+		// Buffer is a valid BlobPart at runtime; cast through the narrower DOM type.
+		new Blob([ctx.fileBytes as unknown as BlobPart], {
+			type: "application/octet-stream",
+		}),
 		ctx.fileName,
 	)
 	const res = await fetchImpl(`${api}/projects/${projectId}/uploads`, {
@@ -289,7 +296,7 @@ export default defineTool({
 					repo: parsed.repo,
 					token: token.access_token,
 					fileName: basename(path),
-					fileBytes: new Uint8Array(readFileSync(path)),
+					fileBytes: readFileSync(path),
 					prUrl: pr_url,
 				},
 				(...a: Parameters<typeof fetch>) => fetch(...a),

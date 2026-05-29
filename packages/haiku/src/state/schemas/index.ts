@@ -59,6 +59,22 @@ export {
 	validateHaikuFeedbackInputSchema,
 } from "./feedback.js"
 export type {
+	HaikuAuthLoginInput,
+	HaikuAuthLogoutInput,
+	HaikuAuthStatusInput,
+	HaikuUploadProofInput,
+} from "./inputs/auth-tools.js"
+export {
+	HAIKU_AUTH_LOGIN_INPUT_SCHEMA,
+	HAIKU_AUTH_LOGOUT_INPUT_SCHEMA,
+	HAIKU_AUTH_STATUS_INPUT_SCHEMA,
+	HAIKU_UPLOAD_PROOF_INPUT_SCHEMA,
+	validateHaikuAuthLoginInputSchema,
+	validateHaikuAuthLogoutInputSchema,
+	validateHaikuAuthStatusInputSchema,
+	validateHaikuUploadProofInputSchema,
+} from "./inputs/auth-tools.js"
+export type {
 	HaikuAwaitDesignDirectionInput,
 	HaikuAwaitGateInput,
 	HaikuAwaitVisualAnswerInput,

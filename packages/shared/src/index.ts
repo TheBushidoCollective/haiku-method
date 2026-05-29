@@ -44,6 +44,8 @@ export {
 	approvalMilestoneLabel,
 	buildStageMilestones,
 	finalizeSteps,
+	milestonePipStatus,
+	resolveActiveMilestoneIndex,
 	reviewMilestoneLabel,
 } from "./progress-milestones"
 export type {

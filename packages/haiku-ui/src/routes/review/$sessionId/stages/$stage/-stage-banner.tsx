@@ -8,6 +8,7 @@
  * phase + stageStatus are derived from the session's stage_state.
  */
 
+import { milestonePipStatus, resolveActiveMilestoneIndex } from "@haiku/shared"
 import type { ProgressMilestone } from "haiku-api"
 import {
 	PHASE_TOOLTIPS,
@@ -68,16 +69,18 @@ export function PhaseStepper({
 	// after the count.
 	if (milestones && milestones.length > 0) {
 		const total = milestones.length
-		const ai =
-			typeof progressIndex === "number"
-				? progressIndex
-				: milestones.findIndex((m) => m.status === "active")
-		// `ai < 0` means no milestone is marked active. That's "all done"
-		// only when at least one milestone IS done — otherwise it's a track
-		// that hasn't started (every pip pending), which must NOT read as
-		// complete. A completed stage short-circuits to done regardless.
-		const anyDone = milestones.some((m) => m.status === "done")
-		const allDone = isStageComplete || ai >= total || (ai < 0 && anyDone)
+		// SINGLE source of truth for the dots, the caption, AND the active
+		// label: the resolved active index. `progressIndex` (placed from the
+		// LIVE cursor action) wins over each milestone's own stamp-lagging
+		// `status`, so the orange dot, the "N/total" caption, and the label
+		// can never point at different milestones — the desync the bug report
+		// showed (dot on "spec review" / caption "9/10 approval gate").
+		const ai = resolveActiveMilestoneIndex(
+			milestones,
+			progressIndex,
+			isStageComplete,
+		)
+		const allDone = ai >= total
 		const activeLabel = !allDone ? milestones[ai]?.label : undefined
 		const groupAriaLabel = allDone
 			? "All milestones complete"
@@ -96,8 +99,9 @@ export function PhaseStepper({
 				</span>
 				<ol className="inline-flex items-center gap-1 list-none m-0 p-0">
 					{milestones.map((m, i) => {
-						const done = isStageComplete || m.status === "done"
-						const active = !isStageComplete && m.status === "active"
+						const pip = milestonePipStatus(i, ai)
+						const done = pip === "done"
+						const active = pip === "active"
 						const stateWord = active ? "active" : done ? "done" : "pending"
 						const ariaLabel = `${m.label} — ${stateWord}`
 						return (

@@ -17,7 +17,11 @@
  * max-width container. App.tsx renders it directly.
  */
 
-import { MarkdownViewer } from "@haiku/shared"
+import {
+	MarkdownViewer,
+	milestonePipStatus,
+	resolveActiveMilestoneIndex,
+} from "@haiku/shared"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Header as HeaderLandmark, Main } from "../../a11y"
 import { ThemeToggle } from "../../atoms/ThemeToggle"
@@ -260,11 +264,18 @@ function PhaseStepper({
 	// `key` so live updates reconcile in place without remounting.
 	if (milestones && milestones.length > 0) {
 		const total = milestones.length
-		const ai =
-			typeof progressIndex === "number"
-				? progressIndex
-				: milestones.findIndex((m) => m.status === "active")
-		const allDone = isStageComplete || ai < 0 || ai >= total
+		// SINGLE source of truth for the dots, the caption, AND the active
+		// label: the resolved active index. `progressIndex` (placed from the
+		// LIVE cursor action) wins over each milestone's own stamp-lagging
+		// `status`, so the orange dot, the "N/total" caption, and the label
+		// can never point at different milestones (the desync the bug report
+		// showed: dot on "spec review", caption "approval gate").
+		const ai = resolveActiveMilestoneIndex(
+			milestones,
+			progressIndex,
+			isStageComplete,
+		)
+		const allDone = ai >= total
 		const activeLabel = !allDone ? milestones[ai]?.label : undefined
 		return (
 			// biome-ignore lint/a11y/useSemanticElements: minimal grouping; fieldset/legend would impose form semantics
@@ -278,8 +289,9 @@ function PhaseStepper({
 				</span>
 				<div className="inline-flex items-center gap-1">
 					{milestones.map((m, i) => {
-						const done = isStageComplete || m.status === "done"
-						const active = !isStageComplete && m.status === "active"
+						const pip = milestonePipStatus(i, ai)
+						const done = pip === "done"
+						const active = pip === "active"
 						return (
 							<div
 								key={m.key}

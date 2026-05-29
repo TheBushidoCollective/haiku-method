@@ -62,6 +62,61 @@ export function finalizeSteps(
 	})
 }
 
+/** Resolve which milestone the progress strip should mark ACTIVE, and from
+ *  that, each pip's render status — the SINGLE source of truth the SPA's
+ *  phase stepper (dots + numeric caption + active-label) all read from.
+ *
+ *  Why this exists: the wire carries TWO position signals that can disagree
+ *  by a tick. Each milestone's own `status` (`done|active|pending`) is
+ *  derived from on-disk stamps, which LAG the live cursor action (a stamp
+ *  lands the tick AFTER the action fires). `progressIndex` is placed from
+ *  the LIVE action (see `snapshotMilestoneIndex` in progress-track.ts), so
+ *  it leads. The status line already renders from the live index; the SPA
+ *  used to render the dots from `status` but the caption from
+ *  `progressIndex`, so an intent at the approval gate showed the orange dot
+ *  back on "spec review" while the caption read "9/10 approval gate"
+ *  (reported 2026-05-26 for the status line; the SPA had the same split).
+ *
+ *  Resolution: when `progressIndex` is a usable number it WINS — it's the
+ *  authoritative live position, and every pip (and the caption) derives from
+ *  it (`i < active` → done, `i === active` → active, `i > active` → pending).
+ *  When it's absent/out-of-range we fall back to each milestone's own
+ *  `status`, which is internally consistent (`finalizeSteps` marks exactly
+ *  the first-not-done active). A complete stage forces every pip done. */
+export function resolveActiveMilestoneIndex(
+	milestones: ReadonlyArray<{ status: StepStatus }>,
+	progressIndex: number | undefined,
+	stageComplete: boolean,
+): number {
+	const total = milestones.length
+	if (stageComplete) return total // every pip done, no active
+	if (
+		typeof progressIndex === "number" &&
+		Number.isInteger(progressIndex) &&
+		progressIndex >= 0 &&
+		progressIndex <= total
+	) {
+		return progressIndex
+	}
+	const fromStatus = milestones.findIndex((m) => m.status === "active")
+	// No active marker → every supplied milestone is done.
+	return fromStatus < 0 ? total : fromStatus
+}
+
+/** Render status for ONE pip, derived from the resolved active index — NOT
+ *  from the pip's own (possibly-lagging) `status`. `index >= total` (the
+ *  "all done" sentinel from `resolveActiveMilestoneIndex`) marks every pip
+ *  done. Keeps the dots, the numeric caption, and the active label reading
+ *  from a single position so they can never desync. */
+export function milestonePipStatus(
+	pipIndex: number,
+	activeIndex: number,
+): StepStatus {
+	if (pipIndex < activeIndex) return "done"
+	if (pipIndex === activeIndex) return "active"
+	return "pending"
+}
+
 /** Per-role done flag the caller supplies: the role name + whether every
  *  unit in the stage has stamped it. */
 export interface MilestoneRoleFlag {

@@ -290,4 +290,86 @@ describe("PhaseStepper — granular milestone track", () => {
 		const list = container.querySelector("ol")
 		expect(list?.children.length).toBe(4)
 	})
+
+	// ── Desync regression (screenshot 2026-05-28) ───────────────────────
+	// The stamp-derived milestone `status` LAGS the live cursor action by a
+	// tick: it can mark an EARLY pip `active` with several LATER pips already
+	// `done`, while `progress_index` (placed from the live action) points at
+	// the late approval gate. The dots used to follow `status` (orange dot at
+	// index 2) while the caption + active label used progress_index ("9/10
+	// approval gate"). They must now agree on the live position.
+	const LAGGING_MILESTONES = [
+		{ key: "elaborate", label: "elaborate", status: "done" as const },
+		{ key: "review:spec", label: "spec review", status: "active" as const },
+		{
+			key: "review:adversarial:0",
+			label: "adversarial review",
+			status: "done" as const,
+		},
+		{ key: "execute", label: "execute", status: "done" as const },
+		{ key: "approve:spec", label: "spec approval", status: "done" as const },
+		{
+			key: "approve:adversarial:0",
+			label: "adversarial approval",
+			status: "done" as const,
+		},
+		{
+			key: "approve:quality_gates",
+			label: "quality gates",
+			status: "done" as const,
+		},
+		{
+			key: "approve:continuity",
+			label: "continuity approval",
+			status: "done" as const,
+		},
+		{
+			key: "approve:runtime",
+			label: "runtime approval",
+			status: "done" as const,
+		},
+		{ key: "approve:user", label: "approval gate", status: "pending" as const },
+	]
+
+	it("places the active milestone at the live progressIndex, not the stamp-active one", () => {
+		const { getByText } = render(
+			<PhaseStepper
+				phase="approve"
+				stageStatus="current"
+				milestones={LAGGING_MILESTONES}
+				progressIndex={9}
+			/>,
+		)
+		// Caption + group-aria reflect the LIVE position (approval gate,
+		// 10/10), NOT the stamp-lagging "spec review" the status array marks
+		// active. Before the fix the dots/aria followed `status` (index 1) so
+		// "spec review — active" carried aria-current while the caption read
+		// "10/10" — the desync the screenshot showed.
+		expect(getByText("10/10")).toBeTruthy()
+		expect(screen.getByLabelText(/^milestone 10 of 10$/i)).toBeTruthy()
+		// EXACTLY ONE milestone carries aria-current="step", and it's the
+		// approval gate — not "spec review" (the stamp-active one).
+		const current = screen.getAllByLabelText(/— active$/i)
+		expect(current.length).toBe(1)
+		expect(current[0].getAttribute("aria-label")).toMatch(
+			/approval gate — active/i,
+		)
+		expect(current[0].getAttribute("aria-current")).toBe("step")
+		// The stamp-active "spec review" pip must now read DONE, not active.
+		expect(screen.getByLabelText(/spec review — done/i)).toBeTruthy()
+		// And every pip BEFORE the live active one is done (no pending gap).
+		expect(screen.queryAllByLabelText(/— pending$/i).length).toBe(0)
+	})
+
+	it("falls back to the stamp-active milestone when no progressIndex", () => {
+		render(
+			<PhaseStepper
+				phase="review"
+				stageStatus="current"
+				milestones={LAGGING_MILESTONES}
+			/>,
+		)
+		// No live index → the array's own active marker (spec review, index 1).
+		expect(screen.getByLabelText(/^milestone 2 of 10$/i)).toBeTruthy()
+	})
 })

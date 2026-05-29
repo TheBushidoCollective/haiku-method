@@ -10,6 +10,9 @@ import {
 	approvalMilestoneLabel,
 	buildStageMilestones,
 	finalizeSteps,
+	milestonePipStatus,
+	type ProgressStep,
+	resolveActiveMilestoneIndex,
 	reviewMilestoneLabel,
 } from "../progress-milestones"
 
@@ -309,6 +312,103 @@ test("groupAdversarial:false expands each reviewer into its own per-role pip", (
 	// And each carries its own readable label, not a grouped count.
 	const csc = steps.find((s) => s.key === "review:cross-stage-consistency")
 	assert.strictEqual(csc?.label, "cross-stage review")
+})
+
+// ── resolveActiveMilestoneIndex — the desync fix (screenshot 2026-05-28) ─
+//
+// The stamp-derived milestone `status` LAGS the live cursor action: it can
+// mark an EARLY pip `active` with several LATER pips already `done`, while
+// `progress_index` (placed from the live action) points at the late
+// approval gate. The SPA's dots used to follow `status` (orange dot at
+// index 2) while the caption used `progress_index` ("9/10 approval gate").
+// This helper makes one index authoritative for BOTH dots and caption.
+
+// 10-milestone track in the exact inconsistent shape the bug showed: the
+// array's own active marker sits at index 1 (spec review), several LATER
+// pips read done, and the live index points at the approval gate (9).
+const LAGGING: ProgressStep[] = [
+	{ key: "elaborate", label: "elaborate", status: "done" },
+	{ key: "review:spec", label: "spec review", status: "active" },
+	{ key: "review:adversarial:0", label: "adversarial review", status: "done" },
+	{ key: "execute", label: "execute", status: "done" },
+	{ key: "approve:spec", label: "spec approval", status: "done" },
+	{
+		key: "approve:adversarial:0",
+		label: "adversarial approval",
+		status: "done",
+	},
+	{ key: "approve:quality_gates", label: "quality gates", status: "done" },
+	{ key: "approve:continuity", label: "continuity approval", status: "done" },
+	{ key: "approve:runtime", label: "runtime approval", status: "done" },
+	{ key: "approve:user", label: "approval gate", status: "pending" },
+]
+
+test("resolveActiveMilestoneIndex: LIVE progressIndex wins over the stamp marker", () => {
+	// progress_index from the live action points at the approval gate (9);
+	// without the fix the dots would follow `status` and land on index 1.
+	assert.strictEqual(resolveActiveMilestoneIndex(LAGGING, 9, false), 9)
+})
+
+test("resolveActiveMilestoneIndex: falls back to the array marker when no progressIndex", () => {
+	assert.strictEqual(resolveActiveMilestoneIndex(LAGGING, undefined, false), 1)
+})
+
+test("resolveActiveMilestoneIndex: ignores out-of-range progressIndex, uses the marker", () => {
+	assert.strictEqual(resolveActiveMilestoneIndex(LAGGING, 99, false), 1)
+	assert.strictEqual(resolveActiveMilestoneIndex(LAGGING, -1, false), 1)
+})
+
+test("resolveActiveMilestoneIndex: a complete stage marks every pip done (index past end)", () => {
+	assert.strictEqual(
+		resolveActiveMilestoneIndex(LAGGING, 3, true),
+		LAGGING.length,
+	)
+})
+
+test("resolveActiveMilestoneIndex: an all-done array (no active marker) returns the end sentinel", () => {
+	const allDone: ProgressStep[] = LAGGING.map((m) => ({
+		...m,
+		status: "done" as const,
+	}))
+	assert.strictEqual(
+		resolveActiveMilestoneIndex(allDone, undefined, false),
+		allDone.length,
+	)
+})
+
+// ── milestonePipStatus — derive each pip purely from the active index ───
+
+test("milestonePipStatus: done/active/pending from the active index alone", () => {
+	assert.strictEqual(milestonePipStatus(0, 9), "done")
+	assert.strictEqual(milestonePipStatus(8, 9), "done")
+	assert.strictEqual(milestonePipStatus(9, 9), "active")
+	assert.strictEqual(milestonePipStatus(10, 9), "pending")
+})
+
+test("milestonePipStatus: an end-sentinel active index marks every pip done", () => {
+	assert.strictEqual(milestonePipStatus(0, 10), "done")
+	assert.strictEqual(milestonePipStatus(9, 10), "done")
+})
+
+test("dots + caption agree at the approval gate (integration of both helpers)", () => {
+	// The active pip is the LAST one, all before it done, caption ai+1/total
+	// — NOT the desynced "dot at 2, caption 9/10" the bug showed.
+	const ai = resolveActiveMilestoneIndex(LAGGING, 9, false)
+	assert.strictEqual(ai, 9)
+	const rendered = LAGGING.map((_, i) => milestonePipStatus(i, ai))
+	assert.deepStrictEqual(rendered, [
+		"done",
+		"done",
+		"done",
+		"done",
+		"done",
+		"done",
+		"done",
+		"done",
+		"done",
+		"active",
+	])
+	assert.strictEqual(`${ai + 1}/${LAGGING.length}`, "10/10")
 })
 
 console.log(`\n── Result: ${passed} passed, ${failed} failed ───────────`)

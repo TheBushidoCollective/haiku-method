@@ -18,6 +18,9 @@
 // const exports. The contract test is the safe alternative.
 
 import {
+	HAIKU_AUTH_LOGIN_INPUT_SCHEMA,
+	HAIKU_AUTH_LOGOUT_INPUT_SCHEMA,
+	HAIKU_AUTH_STATUS_INPUT_SCHEMA,
 	HAIKU_AWAIT_GATE_INPUT_SCHEMA,
 	HAIKU_DEBUG_INPUT_SCHEMA,
 	HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA,
@@ -33,10 +36,35 @@ import {
 	HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA,
 	HAIKU_STAGE_RESET_INPUT_SCHEMA,
 	HAIKU_UNIT_RESET_INPUT_SCHEMA,
+	HAIKU_UPLOAD_PROOF_INPUT_SCHEMA,
 } from "../state/schemas/index.js"
 import { jsonSchemaOf } from "../state/schemas/inputs/_validate.js"
 
 export const orchestratorToolDefs = [
+	{
+		name: "haiku_auth_status",
+		description:
+			"Show which Git providers (github / gitlab) the engine is authenticated to for MR/PR operations and proof upload. Returns each connected provider's account, scopes, host, expiry, and whether the token is expired — never the token value itself. Optional `provider` narrows to one.",
+		inputSchema: jsonSchemaOf(HAIKU_AUTH_STATUS_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_auth_login",
+		description:
+			"Authenticate a Git provider (github / gitlab) via the haikumethod.ai OAuth broker so the engine can drive PR/MR ops and proof upload over the provider REST API. Opens a verification URL in the browser, polls until you approve, and stores the token in ~/.haiku/settings.json. `provider` is optional — inferred from the repo's origin host when omitted. Never returns the token value.",
+		inputSchema: jsonSchemaOf(HAIKU_AUTH_LOGIN_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_auth_logout",
+		description:
+			"Disconnect a Git provider (github | gitlab) by clearing its stored auth token from ~/.haiku/settings.json. Idempotent — clearing an unconnected provider returns ok with was_connected:false.",
+		inputSchema: jsonSchemaOf(HAIKU_AUTH_LOGOUT_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_upload_proof",
+		description:
+			"Upload a runtime-verification proof file to the intent's / stage's change request over the provider REST API. GitHub → release asset; GitLab → project uploads API + MR-ready markdown ref. Provider is detected from the repo origin; the bearer comes from ~/.haiku/settings.json (run haiku_auth_login first). Returns the durable proof URL.",
+		inputSchema: jsonSchemaOf(HAIKU_UPLOAD_PROOF_INPUT_SCHEMA),
+	},
 	{
 		name: "haiku_run_next",
 		description:

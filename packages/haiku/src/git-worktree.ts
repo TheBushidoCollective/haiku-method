@@ -1165,6 +1165,29 @@ export function parseGitRemote(
 	return { host, owner: segments[0], repo: segments.slice(1).join("/") }
 }
 
+/** Read the repo's `origin` URL via git, or null when there's no remote. */
+export function readOriginRemoteUrl(): string | null {
+	try {
+		const out = execFileSync("git", ["remote", "get-url", "origin"], {
+			encoding: "utf8",
+			stdio: "pipe",
+		}).trim()
+		return out || null
+	} catch {
+		return null
+	}
+}
+
+/** Map a remote host to a supported provider name. `includes()` is intentional
+ *  so GitHub Enterprise (`github.company.com`) and self-hosted GitLab
+ *  (`gitlab.internal`) resolve too. Returns null for unrecognized hosts. */
+export function providerFromHost(host: string): "github" | "gitlab" | null {
+	const h = host.toLowerCase()
+	if (h.includes("github")) return "github"
+	if (h.includes("gitlab")) return "gitlab"
+	return null
+}
+
 export function buildCompareUrl(
 	headBranch: string,
 	baseBranch: string,

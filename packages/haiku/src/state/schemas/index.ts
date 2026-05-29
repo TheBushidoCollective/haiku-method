@@ -71,12 +71,18 @@ export {
 	validateProviderTokenSchema,
 } from "./global-settings.js"
 export {
+	HAIKU_AUTH_LOGIN_INPUT_SCHEMA,
 	HAIKU_AUTH_LOGOUT_INPUT_SCHEMA,
 	HAIKU_AUTH_STATUS_INPUT_SCHEMA,
+	HAIKU_UPLOAD_PROOF_INPUT_SCHEMA,
+	type HaikuAuthLoginInput,
 	type HaikuAuthLogoutInput,
 	type HaikuAuthStatusInput,
+	type HaikuUploadProofInput,
+	validateHaikuAuthLoginInputSchema,
 	validateHaikuAuthLogoutInputSchema,
 	validateHaikuAuthStatusInputSchema,
+	validateHaikuUploadProofInputSchema,
 } from "./inputs/auth-tools.js"
 export type {
 	HaikuAwaitDesignDirectionInput,

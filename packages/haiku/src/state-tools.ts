@@ -8681,7 +8681,7 @@ Frontmatter is workflow engine-controlled and cannot be set through this tool. F
   • workflow-driven (mutated over the FB lifecycle): ${FSM_DRIVEN_FB_FIELDS.join(", ")}
   • Set at creation, immutable thereafter: ${CREATE_TIME_FB_FIELDS.join(", ")}
 
-Use haiku_feedback_update for status transitions and haiku_feedback_reject for rejections.`,
+Status transitions are engine-driven — closure runs through the fix-loop's terminal hat (haiku_feedback_advance_hat), not a manual update. Use haiku_feedback_reject to mark a finding invalid/stale (it stamps rejected_at, so the open-feedback walk treats it as terminal and stops re-dispatching it).`,
 		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_WRITE_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",

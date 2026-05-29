@@ -56,7 +56,8 @@ test("healOptionalStageDivergence propagates a branch drop up to intent main", a
 	git(tmp, "add", "-A")
 	git(tmp, "commit", "-q", "-m", "base")
 
-	// Intent main branch: plan still lists the optional `design` stage.
+	// Intent main branch: plan still lists the optional `design` stage. This
+	// is the canonical fork source the cursor reads — it KEEPS design.
 	const intentMain = `haiku/${slug}/main`
 	git(tmp, "checkout", "-q", "-b", intentMain)
 	writeFileSync(
@@ -66,13 +67,19 @@ test("healOptionalStageDivergence propagates a branch drop up to intent main", a
 	git(tmp, "add", "-A")
 	git(tmp, "commit", "-q", "-m", "intent main with design")
 
-	// Working-tree checkout (a stage branch) already has design dropped.
+	// Stage branch (forked from main) is where the OLD buggy drop landed:
+	// design removed from intent.stages on the BRANCH, never on main. We fork
+	// it and CHECK IT OUT so the working tree carries the diverged (no-design)
+	// plan while `git show <intentMain>:…` still reports design. That is the
+	// exact deadlock divergence the heal must detect and propagate up to main.
+	const stageBranch = `haiku/${slug}/product`
+	git(tmp, "checkout", "-q", "-b", stageBranch)
 	writeFileSync(
 		join(intentDirAbs, "intent.md"),
 		intentMd(["inception", "product"]),
 	)
 	git(tmp, "add", "-A")
-	git(tmp, "commit", "-q", "-m", "stage branch without design")
+	git(tmp, "commit", "-q", "-m", "old-bug: dropped design on stage branch")
 
 	// Run the heal from inside the repo (cwd-driven, like a real tick).
 	const prevCwd = process.cwd()

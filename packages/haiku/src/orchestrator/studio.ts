@@ -24,12 +24,8 @@ import { resolvePluginRoot } from "../config.js"
 import { readIntentFileAtMain } from "../git-worktree.js"
 import { intentDir, parseFrontmatter } from "../state-tools.js"
 import { resolveStudio, studioSearchPaths } from "../studio-reader.js"
-// ESM import cycles below are call-time only (used inside function bodies,
-// never at module eval): cursor.ts statically imports this module, and
-// git-worktree → state-tools → studio. Node resolves these lazily at call
-// time, so the bindings are defined by the time these functions run. (The
-// previous `require(...)` form threw `require is not defined` — these are
-// ESM modules.)
+// Call-time-only ESM cycle (binding used inside a function body, never at
+// module eval): cursor.ts statically imports this module. Safe in ESM.
 import { isStageComplete } from "./workflow/cursor.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {

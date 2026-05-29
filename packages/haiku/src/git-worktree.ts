@@ -34,16 +34,16 @@ import { join } from "node:path"
 import matter from "gray-matter"
 import { readProviderToken } from "./global-settings.js"
 import { migrateIntent } from "./orchestrator/migrate-registry.js"
+// Named import also triggers the side-effect registration on
+// migrate-registry — without that registration, the post-merge sweep's
+// `migrateIntent("0", "4.0.0")` would throw "no migration path."
+import { hasV3CruftInIntent } from "./orchestrator/migrations/v0-to-v4.js"
 import {
 	type CreatePrInput,
 	createPullRequestRest,
 	markPullRequestReadyRest,
 	type PrRestContext,
 } from "./provider-rest.js"
-// Named import also triggers the side-effect registration on
-// migrate-registry — without that registration, the post-merge sweep's
-// `migrateIntent("0", "4.0.0")` would throw "no migration path."
-import { hasV3CruftInIntent } from "./orchestrator/migrations/v0-to-v4.js"
 import {
 	ensureHaikuGitignored,
 	isGitRepo,
@@ -904,8 +904,40 @@ export function resolvePrRestContext(): PrRestContext | null {
 	}
 }
 
+/** Like `resolvePrRestContext`, but AUTHENTICATES WHEN NEEDED. If no usable
+ *  token is stored for the repo's provider, it runs the broker handshake inline
+ *  (browser + poll) and uses the fresh token — the engine never asks the agent
+ *  to "go authenticate first." Returns null when there's no recognized provider
+ *  remote, or when auth couldn't be obtained (broker unreachable / declined /
+ *  timed out — e.g. headless CI, where `/cli/start` fails fast); the caller then
+ *  falls back to the gh/glab CLI. The dynamic import of the login flow avoids a
+ *  static import cycle with the auth tool, which imports this module's git
+ *  helpers. */
+export async function resolvePrRestContextEnsuringAuth(): Promise<PrRestContext | null> {
+	const origin = readOriginRemoteUrl()
+	if (!origin) return null
+	const parsed = parseGitRemote(origin)
+	if (!parsed) return null
+	const provider = providerFromHost(parsed.host)
+	if (!provider) return null
+	const { ensureProviderToken } = await import(
+		"./tools/orchestrator/haiku_auth_login.js"
+	)
+	const token = await ensureProviderToken(provider)
+	if (!token?.access_token) return null
+	return {
+		provider,
+		host: parsed.host,
+		owner: parsed.owner,
+		repo: parsed.repo,
+		token: token.access_token,
+	}
+}
+
 /** Default fetch impl for the REST PR/MR helpers — wraps global fetch. */
-function defaultPrFetch(...a: Parameters<typeof fetch>): ReturnType<typeof fetch> {
+function defaultPrFetch(
+	...a: Parameters<typeof fetch>
+): ReturnType<typeof fetch> {
 	return fetch(...a)
 }
 
@@ -926,10 +958,12 @@ export async function openPullRequest(
 ): Promise<{ ok: boolean; url?: string; error?: string }> {
 	const draft = options?.draft === true
 
-	// Token-backed REST path: when a provider token is stored, drive the
-	// provider API directly (no authed CLI required). On any REST miss we fall
-	// through to the CLI below — REST is never the only path.
-	const rest = resolvePrRestContext()
+	// Token-backed REST path, AUTHENTICATING WHEN NEEDED: if no token is stored
+	// for the repo's provider, the broker handshake runs inline (the engine
+	// never asks the agent to authenticate first). On any REST miss — including
+	// auth that couldn't be obtained (broker down / declined / timed out) — we
+	// fall through to the gh/glab CLI. REST is preferred, never the only path.
+	const rest = await resolvePrRestContextEnsuringAuth()
 	if (rest) {
 		try {
 			const input: CreatePrInput = { branch, mainline, title, body, draft }
@@ -1257,6 +1291,18 @@ export function providerFromHost(host: string): "github" | "gitlab" | null {
 	return null
 }
 
+/** The repo's provider, from the origin remote host, or null. Sync + cheap —
+ *  used by the pre-open guards to decide whether a PR/MR open is even possible:
+ *  a recognized provider remote means auth-when-needed can obtain a token (so
+ *  the open is worth attempting) even when no `gh`/`glab` CLI is on PATH. */
+export function providerFromOrigin(): "github" | "gitlab" | null {
+	const origin = readOriginRemoteUrl()
+	if (!origin) return null
+	const parsed = parseGitRemote(origin)
+	if (!parsed) return null
+	return providerFromHost(parsed.host)
+}
+
 export function buildCompareUrl(
 	headBranch: string,
 	baseBranch: string,
@@ -1543,8 +1589,9 @@ export async function markPullRequestReady(url: string): Promise<{
 		return { ok: false, error: `not a valid URL: ${url}` }
 	}
 
-	// Token-backed REST path first; any REST miss falls through to the CLI.
-	const rest = resolvePrRestContext()
+	// Token-backed REST path, authenticating when needed; any REST miss (incl.
+	// auth that couldn't be obtained) falls through to the CLI.
+	const rest = await resolvePrRestContextEnsuringAuth()
 	if (rest) {
 		try {
 			await markPullRequestReadyRest(rest, url, defaultPrFetch)

@@ -51,7 +51,7 @@ import {
 	mergeStageBranchForward,
 	mergeStageBranchIntoMain,
 	openStageDraftPullRequest,
-	resolvePrRestContext,
+	providerFromOrigin,
 	pushStageBranch,
 } from "../../git-worktree.js"
 import { withIntentMainLock } from "../../locks.js"
@@ -126,10 +126,12 @@ async function openStageDraftPrIfDelivery(
 		const studio = (fm.studio as string) || ""
 		if (!studio || !stageRequiresExternalReview(studio, stage)) return
 	}
-	// A stored provider token opens the PR over REST without a CLI on PATH, so
-	// the no-CLI early-return must also check for a REST context.
+	// Skip only when there's genuinely no way to open a PR: no `gh`/`glab` CLI
+	// AND no recognized provider remote. A provider remote alone is enough —
+	// openPullRequest authenticates when needed (REST over the stored or
+	// just-obtained token), so a stored token isn't a precondition.
 	if (!isGitRepo()) return
-	if (detectPrTool() === null && resolvePrRestContext() === null) return
+	if (detectPrTool() === null && providerFromOrigin() === null) return
 	if (readStagePr(slug, stage)?.url) return
 	try {
 		const draft = await openStageDraftPullRequest({ slug, stage })

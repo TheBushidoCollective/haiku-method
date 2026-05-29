@@ -1,9 +1,14 @@
 // tools/orchestrator/haiku_auth_login.ts — broker-driven provider OAuth login.
 //
-// Phase 3 of provider OAuth. Runs the haikumethod.ai auth-broker handshake:
-//   1. POST {AUTH_PROXY}/cli/start  → { device_code, verification_url, ... }
+// Phase 3 of provider OAuth. Runs the haikumethod.ai auth-broker handshake —
+// a brokered authorization-code flow (NOT the provider's native RFC-8628
+// device flow): the broker does the OAuth code exchange server-side; the CLI
+// just opens the verification URL and polls the session for the relayed token.
+// Contract matches `deploy/auth-proxy/src/cli.ts`:
+//   1. POST {AUTH_PROXY}/cli/start  → { session_id, verification_url, expires_in }
 //   2. open verification_url in the user's browser (best-effort)
-//   3. POLL {AUTH_PROXY}/cli/poll until status:"ready" (or timeout)
+//   3. POLL {AUTH_PROXY}/cli/poll { session_id } until status:"ready" — the
+//      token bundle is spread at the TOP LEVEL of the ready response.
 //   4. writeProviderToken(provider, bundle)  → ~/.haiku/settings.json
 //
 // `provider` is OPTIONAL — when omitted it's inferred from the repo's origin
@@ -22,7 +27,7 @@ import {
 	providerFromHost,
 	readOriginRemoteUrl,
 } from "../../git-worktree.js"
-import { writeProviderToken } from "../../global-settings.js"
+import { readProviderToken, writeProviderToken } from "../../global-settings.js"
 import type {
 	ProviderName,
 	ProviderToken,
@@ -49,22 +54,32 @@ export function authProxyBaseUrl(): string {
 	return base.replace(/\/+$/, "")
 }
 
-/** Broker `/cli/start` response — the device-flow ticket. */
+/** Broker `/cli/start` response — the session ticket. Matches
+ *  `deploy/auth-proxy/src/cli.ts` `start()`: a session id (NOT an OAuth
+ *  device_code — the broker runs the standard authorization-code flow
+ *  server-side; the CLI just polls by session) + the verification URL + a
+ *  session expiry. */
 export interface BrokerStartResponse {
-	device_code: string
+	session_id: string
 	verification_url: string
-	/** Server-suggested poll interval (seconds). Optional; we clamp it. */
-	interval?: number
-	/** Overall expiry (seconds from now). Optional; we apply a default. */
+	/** Session expiry (seconds from now). The broker mints a 10-min session. */
 	expires_in?: number
 }
 
-/** Broker `/cli/poll` response. `status` drives the loop. */
+/** Broker `/cli/poll` response. `status` drives the loop. On `ready` the token
+ *  bundle is spread at TOP LEVEL (not nested under `token`) — matches the
+ *  broker's `poll()` (`{ status, provider, host, account, ...token }`). The
+ *  broker has no "denied" status; a declined/abandoned auth simply `expired`s. */
 export interface BrokerPollResponse {
-	status: "pending" | "ready" | "denied" | "expired"
-	/** Present only when status === "ready". */
-	token?: ProviderToken
-	/** Optional human reason for denied/expired. */
+	status: "pending" | "ready" | "consumed" | "expired"
+	access_token?: string
+	refresh_token?: string
+	expires_at?: string
+	scopes?: string[]
+	host?: string
+	account?: string
+	provider?: ProviderName
+	/** Optional human reason for expired. */
 	error?: string
 }
 
@@ -158,27 +173,28 @@ export async function runBrokerLogin(
 		)
 	}
 	const start = (await startRes.json()) as BrokerStartResponse
-	if (!start?.device_code || !start?.verification_url) {
+	if (!start?.session_id || !start?.verification_url) {
 		throw new LoginError(
 			"auth_login_broker_start_invalid",
-			"broker /cli/start response missing device_code or verification_url",
+			"broker /cli/start response missing session_id or verification_url",
 		)
 	}
 
 	// 2) open the verification URL (best-effort)
 	deps.openUrl(start.verification_url)
 
-	// 3) poll until ready / denied / expired / timeout
+	// 3) poll until ready / consumed / expired / timeout
 	const expiryCapMs = (start.expires_in ?? 0) * 1000
 	const deadline =
-		deps.now() + (expiryCapMs > 0 ? Math.min(timeoutMs, expiryCapMs) : timeoutMs)
-	const waitMs = pollIntervalMs(start.interval)
+		deps.now() +
+		(expiryCapMs > 0 ? Math.min(timeoutMs, expiryCapMs) : timeoutMs)
+	const waitMs = pollIntervalMs(undefined)
 
 	while (deps.now() < deadline) {
 		const pollRes = await deps.fetch(`${base}/cli/poll`, {
 			method: "POST",
 			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ provider, device_code: start.device_code }),
+			body: JSON.stringify({ session_id: start.session_id }),
 		})
 		if (!pollRes.ok) {
 			throw new LoginError(
@@ -188,25 +204,34 @@ export async function runBrokerLogin(
 		}
 		const poll = (await pollRes.json()) as BrokerPollResponse
 		if (poll.status === "ready") {
-			if (!poll.token?.access_token || !poll.token?.host) {
+			// The broker spreads the token bundle at top level. `host` falls back
+			// to the provider default (the broker normalizes it on its side).
+			if (!poll.access_token) {
 				throw new LoginError(
 					"auth_login_broker_token_invalid",
-					"broker reported ready but returned no usable token bundle",
+					"broker reported ready but returned no access_token",
 				)
 			}
-			writeProviderToken(provider, poll.token)
-			return { provider, account: poll.token.account ?? null }
+			const token: ProviderToken = {
+				access_token: poll.access_token,
+				host:
+					poll.host ?? (provider === "github" ? "github.com" : "gitlab.com"),
+				obtained_at: new Date(deps.now()).toISOString(),
+				...(poll.refresh_token ? { refresh_token: poll.refresh_token } : {}),
+				...(poll.expires_at ? { expires_at: poll.expires_at } : {}),
+				...(poll.scopes ? { scopes: poll.scopes } : {}),
+				...(poll.account ? { account: poll.account } : {}),
+			}
+			writeProviderToken(provider, token)
+			return { provider, account: token.account ?? null }
 		}
-		if (poll.status === "denied") {
-			throw new LoginError(
-				"auth_login_denied",
-				poll.error ?? "authorization was denied",
-			)
-		}
-		if (poll.status === "expired") {
+		if (poll.status === "expired" || poll.status === "consumed") {
 			throw new LoginError(
 				"auth_login_expired",
-				poll.error ?? "the authorization request expired",
+				poll.error ??
+					(poll.status === "consumed"
+						? "the authorization session was already consumed"
+						: "the authorization request expired"),
 			)
 		}
 		// status === "pending" → wait and re-poll
@@ -227,6 +252,47 @@ export function inferProviderFromOrigin(): ProviderName | null {
 	const parsed = parseGitRemote(origin)
 	if (!parsed) return null
 	return providerFromHost(parsed.host)
+}
+
+/** Is a stored token still usable? Absent → no. Present with an `expires_at` in
+ *  the past → no (re-auth). No `expires_at` (PAT-style / non-expiring) → yes. */
+function tokenUsable(token: ProviderToken | null, nowMs: number): boolean {
+	if (!token?.access_token) return false
+	if (typeof token.expires_at === "string" && token.expires_at.length > 0) {
+		const exp = Date.parse(token.expires_at)
+		if (Number.isFinite(exp) && exp <= nowMs) return false
+	}
+	return true
+}
+
+/**
+ * Ensure a usable provider token exists, AUTHENTICATING WHEN NEEDED — the
+ * engine never asks the agent/user to "go call haiku_auth_login first." If a
+ * valid token is stored, return it; otherwise run the broker handshake inline
+ * (opens the browser, polls, persists) and return the fresh token. `provider`
+ * is the repo's provider (origin host); callers pass it via
+ * `inferProviderFromOrigin()`.
+ *
+ * Returns null when auth can't be obtained (broker unreachable, declined,
+ * timed out, or no provider) — the caller decides what to do: PR/MR ops fall
+ * back to the gh/glab CLI, proof upload surfaces the failure. Never throws;
+ * the interactive flow's errors are swallowed into the null so a best-effort
+ * caller isn't broken by an auth that didn't complete.
+ */
+export async function ensureProviderToken(
+	provider: ProviderName,
+	deps: LoginDeps = defaultLoginDeps(),
+	opts: { timeoutMs?: number } = {},
+): Promise<ProviderToken | null> {
+	const existing = readProviderToken(provider)
+	if (tokenUsable(existing, deps.now())) return existing
+	try {
+		await runBrokerLogin(provider, deps, opts)
+	} catch {
+		return null
+	}
+	const fresh = readProviderToken(provider)
+	return tokenUsable(fresh, deps.now()) ? fresh : null
 }
 
 export default defineTool({

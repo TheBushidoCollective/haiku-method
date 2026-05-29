@@ -9,8 +9,10 @@
 //            caller can drop into the MR description / a note.
 //
 // Provider is detected from the origin host. The bearer comes from the GLOBAL
-// token store (readProviderToken) — when absent, the tool returns the stable
-// `proof_upload_no_auth` code telling the user to run haiku_auth_login first.
+// token store, AUTHENTICATING WHEN NEEDED via `ensureProviderToken` (the broker
+// handshake runs inline if no token is stored — the engine never tells the
+// agent to authenticate first). Only a genuinely unobtainable auth (broker
+// unreachable / declined / timed out) surfaces `proof_upload_auth_unavailable`.
 //
 // The provider API call is factored behind an injectable fetch so the test can
 // assert the right endpoint + headers per provider without network.
@@ -22,7 +24,6 @@ import {
 	providerFromHost,
 	readOriginRemoteUrl,
 } from "../../git-worktree.js"
-import { readProviderToken } from "../../global-settings.js"
 import type { ProviderName } from "../../state/schemas/global-settings.js"
 import {
 	HAIKU_UPLOAD_PROOF_INPUT_SCHEMA,
@@ -35,6 +36,7 @@ import {
 } from "../../state/schemas/inputs/_validate.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
+import { ensureProviderToken } from "./haiku_auth_login.js"
 
 /** What the caller hands the uploader: the parsed remote, the proof bytes, the
  *  bearer, and the (optional) PR/MR URL the proof should reference. */
@@ -274,14 +276,18 @@ export default defineTool({
 			)
 		}
 
-		// 3) bearer from the global token store
-		const token = readProviderToken(provider)
+		// 3) bearer — AUTH WHEN NEEDED. The engine never tells the agent to
+		// "go authenticate first": if there's no usable token, ensureProviderToken
+		// runs the broker handshake inline (browser + poll) for the repo's
+		// provider, then returns the fresh token. Only a genuinely unobtainable
+		// auth (broker unreachable / declined / timed out) surfaces an error.
+		const token = await ensureProviderToken(provider)
 		if (!token?.access_token) {
 			return text(
 				JSON.stringify({
 					ok: false,
-					error: "proof_upload_no_auth",
-					message: `no stored ${provider} token — run haiku_auth_login first`,
+					error: "proof_upload_auth_unavailable",
+					message: `could not authenticate to ${provider} via the haikumethod.ai broker — the auth flow didn't complete (declined, timed out, or broker unreachable). Proof was not uploaded.`,
 				}),
 			)
 		}

@@ -74,27 +74,24 @@ test("runBrokerLogin: start → pending → ready persists the token", async () 
 		const gs = await import(`${SRC}global-settings.ts?d=login-ready`)
 
 		const { fetchImpl, calls } = scriptedFetch([
-			// /cli/start
+			// /cli/start → broker mints a SESSION (not an OAuth device_code)
 			() =>
 				jsonResponse(200, {
-					device_code: "DEV-123",
+					session_id: "SESS-123",
 					verification_url: "https://broker.test/verify/abc",
-					interval: 1,
-					expires_in: 300,
+					expires_in: 600,
 				}),
 			// /cli/poll #1 → pending
 			() => jsonResponse(200, { status: "pending" }),
-			// /cli/poll #2 → ready with token
+			// /cli/poll #2 → ready; the token bundle is SPREAD AT TOP LEVEL
 			() =>
 				jsonResponse(200, {
 					status: "ready",
-					token: {
-						access_token: "gho_secret_value",
-						host: "github.com",
-						account: "octocat",
-						scopes: ["repo"],
-						obtained_at: "2026-05-28T00:00:00.000Z",
-					},
+					provider: "github",
+					host: "github.com",
+					account: "octocat",
+					access_token: "gho_secret_value",
+					scopes: ["repo"],
 				}),
 		])
 
@@ -102,11 +99,13 @@ test("runBrokerLogin: start → pending → ready persists the token", async () 
 		assert.equal(result.provider, "github")
 		assert.equal(result.account, "octocat")
 
-		// start + two polls were all issued at the broker base
+		// start + two polls were all issued at the broker base; poll is keyed on
+		// session_id (NOT a device_code).
 		assert.equal(calls.length, 3)
 		assert.equal(calls[0].url, "https://broker.test/cli/start")
 		assert.equal(calls[1].url, "https://broker.test/cli/poll")
 		assert.equal(calls[2].url, "https://broker.test/cli/poll")
+		assert.equal(JSON.parse(calls[1].init.body).session_id, "SESS-123")
 
 		// the token landed in the global store and is readable
 		const stored = gs.readProviderToken("github")
@@ -120,28 +119,30 @@ test("runBrokerLogin: start → pending → ready persists the token", async () 
 	})
 })
 
-test("runBrokerLogin: denied → LoginError(auth_login_denied), no token stored", async () => {
+test("runBrokerLogin: expired → LoginError(auth_login_expired), no token stored", async () => {
 	await withTempGlobal(async () => {
 		process.env.HAIKU_AUTH_PROXY_URL = "https://broker.test"
 		const mod = await import(
-			`${SRC}tools/orchestrator/haiku_auth_login.ts?d=denied`
+			`${SRC}tools/orchestrator/haiku_auth_login.ts?d=expired`
 		)
-		const gs = await import(`${SRC}global-settings.ts?d=login-denied`)
+		const gs = await import(`${SRC}global-settings.ts?d=login-expired`)
 
+		// The broker has no "denied" — a declined/abandoned authorization just
+		// expires (session TTL). poll keys on session_id.
 		const { fetchImpl } = scriptedFetch([
 			() =>
 				jsonResponse(200, {
-					device_code: "DEV-9",
+					session_id: "SESS-9",
 					verification_url: "https://broker.test/verify/x",
 				}),
-			() => jsonResponse(200, { status: "denied", error: "user said no" }),
+			() => jsonResponse(200, { status: "expired", error: "session expired" }),
 		])
 
 		await assert.rejects(
 			() => mod.runBrokerLogin("gitlab", fakeDeps(fetchImpl)),
 			(err) => {
 				assert.ok(err instanceof mod.LoginError)
-				assert.equal(err.code, "auth_login_denied")
+				assert.equal(err.code, "auth_login_expired")
 				return true
 			},
 		)
@@ -183,4 +184,77 @@ test("haiku_auth_login rejects additional properties via input gate", async () =
 	const res = await tool.handle({ provider: "github", extra: true })
 	assert.equal(res.isError, true)
 	assert.match(res.content[0].text, /haiku_auth_login_input_invalid/)
+})
+
+// ── ensureProviderToken: AUTH WHEN NEEDED (no "go call the auth tool first") ──
+
+test("ensureProviderToken: a usable stored token is returned WITHOUT calling the broker", async () => {
+	await withTempGlobal(async () => {
+		const mod = await import(
+			`${SRC}tools/orchestrator/haiku_auth_login.ts?d=ept-have`
+		)
+		const gs = await import(`${SRC}global-settings.ts?d=ept-have`)
+		gs.writeProviderToken("github", {
+			access_token: "gho_existing",
+			host: "github.com",
+			account: "octocat",
+			obtained_at: "2026-05-28T00:00:00.000Z",
+		})
+		// fetch THROWS if touched — proves no broker round-trip when a token exists.
+		const deps = fakeDeps(async () => {
+			throw new Error("broker must not be called when a token is present")
+		})
+		const tok = await mod.ensureProviderToken("github", deps)
+		assert.ok(tok)
+		assert.equal(tok.access_token, "gho_existing")
+	})
+})
+
+test("ensureProviderToken: no token → runs the broker handshake inline, returns the fresh token", async () => {
+	await withTempGlobal(async () => {
+		process.env.HAIKU_AUTH_PROXY_URL = "https://broker.test"
+		const mod = await import(
+			`${SRC}tools/orchestrator/haiku_auth_login.ts?d=ept-auth`
+		)
+		const gs = await import(`${SRC}global-settings.ts?d=ept-auth`)
+		const { fetchImpl } = scriptedFetch([
+			() =>
+				jsonResponse(200, {
+					session_id: "SESS-AUTO",
+					verification_url: "https://broker.test/verify/auto",
+				}),
+			() =>
+				jsonResponse(200, {
+					status: "ready",
+					provider: "github",
+					host: "github.com",
+					account: "octocat",
+					access_token: "gho_just_obtained",
+				}),
+		])
+		const tok = await mod.ensureProviderToken("github", fakeDeps(fetchImpl))
+		assert.ok(tok, "auto-auth should have obtained a token")
+		assert.equal(tok.access_token, "gho_just_obtained")
+		// persisted for next time
+		assert.equal(
+			gs.readProviderToken("github").access_token,
+			"gho_just_obtained",
+		)
+		restoreProxy()
+	})
+})
+
+test("ensureProviderToken: broker unreachable → returns null (never throws), so the caller can fall back", async () => {
+	await withTempGlobal(async () => {
+		process.env.HAIKU_AUTH_PROXY_URL = "https://broker.test"
+		const mod = await import(
+			`${SRC}tools/orchestrator/haiku_auth_login.ts?d=ept-down`
+		)
+		// /cli/start 500 (broker down / undeployed) → login throws internally →
+		// ensureProviderToken swallows it and returns null.
+		const { fetchImpl } = scriptedFetch([() => jsonResponse(500, {})])
+		const tok = await mod.ensureProviderToken("github", fakeDeps(fetchImpl))
+		assert.equal(tok, null)
+		restoreProxy()
+	})
 })

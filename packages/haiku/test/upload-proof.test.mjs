@@ -5,6 +5,10 @@
 // Imports the TS source via tsx (the test runner is `npx tsx`).
 
 import assert from "node:assert/strict"
+import { execFileSync } from "node:child_process"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { test } from "node:test"
 
 const SRC = new URL("../src/", import.meta.url).pathname
@@ -171,9 +175,8 @@ test("uploadProofGitLab: HTTP error → ProofUploadError", async () => {
 })
 
 test("haiku_upload_proof: missing path → proof_upload_path_missing", async () => {
-	const tool = (
-		await import(`${SRC}tools/orchestrator/haiku_upload_proof.ts`)
-	).default
+	const tool = (await import(`${SRC}tools/orchestrator/haiku_upload_proof.ts`))
+		.default
 	const res = await tool.handle({
 		intent: "demo",
 		path: "/nonexistent/does/not/exist.webm",
@@ -183,11 +186,66 @@ test("haiku_upload_proof: missing path → proof_upload_path_missing", async () 
 })
 
 test("haiku_upload_proof: bad input rejected by gate", async () => {
-	const tool = (
-		await import(`${SRC}tools/orchestrator/haiku_upload_proof.ts`)
-	).default
+	const tool = (await import(`${SRC}tools/orchestrator/haiku_upload_proof.ts`))
+		.default
 	// missing required `path`
 	const res = await tool.handle({ intent: "demo" })
 	assert.equal(res.isError, true)
 	assert.match(res.content[0].text, /haiku_upload_proof_input_invalid/)
+})
+
+test("haiku_upload_proof: no token → AUTHENTICATES (doesn't ask) and surfaces auth_unavailable when the broker can't be reached", async () => {
+	const HAS_GIT = (() => {
+		try {
+			execFileSync("git", ["--version"], { stdio: "ignore" })
+			return true
+		} catch {
+			return false
+		}
+	})()
+	if (!HAS_GIT) return
+
+	const repo = mkdtempSync(join(tmpdir(), "haiku-upload-auth-"))
+	const globalDir = mkdtempSync(join(tmpdir(), "haiku-upload-global-"))
+	const origCwd = process.cwd()
+	const origGlobal = process.env.HAIKU_GLOBAL_DIR
+	const origProxy = process.env.HAIKU_AUTH_PROXY_URL
+	try {
+		execFileSync("git", ["init", "-q"], { cwd: repo })
+		// A GitHub origin so the provider resolves; no token in the empty global
+		// store; the broker pointed at a dead local port (fast ECONNREFUSED, so
+		// /cli/start fails before any browser open).
+		execFileSync(
+			"git",
+			["remote", "add", "origin", "https://github.com/acme/widgets.git"],
+			{ cwd: repo },
+		)
+		const proof = join(repo, "proof.webm")
+		writeFileSync(proof, "fake video bytes")
+		process.chdir(repo)
+		process.env.HAIKU_GLOBAL_DIR = globalDir // empty → no stored token
+		process.env.HAIKU_AUTH_PROXY_URL = "http://127.0.0.1:1"
+
+		const tool = (
+			await import(`${SRC}tools/orchestrator/haiku_upload_proof.ts?d=authpath`)
+		).default
+		const res = await tool.handle({ intent: "demo", path: proof })
+		const body = JSON.parse(res.content[0].text)
+		// The engine auto-authed (hit the broker) and, since it couldn't, surfaced
+		// the new error — NOT the old "run haiku_auth_login first."
+		assert.equal(body.error, "proof_upload_auth_unavailable")
+		assert.doesNotMatch(
+			res.content[0].text,
+			/haiku_auth_login|proof_upload_no_auth/,
+			"must not tell the agent to authenticate first",
+		)
+	} finally {
+		process.chdir(origCwd)
+		if (origGlobal === undefined) delete process.env.HAIKU_GLOBAL_DIR
+		else process.env.HAIKU_GLOBAL_DIR = origGlobal
+		if (origProxy === undefined) delete process.env.HAIKU_AUTH_PROXY_URL
+		else process.env.HAIKU_AUTH_PROXY_URL = origProxy
+		rmSync(repo, { recursive: true, force: true })
+		rmSync(globalDir, { recursive: true, force: true })
+	}
 })

@@ -1,6 +1,7 @@
 // H·AI·K·U Browse — path-based URL builder and parser
 //
 // URL pattern: /browse/{host}/{...project}/[intent/{slug}/[stage/{stage}/[{unit}/]]]
+// Feedback:    …/intent/{slug}/feedback/{id}  or  …/intent/{slug}/stage/{stage}/feedback/{id}
 // Special views: /browse/{host}/{...project}/board/
 // Branch param: ?branch=feature
 
@@ -10,6 +11,11 @@ export interface BrowseLocation {
 	intent?: string
 	stage?: string
 	unit?: string
+	/** Feedback finding id (e.g. `FB-007`) for a feedback deep link. When set,
+	 *  `stage` is the finding's stage scope (absent for an intent-scoped FB).
+	 *  Mutually exclusive with `unit` in a URL — a feedback link targets a
+	 *  finding, a unit link targets a unit. */
+	feedback?: string
 	view?: "board"
 	branch?: string
 }
@@ -32,6 +38,12 @@ const RESERVED_KEYWORDS = new Set(["intent", "board"])
  *
  *   buildBrowseUrl({ host: "github.com", project: "org/repo", intent: "add-login", stage: "dev", unit: "unit-01" })
  *   → "/browse/github.com/org/repo/intent/add-login/stage/dev/unit/unit-01/"
+ *
+ *   buildBrowseUrl({ host: "github.com", project: "org/repo", intent: "add-login", stage: "dev", feedback: "FB-007" })
+ *   → "/browse/github.com/org/repo/intent/add-login/stage/dev/feedback/FB-007/"
+ *
+ *   buildBrowseUrl({ host: "github.com", project: "org/repo", intent: "add-login", feedback: "FB-007" })
+ *   → "/browse/github.com/org/repo/intent/add-login/feedback/FB-007/"  (intent-scoped)
  */
 export function buildBrowseUrl(loc: BrowseLocation): string {
 	const base = `/browse/${loc.host}/${loc.project}`
@@ -39,7 +51,14 @@ export function buildBrowseUrl(loc: BrowseLocation): string {
 	let path: string
 	if (loc.intent) {
 		path = `${base}/intent/${loc.intent}/`
-		if (loc.stage) {
+		if (loc.feedback) {
+			// Feedback deep link: optional `stage/<stage>/` scope, then
+			// `feedback/<id>/`. Takes precedence over `unit` — a URL targets a
+			// finding OR a unit, never both.
+			path = loc.stage
+				? `${base}/intent/${loc.intent}/stage/${loc.stage}/feedback/${loc.feedback}/`
+				: `${base}/intent/${loc.intent}/feedback/${loc.feedback}/`
+		} else if (loc.stage) {
 			path = `${base}/intent/${loc.intent}/stage/${loc.stage}/`
 			if (loc.unit) {
 				// `unit/` keyword mirrors `intent/` and `stage/` — each level of the
@@ -122,6 +141,23 @@ export function parseBrowsePath(segments: string[]): BrowseLocation | null {
 	if (keyword === "intent") {
 		const remaining = segments.slice(keywordIndex + 1)
 		if (remaining.length >= 1) loc.intent = remaining[0]
+
+		// Feedback anchor: `…/feedback/{id}` is a distinct leaf from `unit`.
+		// The segment AFTER `feedback` is the id; a `stage/{stage}` before it
+		// (when present) is the finding's scope. Handle this first so a feedback
+		// id is never mis-parsed as a unit (the keyword disambiguates the leaf).
+		//   intent/{slug}/feedback/{id}                  → intent-scoped
+		//   intent/{slug}/stage/{stage}/feedback/{id}    → stage-scoped
+		const fbIdx = remaining.indexOf("feedback")
+		if (fbIdx !== -1) {
+			loc.feedback = remaining[fbIdx + 1]
+			// stage scope: `stage/{stage}` immediately precedes `feedback`.
+			if (fbIdx >= 2 && remaining[fbIdx - 2] === "stage") {
+				loc.stage = remaining[fbIdx - 1]
+			}
+			return loc
+		}
+
 		// Parse stage: either "stage/{name}" keyword format or legacy "{name}" positional format
 		if (remaining.length >= 3 && remaining[1] === "stage") {
 			// New format: intent/{slug}/stage/{stage}[/unit/{unit}]

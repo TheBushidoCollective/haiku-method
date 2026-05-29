@@ -75,6 +75,11 @@ interface Props {
 	provider: BrowseProvider
 	location?: BrowseLocation
 	initialStage?: string
+	/** Feedback finding id to deep-link to (from a feedback browse URL). On
+	 *  mount the matching card is scrolled into view and briefly ring-
+	 *  highlighted. Its stage scope (when any) is expanded so the card is
+	 *  rendered. */
+	initialFeedback?: string
 	onBack: () => void
 }
 
@@ -83,6 +88,7 @@ export function IntentDetailView({
 	provider,
 	location,
 	initialStage,
+	initialFeedback,
 	onBack,
 }: Props) {
 	const router = useRouter()
@@ -94,8 +100,13 @@ export function IntentDetailView({
 	// jumping straight into the active stage — only expand a stage when one is
 	// explicitly deep-linked. The active stage is one click away and carries
 	// the amber dot in the pipeline.
+	// A feedback deep link both lands on a stage (its scope, so the card is
+	// rendered) and the explicit `initialStage`. `feedbackStage` is the scope
+	// the URL named (empty for an intent-scoped FB → the always-rendered intent
+	// Feedback section carries it).
+	const feedbackStage = initialFeedback ? location?.stage : undefined
 	const [expandedStage, setExpandedStage] = useState<string | null>(
-		initialStage || null,
+		initialStage || feedbackStage || null,
 	)
 	const stageRefs = useRef<Record<string, HTMLElement | null>>({})
 	const [viewMode, setViewMode] = useState<"pipeline" | "board">("pipeline")
@@ -142,7 +153,7 @@ export function IntentDetailView({
 	// Scroll to initially expanded stage on mount
 	useEffect(() => {
 		const target = initialStage || location?.stage
-		if (target && !location?.unit) {
+		if (target && !location?.unit && !initialFeedback) {
 			// Small delay so DOM has rendered the expanded stage section
 			const timeout = setTimeout(() => {
 				stageRefs.current[target]?.scrollIntoView({
@@ -152,7 +163,37 @@ export function IntentDetailView({
 			}, 150)
 			return () => clearTimeout(timeout)
 		}
-	}, [initialStage, location?.stage, location?.unit])
+	}, [initialStage, location?.stage, location?.unit, initialFeedback])
+
+	// Deep-link to a specific feedback finding: scroll its card into view and
+	// briefly ring-highlight it. The card carries a stable DOM id (`fb-<id>`);
+	// its stage scope was expanded above so it's mounted by now. The ring is a
+	// transient class toggle (no React state on the card) — added on arrival,
+	// removed after the pulse so it doesn't persist on later interaction.
+	useEffect(() => {
+		if (!initialFeedback) return
+		const timeout = setTimeout(() => {
+			const el = document.getElementById(`fb-${initialFeedback}`)
+			if (!el) return
+			el.scrollIntoView({ behavior: "smooth", block: "center" })
+			el.classList.add(
+				"ring-2",
+				"ring-teal-400",
+				"ring-offset-2",
+				"dark:ring-offset-stone-900",
+			)
+			const clear = setTimeout(() => {
+				el.classList.remove(
+					"ring-2",
+					"ring-teal-400",
+					"ring-offset-2",
+					"dark:ring-offset-stone-900",
+				)
+			}, 2400)
+			el.dataset.fbHighlightTimer = String(clear)
+		}, 200)
+		return () => clearTimeout(timeout)
+	}, [initialFeedback])
 
 	// Listen for browser back/forward (path-based navigation only)
 	useEffect(() => {
@@ -2480,6 +2521,9 @@ function FeedbackCard({
 	scope: "stage" | "intent"
 }) {
 	const [open, setOpen] = useState(false)
+	// Stable anchor for feedback deep links — the IntentDetailView mount effect
+	// scrolls + ring-highlights `#fb-<id>` when a feedback browse URL names it.
+	const anchorId = `fb-${fb.id}`
 	const isHuman = fb.authorType === "human"
 	const isClosed = fb.closedAt != null
 	const pillClass = isHuman
@@ -2495,7 +2539,8 @@ function FeedbackCard({
 	const severityBadge = fb.severity ? SEVERITY_BADGES[fb.severity] : null
 	return (
 		<div
-			className={`rounded-lg border ${
+			id={anchorId}
+			className={`scroll-mt-24 rounded-lg border transition-shadow ${
 				isClosed
 					? "border-stone-200 dark:border-stone-700"
 					: "border-amber-200 dark:border-amber-900/50"

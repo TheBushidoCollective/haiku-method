@@ -140,6 +140,38 @@ export function findCurrentStageFromMain(
 	return null
 }
 
+/** Resolve the active stage for SPA + tool readers with a full fallback chain:
+ *  stamped `intent.active_stage` → derived from the CANONICAL (intent-main)
+ *  plan → the last stage in that plan. Never returns "" when a plan exists.
+ *
+ *  This is the single source the stamp-only readers (`resolveActiveStage` in
+ *  state-tools, `readActiveStage` in session-routes) delegate to. The stamp
+ *  alone goes stale on a diverged stage-branch checkout (the old buggy drop)
+ *  or is simply absent on a freshly migrated intent; returning "" there is
+ *  what produced the SPA's `no_active_stage` 409 on feedback submit. Walking
+ *  the canonical plan recovers a real stage; the last-stage fallback covers
+ *  the "every stage already complete" edge so an intent at completion still
+ *  resolves a stage for stage-scoped writes. Returns "" only when there is
+ *  genuinely no plan (no studio, empty plan) — callers must tolerate that. */
+export function resolveActiveStageWithFallback(slug: string): string {
+	const intentFile = join(intentDir(slug), "intent.md")
+	if (!existsSync(intentFile)) return ""
+	let fm: Record<string, unknown>
+	try {
+		fm = parseFrontmatter(readFileSync(intentFile, "utf8")).data
+	} catch {
+		return ""
+	}
+	const stamped = (fm.active_stage as string) || ""
+	if (stamped) return stamped
+	const studio = (fm.studio as string) || ""
+	if (!studio) return ""
+	const derived = findCurrentStageFromMain(slug, studio)
+	if (derived) return derived
+	const plan = resolveCanonicalIntentStages(slug, studio, fm)
+	return plan.length > 0 ? plan[plan.length - 1] : ""
+}
+
 /** Filter cross-stage references (a stage's `inputs:` entries) to those whose
  *  source stage is still in the intent's plan — the auto-ignore that lets an
  *  optional stage be dropped without orphaning a downstream dependency.

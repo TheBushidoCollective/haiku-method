@@ -646,14 +646,16 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 }
 
 function readActiveStage(slug: string): string {
-	const intentFile = join(intentDir(slug), "intent.md")
-	if (!existsSync(intentFile)) return ""
-	try {
-		const { data } = parseFrontmatter(readFileSync(intentFile, "utf8"))
-		return (data.active_stage as string) || ""
-	} catch {
-		return ""
+	// Full fallback chain (stamp → derived-from-canonical-main → last plan
+	// stage) so a diverged or unstamped intent still resolves a stage — the
+	// SPA advance/feedback paths must never see "" turn into a no_active_stage
+	// 409. Lazy require keeps the http layer off studio's static import graph.
+	const { resolveActiveStageWithFallback } = require(
+		"../orchestrator/studio.js",
+	) as {
+		resolveActiveStageWithFallback: (slug: string) => string
 	}
+	return resolveActiveStageWithFallback(slug)
 }
 
 /** Stamp `reviews.user` and `approvals.user` (when missing) on every

@@ -5021,12 +5021,9 @@ function injectPushWarning(
 function resolveActiveStage(intent: string): string {
 	// Delegate to the shared fallback resolver (stamp → derived-from-canonical-
 	// main → last plan stage) so a diverged or unstamped intent still resolves
-	// a stage and never collapses to "". Lazy require avoids a static import
-	// cycle (studio.ts already depends on state-tools for intentDir/frontmatter).
-	const { resolveActiveStageWithFallback } =
-		require("./orchestrator/studio.js") as {
-			resolveActiveStageWithFallback: (slug: string) => string
-		}
+	// a stage and never collapses to "". studio.ts ↔ state-tools is a call-time
+	// ESM cycle (each only uses the other inside function bodies), so the static
+	// import is safe.
 	return resolveActiveStageWithFallback(intent)
 }
 

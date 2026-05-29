@@ -654,11 +654,7 @@ function readActiveStage(slug: string): string {
 	// Full fallback chain (stamp → derived-from-canonical-main → last plan
 	// stage) so a diverged or unstamped intent still resolves a stage — the
 	// SPA advance/feedback paths must never see "" turn into a no_active_stage
-	// 409. Lazy require keeps the http layer off studio's static import graph.
-	const { resolveActiveStageWithFallback } =
-		require("../orchestrator/studio.js") as {
-			resolveActiveStageWithFallback: (slug: string) => string
-		}
+	// 409.
 	return resolveActiveStageWithFallback(slug)
 }
 

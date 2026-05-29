@@ -7,7 +7,7 @@
 // NEXT tick surfaces discovery+decompose normally (on keep) or nothing (on
 // drop). See cursor.ts optional-offer branch.
 import assert from "node:assert/strict"
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -51,29 +51,34 @@ test("optional-offer action holds discovery/decompose signals", async () => {
 		const { derivePosition } = await import(
 			`../src/orchestrator/workflow/cursor.ts?d=${Date.now()}`
 		)
-		const action = derivePosition(slug, "software")
+		// derivePosition takes an options object, and signals_unmet holds
+		// SIGNAL OBJECTS ({ signal: "discovery", … }), not bare strings — so
+		// membership is tested via .some(s => s.signal === …), not .includes().
+		const action = derivePosition({ slug, intentDir: iDir, studio: "software" })
 		assert.equal(action.kind, "elaborate_loop")
 		assert.equal(action.optional_offer, true)
-		// The decision is pending — discovery and decompose MUST be held back.
 		assert.ok(
 			Array.isArray(action.signals_unmet),
 			"signals_unmet should be an array",
 		)
+		const hasSignal = (name) =>
+			action.signals_unmet.some((s) => s.signal === name)
+		// The decision is pending — discovery and decompose MUST be held back.
 		assert.ok(
-			!action.signals_unmet.includes("discovery"),
+			!hasSignal("discovery"),
 			`offer must not surface 'discovery'; got ${JSON.stringify(action.signals_unmet)}`,
 		)
 		assert.ok(
-			!action.signals_unmet.includes("decompose"),
+			!hasSignal("decompose"),
 			`offer must not surface 'decompose'; got ${JSON.stringify(action.signals_unmet)}`,
 		)
 		assert.ok(
-			!action.signals_unmet.includes("verify_decompose"),
+			!hasSignal("verify_decompose"),
 			`offer must not surface 'verify_decompose'; got ${JSON.stringify(action.signals_unmet)}`,
 		)
 		// The conversation signal is the gate that clears the offer — keep it.
 		assert.ok(
-			action.signals_unmet.includes("conversation"),
+			hasSignal("conversation"),
 			`offer must keep 'conversation'; got ${JSON.stringify(action.signals_unmet)}`,
 		)
 	} finally {

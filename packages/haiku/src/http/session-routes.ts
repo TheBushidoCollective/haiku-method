@@ -555,30 +555,35 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				return
 			}
 			const slug = session.intent_slug
+			// readActiveStage falls back (stamp → derived-from-canonical-main →
+			// last plan stage), so "" here means the intent has no resolvable
+			// plan at all (fully complete, or pre-plan). That must NOT block the
+			// review: /api/feedback already wrote the feedback files, and this
+			// advance signal's only remaining job is to wake the gate so the
+			// engine ticks. Proceed at intent scope; the stage-scoped user-slot
+			// stamping below is guarded on a real stage. Reviewing feedback must
+			// never fail on no_active_stage.
 			const targetStage = readActiveStage(slug)
 			if (!targetStage) {
 				logFeedbackAction({
 					reqId: req.id,
 					action: "advance",
-					status: 409,
+					status: 200,
 					intent: slug,
-					detail: "no_active_stage",
+					detail: "no_active_stage_soft: waking gate at intent scope",
 				})
-				reply.status(409).send({
-					error: "no_active_stage",
-					detail: "intent has no active stage",
-				})
-				return
 			}
 
-			const stageOpenFbs = readFeedbackFiles(slug, targetStage).filter(
-				(item) =>
-					item.status === "pending" ||
-					item.status === "fixing" ||
-					item.status === "addressed",
-			)
+			const stageOpenFbs = targetStage
+				? readFeedbackFiles(slug, targetStage).filter(
+						(item) =>
+							item.status === "pending" ||
+							item.status === "fixing" ||
+							item.status === "addressed",
+					)
+				: []
 			let stampedUserSlots = false
-			if (stageOpenFbs.length === 0) {
+			if (targetStage && stageOpenFbs.length === 0) {
 				try {
 					stampUserSlotsForCompletedStage(slug, targetStage)
 					stampedUserSlots = true

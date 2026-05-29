@@ -2572,6 +2572,68 @@ export function readFileFromBranch(
 	}
 }
 
+/** Read an intent's `intent.md` from the canonical intent-main branch
+ *  (`haiku/<slug>/main`) — the fork source of every stage branch — without
+ *  checking it out. In a diverged checkout (a stage branch carrying a stale
+ *  plan from the pre-2026-05-28 buggy drop), this is the authoritative copy.
+ *  Returns null in filesystem mode or when main can't be read, so callers
+ *  fall back to the working-tree intent.md. */
+export function readIntentFileAtMain(slug: string): string | null {
+	const intentMain = `haiku/${slug}/main`
+	const rel = `.haiku/intents/${slug}/intent.md`
+	return readFileFromBranch(intentMain, rel)
+}
+
+/** Remove `stage` from intent.md's `stages` array on the intent-main branch,
+ *  via a transient worktree so the engine's current checkout is never
+ *  disturbed. Used by the pre-tick optional-stage divergence heal to propagate
+ *  a stage-branch drop UP to main (the fork source of every future stage
+ *  branch) so the cursor — which reads main — stops re-arriving at a stage the
+ *  branches already dropped. Best-effort: swallows errors (e.g. main already
+ *  checked out elsewhere) so a tick never hard-fails; the next tick retries,
+ *  and the explicit haiku_drop_stage path also lands on main. Returns true
+ *  only when it actually wrote the drop. No-op in filesystem mode or when
+ *  intent-main doesn't exist. */
+export function dropStageFromMainPlan(slug: string, stage: string): boolean {
+	if (!isGitRepo()) return false
+	const intentMain = `haiku/${slug}/main`
+	if (!branchExists(intentMain)) return false
+	const rel = `.haiku/intents/${slug}/intent.md`
+	try {
+		return withWorktreeOnBranch(intentMain, (tmpPath) => {
+			const abs = join(tmpPath, rel)
+			if (!existsSync(abs)) return false
+			// Build a FRESH data object via spread — never mutate the object
+			// gray-matter returns (it caches + shares parsed.data).
+			const parsed = matter(readFileSync(abs, "utf8"))
+			const current = Array.isArray(parsed.data.stages)
+				? (parsed.data.stages as unknown[]).filter(
+						(s): s is string => typeof s === "string",
+					)
+				: []
+			if (!current.includes(stage)) return false // already healed
+			const nextStages = current.filter((s) => s !== stage)
+			if (nextStages.length === 0) return false // never strip to empty
+			const nextData = { ...parsed.data, stages: nextStages }
+			fsWriteFileSync(abs, matter.stringify(parsed.content, nextData))
+			tryRun(["git", "-C", tmpPath, "add", "--", rel])
+			tryRun([
+				"git",
+				"-C",
+				tmpPath,
+				"commit",
+				"-m",
+				`haiku: heal optional-stage divergence — drop '${stage}' from ${slug} plan on intent main`,
+				"--",
+				rel,
+			])
+			return true
+		})
+	} catch {
+		return false
+	}
+}
+
 /** Absolute path to a unit's worktree under `.haiku/worktrees/{slug}/{unit}`. */
 export function unitWorktreePath(slug: string, unit: string): string {
 	return join(primaryRepoRoot(), ".haiku", "worktrees", slug, unit)

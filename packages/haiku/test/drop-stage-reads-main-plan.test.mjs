@@ -7,7 +7,7 @@
 // Reading main makes the two agree.
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -51,47 +51,24 @@ test("drop resolves active stage from intent main, not the diverged branch", asy
 	const iDir = join(dir, ".haiku", "intents", slug)
 	mkdirSync(join(iDir, "stages"), { recursive: true })
 
-	// Intent main lists design (the canonical, still-present plan).
-	writeFileSync(
-		join(iDir, "intent.md"),
-		fm(["inception", "design", "product", "development"]),
-	)
-	// inception is complete everywhere (one signed unit — v4 completeness reads
-	// unit FM, not a gate.md sentinel) so the cursor (reading main's plan)
-	// walks past it to design, the optional unstarted stage.
-	const incUnits = join(iDir, "stages", "inception", "units")
-	mkdirSync(incUnits, { recursive: true })
-	writeFileSync(
-		join(incUnits, "unit-01-foo.md"),
-		[
-			"---",
-			"name: unit-01-foo",
-			"status: complete",
-			"hats: []",
-			"reviews: {}",
-			"approvals: {}",
-			"depends_on: []",
-			"outputs: []",
-			"quality_gates: []",
-			"---",
-			"",
-			"Body",
-		].join("\n"),
-	)
+	// `design` is optional in the software studio. Putting it FIRST in the plan
+	// makes it the active, unstarted stage immediately — no upstream stage to
+	// complete (the proven shape from drop-stage-lands-on-main). Intent main
+	// KEEPS design (the canonical plan the cursor reads).
+	writeFileSync(join(iDir, "intent.md"), fm(["design", "product"]))
 	sh("git", ["add", "-A"], dir)
-	sh("git", ["commit", "-m", "seed main"], dir)
-	sh("git", ["branch", "haiku/release-healthy-signals/main"], dir)
+	sh("git", ["commit", "-m", "seed main with design"], dir)
+	sh("git", ["branch", `haiku/${slug}/main`], dir)
 
-	// Stage branch where the OLD buggy drop landed: design already removed
-	// from intent.stages → reading this branch, active stage is `product`.
-	sh("git", ["branch", "haiku/release-healthy-signals/design"], dir)
-	sh("git", ["checkout", "haiku/release-healthy-signals/design"], dir)
-	writeFileSync(
-		join(iDir, "intent.md"),
-		fm(["inception", "product", "development"]),
-	)
+	// Stage branch where the OLD buggy drop landed: design removed from
+	// intent.stages on the BRANCH only. Reading this checkout, the active stage
+	// is `product` — so the pre-fix guard refused the drop while the cursor
+	// (reading main) kept arriving at design. We park the checkout here.
+	sh("git", ["branch", `haiku/${slug}/product`], dir)
+	sh("git", ["checkout", `haiku/${slug}/product`], dir)
+	writeFileSync(join(iDir, "intent.md"), fm(["product"]))
 	sh("git", ["add", "-A"], dir)
-	sh("git", ["commit", "-m", "old-bug: dropped design on branch"], dir)
+	sh("git", ["commit", "-m", "old-bug: dropped design on stage branch"], dir)
 
 	const prevCwd = process.cwd()
 	const prevPlugin = process.env.CLAUDE_PLUGIN_ROOT
@@ -101,9 +78,9 @@ test("drop resolves active stage from intent main, not the diverged branch", asy
 		const mod = await import(
 			`../src/tools/orchestrator/haiku_drop_stage.ts?d=${Date.now()}`
 		)
-		// Checkout is parked on the design branch (current-branch active stage
-		// is `product`). With the canonical-main read, design IS the active
-		// stage, so the drop must be accepted — not `drop_stage_not_active`.
+		// Parked on the product branch (current-branch active stage is
+		// `product`). With the canonical-main read, design IS the active stage,
+		// so the drop must be accepted — not `drop_stage_not_active`.
 		const res = await mod.default.handle({ intent: slug, stage: "design" })
 		const payload = JSON.parse(res.content[0].text)
 		assert.equal(
@@ -114,10 +91,7 @@ test("drop resolves active stage from intent main, not the diverged branch", asy
 		// And the drop lands on intent main.
 		const mainIntent = sh(
 			"git",
-			[
-				"show",
-				"haiku/release-healthy-signals/main:.haiku/intents/release-healthy-signals/intent.md",
-			],
+			["show", `haiku/${slug}/main:.haiku/intents/${slug}/intent.md`],
 			dir,
 		)
 		assert.doesNotMatch(mainIntent, /stages:.*design/)

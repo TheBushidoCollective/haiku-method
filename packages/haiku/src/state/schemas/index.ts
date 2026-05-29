@@ -59,6 +59,26 @@ export {
 	validateHaikuFeedbackInputSchema,
 } from "./feedback.js"
 export type {
+	GlobalSettings,
+	ProviderName,
+	ProviderToken,
+} from "./global-settings.js"
+export {
+	GLOBAL_SETTINGS_SCHEMA,
+	PROVIDER_NAMES,
+	PROVIDER_TOKEN_SCHEMA,
+	validateGlobalSettingsSchema,
+	validateProviderTokenSchema,
+} from "./global-settings.js"
+export {
+	HAIKU_AUTH_LOGOUT_INPUT_SCHEMA,
+	HAIKU_AUTH_STATUS_INPUT_SCHEMA,
+	type HaikuAuthLogoutInput,
+	type HaikuAuthStatusInput,
+	validateHaikuAuthLogoutInputSchema,
+	validateHaikuAuthStatusInputSchema,
+} from "./inputs/auth-tools.js"
+export type {
 	HaikuAwaitDesignDirectionInput,
 	HaikuAwaitGateInput,
 	HaikuAwaitVisualAnswerInput,

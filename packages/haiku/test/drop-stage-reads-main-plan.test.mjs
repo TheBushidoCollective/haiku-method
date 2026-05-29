@@ -56,11 +56,28 @@ test("drop resolves active stage from intent main, not the diverged branch", asy
 		join(iDir, "intent.md"),
 		fm(["inception", "design", "product", "development"]),
 	)
-	// inception is complete everywhere so the cursor (reading main) arrives at
-	// design — the optional unstarted stage.
-	const incDir = join(iDir, "stages", "inception")
-	mkdirSync(incDir, { recursive: true })
-	writeFileSync(join(incDir, "gate.md"), "signed\n")
+	// inception is complete everywhere (one signed unit — v4 completeness reads
+	// unit FM, not a gate.md sentinel) so the cursor (reading main's plan)
+	// walks past it to design, the optional unstarted stage.
+	const incUnits = join(iDir, "stages", "inception", "units")
+	mkdirSync(incUnits, { recursive: true })
+	writeFileSync(
+		join(incUnits, "unit-01-foo.md"),
+		[
+			"---",
+			"name: unit-01-foo",
+			"status: complete",
+			"hats: []",
+			"reviews: {}",
+			"approvals: {}",
+			"depends_on: []",
+			"outputs: []",
+			"quality_gates: []",
+			"---",
+			"",
+			"Body",
+		].join("\n"),
+	)
 	sh("git", ["add", "-A"], dir)
 	sh("git", ["commit", "-m", "seed main"], dir)
 	sh("git", ["branch", "haiku/release-healthy-signals/main"], dir)

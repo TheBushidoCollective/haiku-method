@@ -1575,18 +1575,29 @@ function walkIntentTrack(args: {
 				studio,
 			)
 			// Hold discovery/decompose while the keep-or-drop decision is
-			// pending. Surfacing them here would have the agent fan out
-			// discovery + decompose subagents on a stage it may immediately
-			// drop — throwaway work, and (worse) decompose authors units that
-			// flip the `units.length === 0` offer condition off, stranding the
-			// drop path. Recording the conversation (writes elaboration.md) is
-			// the gate that clears this one-shot offer; the NEXT tick then
+			// pending — but ONLY when there's a human to hold for. Surfacing
+			// them would have the agent fan out discovery + decompose subagents
+			// on a stage it may immediately drop (throwaway work), and (worse)
+			// decompose authors units that flip the `units.length === 0` offer
+			// condition off, stranding the drop path. Recording the conversation
+			// (writes elaboration.md) clears this one-shot offer; the NEXT tick
 			// surfaces discovery + decompose normally on keep, or nothing on
 			// drop. So the offer carries ONLY the conversation-class signal(s).
+			//
+			// AUTOPILOT EXCEPTION: autopilot has no user to make a keep-or-drop
+			// call, so there's nothing to hold for — it auto-keeps and drives
+			// the stage to completion in one autonomous pass. Trimming the
+			// signal set there strands the autopilot harness (it acts on the
+			// signals in the action; a perpetually-re-emitted conversation-only
+			// offer that its drive loop can't clear trips the deadlock detector
+			// → loop_halted). So in autopilot we emit the FULL signal set, same
+			// as a mandatory stage. The `optional_offer` flag still rides along
+			// for surfaces that want to note it, but discovery isn't held.
+			const holdForDecision = mode !== "autopilot"
 			const OFFER_SIGNALS = new Set(["conversation", "verify_conversation"])
-			const offerSignals = signalsUnmet.filter((s) =>
-				OFFER_SIGNALS.has(s.signal),
-			)
+			const offerSignals = holdForDecision
+				? signalsUnmet.filter((s) => OFFER_SIGNALS.has(s.signal))
+				: signalsUnmet
 			return {
 				kind: "elaborate_loop",
 				stage,

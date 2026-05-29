@@ -44,10 +44,28 @@ test("optional-offer action holds discovery/decompose signals", async () => {
 	process.chdir(dir)
 	process.env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT
 	try {
-		// inception complete (gate.md); design is next + optional + unstarted.
-		const incDir = join(iDir, "stages", "inception")
-		mkdirSync(incDir, { recursive: true })
-		writeFileSync(join(incDir, "gate.md"), "signed\n")
+		// inception complete (one signed unit — v4 completeness reads unit FM,
+		// not a gate.md sentinel), so the cursor walks past it to design, the
+		// next + optional + unstarted stage that triggers the keep-or-drop offer.
+		const incUnits = join(iDir, "stages", "inception", "units")
+		mkdirSync(incUnits, { recursive: true })
+		writeFileSync(
+			join(incUnits, "unit-01-foo.md"),
+			[
+				"---",
+				"name: unit-01-foo",
+				"status: complete",
+				"hats: []",
+				"reviews: {}",
+				"approvals: {}",
+				"depends_on: []",
+				"outputs: []",
+				"quality_gates: []",
+				"---",
+				"",
+				"Body",
+			].join("\n"),
+		)
 		const { derivePosition } = await import(
 			`../src/orchestrator/workflow/cursor.ts?d=${Date.now()}`
 		)

@@ -292,7 +292,18 @@ export type CursorAction =
 	// gate opens, a persistent repo artifact, and a website-browse surface.
 	// User-facing only — the focused work agents never read it. Forward-only
 	// (see `stageOwesBrief`): never interrupts a stage already executing.
-	| { kind: "write_brief"; stage: string }
+	//
+	// `phase` distinguishes the two firings of the SAME `BRIEF.md` artifact:
+	//   - `"pre"`  — PRE-execute (the original firing above): "this is what I
+	//                am going to do". Written from the planned units before any
+	//                code lands, gated on BRIEF.md absence.
+	//   - `"post"` — POST-execute (2026-05-28): "this is what I did". Rewrites
+	//                the SAME `BRIEF.md` in place after execution + adversarial
+	//                approval + quality gates, before the stage closes. Gated on
+	//                a one-shot `.brief-finalized` marker (BRIEF.md already
+	//                exists from the pre firing, so absence can't gate it). See
+	//                `stageOwesClosingBrief`.
+	| { kind: "write_brief"; stage: string; phase: "pre" | "post" }
 	// `role` is the lead role (back-compat / single-role shadow); `dispatches`
 	// carries the full parallel batch when >1 (the adversarial fan-out — same
 	// shape as `dispatch_review`). `spec` and `user` dispatch single (serial).
@@ -967,6 +978,32 @@ export function stageOwesBrief(
 	if (existsSync(join(intentDir, "stages", stage, "BRIEF.md"))) return false
 	if (anyUnitStarted) return false
 	return true
+}
+
+/**
+ * Does this stage still owe its CLOSING `BRIEF.md` rewrite before it can
+ * close? The pre-execute brief said "this is what I am going to do"; the
+ * closing brief rewrites the SAME `BRIEF.md` in place to say "this is what I
+ * did" — the post-execution summary the human sees once the work has landed.
+ *
+ * It fires POST-execute, after every approval is signed and the quality
+ * gates have run, BEFORE complete_stage. Because `BRIEF.md` already exists
+ * from the pre firing, file absence can't gate this one — instead a one-shot
+ * `.brief-finalized` sibling marker does (mirrors `stageOwesObservations`'s
+ * existence-of-`observations.md` gate). The closing-brief dispatch rewrites
+ * `BRIEF.md` and stamps the marker; the next tick sees the marker and falls
+ * through to complete_stage.
+ *
+ * Forward-only by construction: the cursor only walks the frontier
+ * (incomplete) stage, so a completed/merged stage is never re-entered to
+ * write a closing brief.
+ */
+export function stageOwesClosingBrief(
+	intentDir: string,
+	stage: string,
+): boolean {
+	if (!isBriefEnabled(intentDir)) return false
+	return !existsSync(join(intentDir, "stages", stage, ".brief-finalized"))
 }
 
 /**
@@ -1745,7 +1782,7 @@ function walkIntentTrack(args: {
 				(u) => Boolean(u.fm.started_at) || pickIterations(u.fm).length > 0,
 			)
 			if (stageOwesBrief(intentDir, stage, anyUnitStarted)) {
-				return { kind: "write_brief", stage }
+				return { kind: "write_brief", stage, phase: "pre" }
 			}
 		}
 		// Brief written → the deferred review user gate.
@@ -2092,6 +2129,23 @@ function walkIntentTrack(args: {
 		if (!existsSync(observationsPath)) {
 			return { kind: "record_observations", stage }
 		}
+	}
+
+	// 8a-bis. Closing BRIEF (2026-05-28). ON by default (same `brief:`
+	//     opt-out as the pre-execute brief); fires once per stage AFTER
+	//     every approval is signed, the quality gates have run, and
+	//     observations are recorded — but BEFORE complete_stage. It
+	//     rewrites the SAME user-facing `BRIEF.md` the pre-execute brief
+	//     authored, flipping it from "this is what I am going to do" to
+	//     "this is what I did": the post-execution summary the human sees
+	//     once the work has landed. Gated on a one-shot `.brief-finalized`
+	//     marker (BRIEF.md already exists from the pre firing, so absence
+	//     can't gate it). Idempotent — once the dispatch stamps the marker
+	//     the next tick falls through to complete_stage. Forward-only:
+	//     the cursor only walks the frontier stage, so a closed stage is
+	//     never pulled back to rewrite its brief.
+	if (stageOwesClosingBrief(intentDir, stage)) {
+		return { kind: "write_brief", stage, phase: "post" }
 	}
 
 	// 8b. Every approval signed AND observations recorded. Emit

@@ -63,8 +63,15 @@ export class FirestoreSessionStore implements SessionStore {
 	private async client(): Promise<Firestore> {
 		if (this.injected) return this.injected
 		if (!this.dbPromise) {
+			// `ignoreUndefinedProperties` is REQUIRED: the session record has
+			// optional fields (token, account, host, refresh_token, …) and the
+			// release path writes `{ token: undefined }` to clear it. Real
+			// Firestore rejects `undefined` ("Cannot use undefined as a Firestore
+			// value") — the in-memory test store doesn't, which is why this only
+			// surfaced live. Tolerating undefined makes the whole store match the
+			// optional-field contract instead of crashing the poll-on-ready.
 			this.dbPromise = import("@google-cloud/firestore").then(
-				(m) => new m.Firestore(),
+				(m) => new m.Firestore({ ignoreUndefinedProperties: true }),
 			)
 		}
 		return this.dbPromise

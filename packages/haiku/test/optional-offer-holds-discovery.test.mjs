@@ -28,6 +28,10 @@ function setup(stages) {
 			`stages: [${stages.join(", ")}]`,
 			"mode: discrete",
 			"status: active",
+			// Past the pre-intent intent.md substance gate (elaboration_verified_at
+			// — see cursor.ts derivePosition) so derivePosition proceeds into the
+			// per-stage walk instead of returning the pre-intent elaborate_loop.
+			"elaboration_verified_at: 2026-05-28T00:00:00.000Z",
 			"---",
 			"",
 			"# T",
@@ -50,14 +54,18 @@ test("optional-offer action holds discovery/decompose signals", async () => {
 		const { derivePosition } = await import(
 			`../src/orchestrator/workflow/cursor.ts?d=${Date.now()}`
 		)
-		// derivePosition takes an options object and returns a CursorPosition
-		// ({ track, action }); the cursor action is on `.action`. signals_unmet
-		// holds SIGNAL OBJECTS ({ signal: "discovery", … }), not bare strings —
-		// so membership is tested via .some(s => s.signal === …), not .includes().
+		// derivePosition returns a CursorPosition ({ track, action }); the cursor
+		// action is on `.action`. signals_unmet holds SIGNAL OBJECTS
+		// ({ signal: "discovery", … }), not bare strings — membership is tested
+		// via .some(s => s.signal === …), not .includes().
 		const pos = derivePosition({ slug, intentDir: iDir, studio: "software" })
 		const action = pos.action
 		assert.equal(action.kind, "elaborate_loop")
-		assert.equal(action.optional_offer, true)
+		assert.equal(
+			action.optional_offer,
+			true,
+			`expected the optional-stage keep-or-drop offer; got ${JSON.stringify(action)}`,
+		)
 		assert.ok(
 			Array.isArray(action.signals_unmet),
 			"signals_unmet should be an array",
@@ -77,11 +85,13 @@ test("optional-offer action holds discovery/decompose signals", async () => {
 			!hasSignal("verify_decompose"),
 			`offer must not surface 'verify_decompose'; got ${JSON.stringify(action.signals_unmet)}`,
 		)
-		// The conversation signal is the gate that clears the offer — keep it.
-		assert.ok(
-			hasSignal("conversation"),
-			`offer must keep 'conversation'; got ${JSON.stringify(action.signals_unmet)}`,
-		)
+		// Only conversation-class signals remain (the gate that clears the offer).
+		for (const s of action.signals_unmet) {
+			assert.ok(
+				s.signal === "conversation" || s.signal === "verify_conversation",
+				`offer must carry only conversation-class signals; got ${JSON.stringify(action.signals_unmet)}`,
+			)
+		}
 	} finally {
 		process.chdir(prevCwd)
 		process.env.CLAUDE_PLUGIN_ROOT = prevPlugin

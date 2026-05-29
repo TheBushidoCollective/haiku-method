@@ -5097,6 +5097,49 @@ function enforceStageBranch(
 }
 
 /**
+ * Align the checkout to the branch the ENGINE READS for a MANUAL feedback
+ * mutation (reject / delete) — the ACTIVE stage branch, NOT the finding's own
+ * (possibly earlier, already-completed) stage branch.
+ *
+ * The cursor walks every stage `0..active` on the ACTIVE stage branch's tree;
+ * an earlier stage's feedback dir is present there (inherited via the
+ * main→active downstream sync). So a manual mutation of an earlier-stage
+ * finding must land on the ACTIVE branch to be visible on the next tick —
+ * `enforceStageBranch(intent, fbStage)` would instead switch to the finding's
+ * own branch, stranding the mutation where the engine never reads it (and, when
+ * that branch doesn't even carry the file, failing to find it at all). This is
+ * the merge-trains-integration-gate failure-mode 3 (2026-05-28): a reject of a
+ * completed-stage finding done while a later stage was active appeared to "not
+ * take." Intent-scope findings (no stage) align to intent main as before.
+ *
+ * The fix-loop path does NOT use this — there the cursor has already rewound to
+ * the finding's stage (it IS the active stage), so `fbStage === active` and the
+ * old alignment is already correct.
+ */
+function enforceFeedbackBranch(
+	intent: string,
+	fbStage: string | undefined,
+): { content: Array<{ type: "text"; text: string }>; isError: true } | null {
+	if (!fbStage) return enforceStageBranch(intent, undefined)
+	let activeStage: string | null = null
+	try {
+		const intentMd = join(intentDir(intent), "intent.md")
+		if (existsSync(intentMd)) {
+			const studio =
+				(parseFrontmatter(readFileSync(intentMd, "utf8")).data.studio as string) ||
+				""
+			if (studio) activeStage = findCurrentStage(intent, studio)
+		}
+	} catch {
+		// Fall through: unresolved active stage → intent main (null below).
+	}
+	// Active stage drives the read branch. null (intent-completion phase, or
+	// unresolved) → intent main. When the active stage IS the finding's stage
+	// this is identical to the old `enforceStageBranch(intent, fbStage)`.
+	return enforceStageBranch(intent, activeStage ?? undefined)
+}
+
+/**
  * Find a unit file by searching through stages. Returns { path, stage }
  * or null.
  *
@@ -12900,7 +12943,10 @@ export function handleStateTool(
 					isError: true,
 				}
 
-			const feedbackDeleteBranchErr = enforceStageBranch(
+			// Align to the engine's READ branch (active stage), not the
+			// finding's own stage branch — so a manual delete of an
+			// earlier-stage finding lands where the next tick reads it (FM3).
+			const feedbackDeleteBranchErr = enforceFeedbackBranch(
 				intent,
 				stage || undefined,
 			)
@@ -13105,9 +13151,13 @@ export function handleStateTool(
 
 			// Enforce branch BEFORE reading the feedback file — if main has
 			// drifted ahead, the file may only exist on the stage branch.
-			// Reading first would spuriously report "not found". Intent-
-			// scope ("") resolves to intent-main via ensureOnStageBranch.
-			const feedbackRejectBranchErr = enforceStageBranch(
+			// Reading first would spuriously report "not found". Align to the
+			// engine's READ branch (the ACTIVE stage), not the finding's own
+			// stage branch: an earlier-stage finding lives on the active
+			// branch's tree, and a reject must land there to be visible next
+			// tick (FM3 — the merge-trains-integration-gate stranded reject).
+			// Intent-scope ("") resolves to intent main.
+			const feedbackRejectBranchErr = enforceFeedbackBranch(
 				intent,
 				stage || undefined,
 			)

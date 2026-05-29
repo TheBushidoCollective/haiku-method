@@ -5,9 +5,11 @@
 	"main": "dist/index.js",
 	"scripts": {
 		"build": "tsc",
-		"start": "functions-framework --target=authProxy"
+		"start": "functions-framework --target=authProxy",
+		"test": "tsc && node --test test/*.test.mjs"
 	},
 	"dependencies": {
+		"@google-cloud/firestore": "^7.10.0",
 		"@google-cloud/functions-framework": "^3.0.0"
 	},
 	"devDependencies": {

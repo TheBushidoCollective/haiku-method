@@ -700,6 +700,44 @@ export default defineTool({
 						}
 					}
 				} else {
+					// PRE-TICK DANGLING-BRANCH ESCAPE (#22). If the checkout is
+					// parked on a stage branch whose stage is no longer in the
+					// canonical plan — a dropped optional stage whose branch
+					// wasn't reaped, or a stale checkout left after a heal — the
+					// user is stranded ("dropped the stage, was still on the
+					// branch, couldn't rescue off of it"). The post-walk
+					// realignment below is gated on the cursor's action carrying
+					// a `stage`, so a stage-less intent-level action (or any
+					// confusion) leaves us stuck on the dead branch forever.
+					// Escape to the active stage (or intent main) BEFORE the
+					// cursor walks, so every tick guarantees we're on a PLANNED
+					// branch. Conservative: we switch OFF, we do NOT reap — any
+					// stranded commits on the dangling branch survive for the
+					// user to recover.
+					{
+						const here = getCurrentBranch().startsWith(`haiku/${slug}/`)
+							? getCurrentBranch().slice(`haiku/${slug}/`.length)
+							: ""
+						if (here && here !== "main") {
+							const { resolveIntentStages } = await import(
+								"../../orchestrator.js"
+							)
+							const plan = resolveIntentStages(im, studio)
+							if (!plan.includes(here)) {
+								const active = findCurrentStage(slug, studio)
+								const escape = ensureOnStageBranch(slug, active ?? undefined)
+								if (!escape.ok) {
+									return buildGuardResponse(
+										slug,
+										active ?? undefined,
+										escape,
+										"run_next entry — escape dropped/dangling stage branch",
+									)
+								}
+							}
+						}
+					}
+
 					// PRE-CURSOR DOWNSTREAM SYNC. The cursor's walk reads
 					// per-unit FM from the current working tree. If the
 					// branch isn't up to date with intent main (and intent

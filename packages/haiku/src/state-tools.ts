@@ -32,6 +32,7 @@ import { classifyGateRun } from "./gate-environment.js"
 import { buildFbHatDispatchBlock } from "./orchestrator/fb-dispatch-builder.js"
 import { resolveRejectTarget } from "./orchestrator/hat-loop-routing.js"
 import {
+	resolveActiveStageWithFallback,
 	resolveIntentStages,
 	resolveStageFixHats,
 	resolveStudioFixHats,

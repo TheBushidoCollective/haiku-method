@@ -100,10 +100,6 @@ export function resolveCanonicalIntentStages(
 	studio: string,
 	workingTreeFm: Record<string, unknown>,
 ): string[] {
-	// Lazy require avoids a static cycle (git-worktree → state-tools → …).
-	const { readIntentFileAtMain } = require("../git-worktree.js") as {
-		readIntentFileAtMain: (s: string) => string | null
-	}
 	const mainRaw = readIntentFileAtMain(slug)
 	if (mainRaw) {
 		const mainFm = parseFrontmatter(mainRaw).data
@@ -134,14 +130,6 @@ export function findCurrentStageFromMain(
 		typeof workingTreeFm.mode === "string" && workingTreeFm.mode.length > 0
 			? (workingTreeFm.mode as string)
 			: "continuous"
-	const { isStageComplete } = require("./workflow/cursor.js") as {
-		isStageComplete: (
-			dir: string,
-			studio: string,
-			stage: string,
-			mode: string,
-		) => boolean
-	}
 	for (const stage of stages) {
 		if (!isStageComplete(iDir, studio, stage, mode)) return stage
 	}

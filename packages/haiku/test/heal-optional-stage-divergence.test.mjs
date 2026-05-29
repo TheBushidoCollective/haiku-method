@@ -79,7 +79,10 @@ test("healOptionalStageDivergence propagates a branch drop up to intent main", a
 	process.chdir(tmp)
 	try {
 		const { healOptionalStageDivergence } = await import(
-			new URL("../src/orchestrator/workflow/heal-optional-stage-divergence.ts", import.meta.url).href
+			new URL(
+				"../src/orchestrator/workflow/heal-optional-stage-divergence.ts",
+				import.meta.url,
+			).href
 		)
 		const healed = healOptionalStageDivergence(slug, "software")
 		assert.deepEqual(healed, ["design"], "should report design as healed")

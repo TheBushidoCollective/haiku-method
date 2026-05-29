@@ -5023,9 +5023,10 @@ function resolveActiveStage(intent: string): string {
 	// main → last plan stage) so a diverged or unstamped intent still resolves
 	// a stage and never collapses to "". Lazy require avoids a static import
 	// cycle (studio.ts already depends on state-tools for intentDir/frontmatter).
-	const { resolveActiveStageWithFallback } = require(
-		"./orchestrator/studio.js",
-	) as { resolveActiveStageWithFallback: (slug: string) => string }
+	const { resolveActiveStageWithFallback } =
+		require("./orchestrator/studio.js") as {
+			resolveActiveStageWithFallback: (slug: string) => string
+		}
 	return resolveActiveStageWithFallback(intent)
 }
 

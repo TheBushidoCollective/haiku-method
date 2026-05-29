@@ -52,9 +52,9 @@ import {
 	wouldDeadlock,
 } from "./deadlock-detector.js"
 import { completePendingFixChainMerges } from "./fix-chain-merge-gate.js"
-import { healOptionalStageDivergence } from "./heal-optional-stage-divergence.js"
 import { reconcileOrphanedHatSequences } from "./hat-sequence-migration.js"
 import { healDuplicateFeedbackIds } from "./heal-duplicate-feedback-ids.js"
+import { healOptionalStageDivergence } from "./heal-optional-stage-divergence.js"
 import { purgeDeadSidecars } from "./purge-dead-sidecars.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
 import {

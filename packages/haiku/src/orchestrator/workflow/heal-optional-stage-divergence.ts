@@ -25,7 +25,10 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { dropStageFromMainPlan, readIntentFileAtMain } from "../../git-worktree.js"
+import {
+	dropStageFromMainPlan,
+	readIntentFileAtMain,
+} from "../../git-worktree.js"
 import { intentDir, parseFrontmatter } from "../../state-tools.js"
 import { resolveIntentStages, resolveStageOptional } from "../studio.js"
 

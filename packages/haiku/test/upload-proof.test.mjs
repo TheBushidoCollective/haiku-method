@@ -125,7 +125,7 @@ test("uploadProofGitHub: asset upload HTTP error → ProofUploadError", async ()
 	)
 })
 
-test("uploadProofGitLab: POSTs to project uploads API with private-token", async () => {
+test("uploadProofGitLab: POSTs to project uploads API with Authorization: Bearer", async () => {
 	const mod = await import(
 		`${SRC}tools/orchestrator/haiku_upload_proof.ts?d=gl`
 	)
@@ -142,7 +142,7 @@ test("uploadProofGitLab: POSTs to project uploads API with private-token", async
 		...baseCtx,
 		provider: "gitlab",
 		host: "gitlab.com",
-		token: "glpat_secret",
+		token: "oauth_token",
 	}
 	const result = await mod.uploadProofGitLab(ctx, fetchImpl)
 
@@ -154,8 +154,9 @@ test("uploadProofGitLab: POSTs to project uploads API with private-token", async
 		"https://gitlab.com/api/v4/projects/gigsmart%2Fhaiku-method/uploads",
 	)
 	assert.equal(calls[0].init.method, "POST")
-	// GitLab uses the private-token header, NOT bearer
-	assert.equal(calls[0].init.headers["private-token"], "glpat_secret")
+	// OAuth tokens (broker-issued) require Authorization: Bearer, NOT the
+	// PAT-only PRIVATE-TOKEN header (which 401s an OAuth token).
+	assert.equal(calls[0].init.headers.authorization, "Bearer oauth_token")
 })
 
 test("uploadProofGitLab: HTTP error → ProofUploadError", async () => {

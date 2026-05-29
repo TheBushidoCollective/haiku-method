@@ -61,6 +61,7 @@ import {
 	enrichActionWithPreview,
 	getPrepareGateReview,
 	type OrchestratorAction,
+	resolveIntentStages,
 } from "../../orchestrator.js"
 
 /** Single-source dispatch: one workflow tick → one action. Handles
@@ -719,9 +720,6 @@ export default defineTool({
 							? getCurrentBranch().slice(`haiku/${slug}/`.length)
 							: ""
 						if (here && here !== "main") {
-							const { resolveIntentStages } = await import(
-								"../../orchestrator.js"
-							)
 							const plan = resolveIntentStages(im, studio)
 							if (!plan.includes(here)) {
 								const active = findCurrentStage(slug, studio)
@@ -1881,9 +1879,6 @@ export default defineTool({
 				: ((result.next_stage as string | null) ?? null)
 			if (isUserGate && gateKind === "approval" && stage) {
 				try {
-					const { resolveIntentStages } = await import(
-						"../../orchestrator/studio.js"
-					)
 					const intentFile = join(findHaikuRoot(), "intents", slug, "intent.md")
 					const intentFm = existsSync(intentFile)
 						? parseFrontmatter(readFileSync(intentFile, "utf8")).data

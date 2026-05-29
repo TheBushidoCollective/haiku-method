@@ -193,7 +193,10 @@ export async function uploadProofGitLab(
 	)
 	const res = await fetchImpl(`${api}/projects/${projectId}/uploads`, {
 		method: "POST",
-		headers: { "private-token": ctx.token },
+		// OAuth access tokens (what the broker relays) require Authorization:
+		// Bearer — PRIVATE-TOKEN is PAT-only and 401s an OAuth token. Matches
+		// provider-rest.ts's gitlabAuthHeaders.
+		headers: { authorization: `Bearer ${ctx.token}` },
 		body: form,
 	})
 	if (!res.ok) {

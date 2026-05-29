@@ -31,6 +31,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import matter from "gray-matter"
 import { migrateIntent } from "./orchestrator/migrate-registry.js"
 // Named import also triggers the side-effect registration on
 // migrate-registry — without that registration, the post-merge sweep's

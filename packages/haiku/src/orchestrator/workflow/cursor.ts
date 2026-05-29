@@ -1584,7 +1584,9 @@ function walkIntentTrack(args: {
 			// surfaces discovery + decompose normally on keep, or nothing on
 			// drop. So the offer carries ONLY the conversation-class signal(s).
 			const OFFER_SIGNALS = new Set(["conversation", "verify_conversation"])
-			const offerSignals = signalsUnmet.filter((s) => OFFER_SIGNALS.has(s))
+			const offerSignals = signalsUnmet.filter((s) =>
+				OFFER_SIGNALS.has(s.signal),
+			)
 			return {
 				kind: "elaborate_loop",
 				stage,

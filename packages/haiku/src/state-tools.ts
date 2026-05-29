@@ -5019,11 +5019,14 @@ function injectPushWarning(
 
 /** Resolve the active stage for an intent from its frontmatter */
 function resolveActiveStage(intent: string): string {
-	const root = findHaikuRoot()
-	const intentFile = join(root, "intents", intent, "intent.md")
-	if (!existsSync(intentFile)) return ""
-	const { data } = parseFrontmatter(readFileSync(intentFile, "utf8"))
-	return (data.active_stage as string) || ""
+	// Delegate to the shared fallback resolver (stamp → derived-from-canonical-
+	// main → last plan stage) so a diverged or unstamped intent still resolves
+	// a stage and never collapses to "". Lazy require avoids a static import
+	// cycle (studio.ts already depends on state-tools for intentDir/frontmatter).
+	const { resolveActiveStageWithFallback } = require(
+		"./orchestrator/studio.js",
+	) as { resolveActiveStageWithFallback: (slug: string) => string }
+	return resolveActiveStageWithFallback(intent)
 }
 
 /**
